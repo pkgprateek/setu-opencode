@@ -1,0 +1,131 @@
+---
+name: setu-verification
+description: Run verification protocol before completing tasks. Checks build, tests, lint based on mode. Use when finishing a task, before claiming completion, asked to "verify", "check", or "validate" changes.
+---
+
+# Verification Protocol
+
+Before declaring a task complete, verify using targeted extraction.
+
+## Mode-Specific Behavior
+
+| Mode | Verification Level | What to Run |
+|------|-------------------|-------------|
+| **Ultrathink** | Full | All steps: build, test, lint, visual, edge cases |
+| **Quick** | Minimal | Build only if risky changes (new deps, config) |
+| **Expert** | User-driven | Suggest steps, let user decide |
+| **Collab** | Discuss | Ask what verification is needed |
+
+## Verification Steps
+
+### 1. Build Check
+
+```bash
+npm run build || (npm run build 2>&1 | tail -30)
+```
+
+- Check exit code first
+- If failed, capture only last 30 lines or grep for "error"
+- Adapt command to project: `pnpm build`, `yarn build`, `bun build`, etc.
+
+### 2. Test Check
+
+```bash
+npm test 2>&1 | grep -A 3 "FAIL\|Error\|✗" | head -30
+```
+
+- Capture only failures, not full test output
+- Look for patterns: `FAIL`, `Error`, `✗`, `failed`
+- Adapt to test runner: `vitest`, `jest`, `pytest`, etc.
+
+### 3. Lint Check
+
+```bash
+npm run lint 2>&1 | grep -E "error|warning" | head -20
+```
+
+- Capture errors/warnings count or first few issues
+- Adapt to linter: `eslint`, `biome`, `ruff`, etc.
+
+### 4. Type Check (if applicable)
+
+```bash
+npm run typecheck || tsc --noEmit 2>&1 | head -30
+```
+
+- For TypeScript projects
+- Capture type errors only
+
+### 5. Visual Check
+
+```
+Defer to user: "Please verify the UI looks correct."
+```
+
+- Agent typically lacks screenshot access
+- Ask user to confirm visual correctness
+- Note any expected visual changes
+
+### 6. Edge Cases
+
+- Note which edge cases were considered
+- Test critical ones only
+- Document assumptions made
+
+## Principle
+
+**Extract only what's needed.** 
+
+One root error often causes many downstream failures — find the root, ignore the noise.
+
+## Quick Commands by Stack
+
+### Node.js / TypeScript
+```bash
+npm run build && npm test && npm run lint
+```
+
+### Python
+```bash
+python -m pytest && python -m ruff check .
+```
+
+### Go
+```bash
+go build ./... && go test ./... && golangci-lint run
+```
+
+### Rust
+```bash
+cargo build && cargo test && cargo clippy
+```
+
+## Targeted Extraction Examples
+
+**Build failed - get useful info:**
+```bash
+npm run build 2>&1 | tail -30
+```
+
+**Tests failed - get failures only:**
+```bash
+npm test 2>&1 | grep -B 2 -A 5 "FAIL\|Error" | head -50
+```
+
+**Many lint errors - get count and samples:**
+```bash
+npm run lint 2>&1 | grep -c "error" && npm run lint 2>&1 | grep "error" | head -10
+```
+
+## When to Skip Verification
+
+In Quick mode, skip verification for:
+- Comment changes only
+- Documentation updates
+- Whitespace/formatting fixes
+- Renaming variables (after LSP rename)
+
+Still verify in Quick mode for:
+- New dependencies added
+- Configuration changes
+- Any logic changes

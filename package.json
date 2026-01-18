@@ -1,0 +1,53 @@
+{
+  "name": "setu-opencode",
+  "version": "1.0.0",
+  "description": "Setu - A master craftsman persona for OpenCode that transforms AI into a thoughtful, expert colleague",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target node",
+    "dev": "bun run --watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/**/*.ts",
+    "prepublishOnly": "bun run build"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "ai",
+    "coding-assistant",
+    "claude",
+    "llm",
+    "setu",
+    "agent",
+    "harness",
+    "agent-dev"
+  ],
+  "author": "Prateek Kumar Goel",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prateekkumargoel/setu-opencode"
+  },
+  "homepage": "https://github.com/prateekkumargoel/setu-opencode#readme",
+  "bugs": {
+    "url": "https://github.com/prateekkumargoel/setu-opencode/issues"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.0.0"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.0.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
