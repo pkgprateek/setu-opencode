@@ -1,24 +1,30 @@
-# setu-opencode
+# Setu OpenCode
 
 > Transform your AI coding assistant into a thoughtful, expert colleague. 
 
 > *It's about doing it right — which is the fastest way in the end.*
 
-**Setu** (Sanskrit: सेतु, "bridge" — pronounced "SAY-too") is a master craftsman persona for [OpenCode](https://opencode.ai) that bridges the gap between human intent and AI execution.
+**Setu** (Sanskrit: सेतु, "bridge" — pronounced "SAY-too") is a master craftsman persona for [OpenCode](https://opencode.ai) that transforms it into a **Context-Aware Engineer**.
 
 [![npm version](https://img.shields.io/npm/v/setu-opencode.svg)](https://www.npmjs.com/package/setu-opencode)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 ## Why Setu?
 
-Most AI coding tools optimize for speed. Setu optimizes for **craftsmanship**.
+There are many plugins for OpenCode that give you lots of new tools (Batteries) to manage. **Setu** gives you an **Autonomous Workflow** that manages the tools for you. Give Setu a try!
+
+It is Batteries-Included Agent Harness with built-in **(BMS)**, targeting problems like:
+- **Context Rot**: Prevents degradation in long sessions via hygiene protocols.
+- **Hallucinated Completions**: Enforces "Search -> Plan -> Act" loops.
+- **Unverified Code**: Hard-blocks completion until build/tests pass.
 
 | Without Setu | With Setu |
 |--------------|-----------|
-| Dives in immediately | Asks for context first |
-| One mode fits all | 4 modes for different tasks |
+| Dives in immediately | Asks for context first (Phase 0) |
+| One mode fits all	| 4 modes for different tasks |
+| Reads entire files | Smart extraction to save tokens |
 | Stops when it feels done | Verifies before completion |
-| No personality | Trusted colleague experience |
+| No architectural memory | Enforces "Inception" via `AGENTS.md` |
 
 ## Features
 
@@ -35,7 +41,7 @@ Setu adapts to your task:
 
 Every response starts with `[Mode: Ultrathink (Default)]` so you always know what to expect.
 
-### Enforcement
+### Enforcement Protocols
 
 Setu doesn't just suggest good practices — it enforces them:
 
@@ -49,7 +55,7 @@ Setu doesn't just suggest good practices — it enforces them:
 
 | Skill | Description |
 |-------|-------------|
-| `setu-bootstrap` | Project initialization and setup |
+| `setu-bootstrap` | Project initialization and "Inception" |
 | `setu-verification` | Verification protocol by mode |
 | `setu-rules-creation` | Create effective AGENTS.md files |
 | `code-quality` | Naming, error handling, testing patterns |
@@ -148,9 +154,9 @@ For architecture decisions, brainstorming:
 
 In Ultrathink mode, Setu verifies before completion:
 
-1. **Build**: `npm run build` — checks exit code, captures errors
-2. **Test**: `npm test` — captures failures only, not full output
-3. **Lint**: `npm run lint` — captures error/warning count
+1. **Build**: checks exit code, captures errors — e.g. `npm run build` 
+2. **Test**: captures failures only, not full output — e.g. `npm test` 
+3. **Lint**: captures error/warning count — e.g. `npm run lint` 
 4. **Visual**: Asks you to verify UI looks correct
 5. **Edge cases**: Notes which were considered
 
@@ -206,12 +212,6 @@ If you want suggestions without enforcement:
   }
 }
 ```
-
-## Why Not Other Plugins?
-
-There are excellent OpenCode plugins focused on speed and parallelism. Setu takes a different path — prioritizing **craftsmanship over velocity**, **understanding over execution**, and **elegance over quick fixes**.
-
-If you want an AI that feels like a thoughtful senior colleague rather than a task-completion machine, give Setu a try.
 
 ## Contributing
 

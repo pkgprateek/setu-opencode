@@ -2,124 +2,106 @@
 
 > OpenCode plugin implementation of [Setu](https://github.com/pkgprateek/setu) — the master craftsman persona.
 
-## Current State (v0.1 - Alpha)
+## Vision
 
-### Plugin Architecture
-- [x] Package structure (src/, skills/)
-- [x] TypeScript configuration
-- [x] Basic plugin entry point
-
-### Hooks (Implemented)
-- [x] `system-transform` — Inject lean persona (~500 tokens) via `experimental.chat.system.transform`
-- [x] `chat-message` — Mode detection from keywords via `chat.message`
-- [x] `tool-execute` — Verification tracking via `tool.execute.after`
-- [x] `event` — Session lifecycle handling
-- [ ] Enforcement before completion — Waiting for `session.idle` hook in OpenCode API
-
-### Custom Tools
-- [x] `setu_mode` — Switch operating modes
-- [x] `setu_verify` — Run verification protocol
-- [ ] `lsp_diagnostics` — Get errors/warnings before build (⚠️ API investigation needed)
-- [ ] `lsp_rename` — Safe symbol renaming (⚠️ API investigation needed)
-
-### Skills (Bundled)
-- [x] `setu-bootstrap` — Project initialization protocol
-- [x] `setu-verification` — Verification steps and mode-specific behavior
-- [x] `setu-rules-creation` — AGENTS.md generation guidelines
-- [x] `code-quality` — Naming, error handling, testing patterns
-- [x] `refine-code` — Transform code to match standards
-- [x] `commit-helper` — Conventional commit messages
-- [x] `pr-review` — Security, performance, quality review
+To transform the OpenCode agent from a "tool user" into a "thoughtful colleague" (Setu). We achieve this by enforcing a strict **Covenant of Craftsmanship** directly in the plugin code, ensuring that every interaction follows a disciplined protocol of planning, execution, and verification.
 
 ---
 
-## v1.0 (Target: MVP)
+## The Path to v1.0 (The Implementation Plan)
 
-### Core Functionality
-- [ ] Build and test plugin end-to-end
-- [ ] Publish to npm as `setu-opencode`
-- [ ] Verify installation process works
-- [ ] Test all 4 operating modes
+We are executing a 3-movement strategy to elevate the plugin from "Alpha" to "Setu-Compliant".
 
-### Mode Implementation
-- [ ] **Ultrathink** (default): Full protocol — plan → implement → verify
-- [ ] **Quick**: Skip ceremony, execute directly, minimal verification
-- [ ] **Expert**: Trust user judgment, propose but don't block
-- [ ] **Collab**: Discuss options before implementing
+### Movement 1: The Foundation (Enforcement & API)
+*Goal: Make Setu "strict" and "aware" by wiring up the newly discovered APIs.*
 
-### Mode Behavior
-- [ ] Persistent mode switching: `mode: quick` persists until changed
-- [ ] Temporary mode: "quick fix this" applies to single task only
-- [ ] Mode indicator: Every response starts with `[Mode: X (Default)]`
+- [ ] **Hard Enforcement of Phase 0**
+    > **Intent**: Models often ignore soft "wait" instructions to be helpful. This wastes tokens.
+    > **Spec**: Block all tools except `ls` until user replies to first message.
+    > **Technical**: Use `event` hook to track `session.created` vs first user message.
 
-### Enforcement Mechanisms
-- [ ] Todo continuation — Don't stop with incomplete tasks
-- [ ] Verification enforcement — Run checks before "done" (Ultrathink mode)
-- [ ] Attempt limiter — 2 tries then ask for guidance
+- [ ] **Session Idle Enforcement**
+    > **Intent**: Implement the "conscience" of Setu. Prevents the agent from lazily saying "Done!" without running tests.
+    > **Spec**: Intervene before yield if `VerificationState` is incomplete or `AttemptTracker` > 2.
+    > **Technical**: Use `session.idle` hook (recently discovered in API).
 
-### Documentation
-- [ ] CONTRIBUTING.md
-- [ ] Usage examples
-- [ ] Configuration options
+- [ ] **Todo List Access**
+    > **Intent**: Setu cannot "Obsess Over Details" if it can't see the user's todo list.
+    > **Spec**: Create `setu_todos_read` tool.
+    > **Technical**: Wrap `client.session.todo({ id: sessionID })`.
+
+- [ ] **Attempt Tracking Wiring**
+    > **Intent**: Enforce the "2 attempts then ask" rule (Reality Distortion Field limit).
+    > **Spec**: Count failures; intervene after 2.
+    > **Technical**: Connect `AttemptTracker` to `tool.execute.after` (exit code check) and `session.idle`.
+
+### Movement 2: The Craftsman's Tools (Skills & Context)
+*Goal: Reduce the friction of doing things the "right" way.*
+
+- [ ] **Skill Management Tools**
+    > **Intent**: Manually writing files is error-prone. Capture knowledge ("Leave It Better") with one-shot, low-friction actions.
+    > **Spec**: Create `setu_skill_create` and `setu_skill_update` tools.
+    > **Technical**: Dedicated functions handling `.opencode/skills` paths and YAML frontmatter.
+
+- [ ] **Context Injection**
+    > **Intent**: "Phase 1: Discovery" currently costs tokens/time. Pre-injecting this makes Setu smart from the very first token.
+    > **Spec**: Read `AGENTS.md` and `package.json` at startup; inject summary into system prompt.
+    > **Technical**: Enhance `system-transform` hook using `ctx.project` and `ctx.directory`.
+
+- [ ] **Skill Path Unification**
+    > **Intent**: Align with OpenCode platform while maintaining Setu ecosystem compatibility.
+    > **Spec**: Support `.opencode/skills` (primary) and `.claude/skills` (compat).
+
+- [ ] **"Inception" via setu-bootstrap (The "Why" Enforcement)**
+    > **Intent**: Ensure *users* of Setu also define their "Why", making Setu a craftsman for everyone, not just us.
+    > **Spec**: Update `setu-rules-creation` skill to mandate an "Intent & Philosophy" section in `AGENTS.md`.
+    > **Technical**: Modify `skills/setu-rules-creation/SKILL.md` template.
+
+- [ ] **Git "Smart Branching" Strategy**
+    > **Intent**: Prevent accidental commits to `main` while respecting user autonomy.
+    > **Spec**: Warn if user on `main` + complex task + no override. If on feature branch, check semantic alignment (e.g., working on DB in feat/ui). Warn if task diverges significantly from branch intent.
+    > **Technical**: Update `setu-bootstrap` skill to include this logic in `AGENTS.md`.
+
+- [ ] **Session Compaction Strategy (Context Hygiene)**
+    > **Intent**: Prevent context rot and degradation in long sessions.
+    > **Spec**: Monitor context depth. Trigger `/compact` (via `session.compacting` hook or prompt) when heavy.
+    > **Technical**: Investigate `client` API for compaction triggers or use `client.promptAsync`.
+
+### Movement 3: The Lens (LSP & Verification)
+*Goal: Give Setu "sight" into the code structure.*
+
+- [ ] **LSP Symbol Search**
+    > **Intent**: Grep is "blind". LSP allows Setu to find "Definition of X" instantly.
+    > **Spec**: Implement `lsp_symbols` tool.
+    > **Technical**: Wrap `client.find.symbols`.
+
+- [ ] **Investigation: Smart Context Extraction (LSP/AST)**
+    > **Intent**: Reading 100 lines for a signature is wasteful. Use structural tools to save tokens.
+    > **Spec**: Investigate `ast_grep`, `lsp_hover` or `lsp_definition` (or combination of any) for precision reading.
+    > **Technical**: Evaluate `ast-grep` integration or native LSP capabilities.
+
+- [ ] **Stack-Aware Verification**
+    > **Intent**: "Extract only what's needed." Sending 2000 lines of build logs is wasteful.
+    > **Spec**: `setu_verify` detects stack (Node/Python/Go) and runs optimized commands (grep/tail).
+    > **Technical**: Auto-detect based on `package.json` / `go.mod` etc.
 
 ---
 
-## v1.1 (Extended Features)
+## Future Horizons (v1.1+)
 
-### LSP Tools Investigation
-> **Note:** The `ctx.lsp` API is not documented in OpenCode's plugin docs.
-> These tools are implemented but need validation. Priority for v1.1.
+### v1.1: Extended LSP
+- [ ] **Diagnostics**: Investigate consuming `lsp.client.diagnostics` events to catch errors before building.
+- [ ] **Rename**: Investigate `lsp_rename` for safe refactoring.
 
-- [ ] Investigate if `ctx.lsp` exists in plugin context
-- [ ] Test `lsp_diagnostics` tool
-- [ ] Test `lsp_rename` tool
-- [ ] Document LSP integration if working
-- [ ] Remove or mock if not available
-
-### Extended LSP Tools
-- [ ] `lsp_references` — Find all symbol references
-- [ ] `lsp_definition` — Go to definition
-- [ ] `lsp_hover` — Get type information
-- [ ] AST-grep integration for pattern matching
-
-### MCP Integrations
-- [ ] Documentation lookup (Context7-style)
-- [ ] GitHub code search (grep.app-style)
-- [ ] Web search (evaluate options)
-
-### Background Task Support
-- [ ] Parallel agent execution
-- [ ] Task delegation patterns
-- [ ] Progress tracking
-
----
-
-## v2.0 (Advanced)
-
-### Multi-Agent Delegation
-- [ ] Setu delegates internally to specialized models
-- [ ] Fallback chain if preferred model unavailable
-- [ ] Transparent option: Show delegation in UI
-
-### RLM Integration
-- [ ] Context decomposition
-- [ ] Recursive sub-queries
-- [ ] Infinite context handling
+### v2.0: Advanced Architecture
+- [ ] **RLM Integration**: Recursive Context Decomposition for infinite sessions.
+- [ ] **Internal Delegation**: Spawning sub-agents for specific tasks while maintaining the Setu persona.
+- [ ] **Multi-Model Support**: Delegating specific reasoning steps to the best model for the job.
 
 ---
 
 ## Contributing
-
-Contributions welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
-
-Key areas needing help:
-- Testing on diverse projects
-- Additional skills
-- Documentation improvements
-- Performance optimization
-
----
+See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## License
-
-Apache 2.0 — See [LICENSE](./LICENSE)
+Apache 2.0
