@@ -2,25 +2,14 @@
  * setu_verify tool - Run verification protocol
  */
 
+import { tool } from '@opencode-ai/plugin';
 import { getModeVerificationLevel, type SetuMode } from '../prompts/modes';
 
-export interface SetuVerifyArgs {
-  steps?: string[];  // Optional: specific steps to run
-  skipSteps?: string[];  // Optional: steps to skip
-}
-
-export interface VerificationStep {
+interface VerificationStep {
   name: string;
   command: string;
   description: string;
   required: boolean;
-}
-
-export interface SetuVerifyResult {
-  mode: SetuMode;
-  verificationLevel: string;
-  steps: VerificationStep[];
-  message: string;
 }
 
 const VERIFICATION_STEPS: VerificationStep[] = [
@@ -63,7 +52,7 @@ export function createSetuVerifyTool(
   getModeState: () => { current: SetuMode },
   markVerificationComplete: () => void
 ) {
-  return {
+  return tool({
     description: `Run Setu's verification protocol before completing a task.
 Checks build, tests, lint based on current mode.
 - Ultrathink: Full verification (all steps)
@@ -72,21 +61,15 @@ Checks build, tests, lint based on current mode.
 - Collab: Discuss what to verify`,
     
     args: {
-      steps: {
-        type: 'array' as const,
-        items: { type: 'string' as const },
-        description: 'Specific steps to run: build, test, lint, typecheck, visual',
-        required: false
-      },
-      skipSteps: {
-        type: 'array' as const,
-        items: { type: 'string' as const },
-        description: 'Steps to skip',
-        required: false
-      }
+      steps: tool.schema.array(tool.schema.string()).optional().describe(
+        'Specific steps to run: build, test, lint, typecheck, visual'
+      ),
+      skipSteps: tool.schema.array(tool.schema.string()).optional().describe(
+        'Steps to skip'
+      )
     },
     
-    async execute(args: SetuVerifyArgs): Promise<SetuVerifyResult> {
+    async execute(args, _context): Promise<string> {
       const mode = getModeState().current;
       const verificationLevel = getModeVerificationLevel(mode);
       
@@ -115,28 +98,29 @@ Checks build, tests, lint based on current mode.
       
       markVerificationComplete();
       
-      const stepsList = stepsToRun
-        .map(s => `### ${s.name}\n\`\`\`bash\n${s.command}\n\`\`\`\n${s.description}`)
-        .join('\n\n');
-      
-      const message = stepsToRun.length > 0
-        ? `## Verification Protocol [Mode: ${mode}]
+      if (stepsToRun.length > 0) {
+        const stepsList = stepsToRun
+          .map(s => `### ${s.name}\n\`\`\`bash\n${s.command}\n\`\`\`\n${s.description}`)
+          .join('\n\n');
+        
+        return `## Verification Protocol [Mode: ${mode}]
 
 ${stepsList}
 
-**Principle:** Extract only what's needed. One root error often causes many downstream failures — find the root, ignore the noise.`
-        : `## Verification [Mode: ${mode}]
+**Principle:** Extract only what's needed. One root error often causes many downstream failures — find the root, ignore the noise.`;
+      } else {
+        let guidance = '';
+        if (verificationLevel === 'user-driven') {
+          guidance = 'Suggest steps to user, let them decide.';
+        } else if (verificationLevel === 'discuss') {
+          guidance = 'Discuss with user what verification is needed.';
+        }
+        
+        return `## Verification [Mode: ${mode}]
 
 Verification level: ${verificationLevel}
-${verificationLevel === 'user-driven' ? 'Suggest steps to user, let them decide.' : ''}
-${verificationLevel === 'discuss' ? 'Discuss with user what verification is needed.' : ''}`;
-      
-      return {
-        mode,
-        verificationLevel,
-        steps: stepsToRun,
-        message
-      };
+${guidance}`;
+      }
     }
-  };
+  });
 }

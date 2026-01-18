@@ -2,12 +2,9 @@
  * setu_mode tool - Switch operating modes
  */
 
-import { type SetuMode, MODE_TRIGGERS } from '../prompts/modes';
+import { tool } from '@opencode-ai/plugin';
+import { type SetuMode } from '../prompts/modes';
 import { MODE_DESCRIPTIONS, getModePrefix } from '../prompts/persona';
-
-export interface SetuModeArgs {
-  mode: string;
-}
 
 export interface SetuModeResult {
   success: boolean;
@@ -23,7 +20,7 @@ export function createSetuModeTool(
   getModeState: () => { current: SetuMode },
   setModeState: (state: { current: SetuMode; isPersistent: boolean }) => void
 ) {
-  return {
+  return tool({
     description: `Switch Setu's operating mode. Available modes:
 - ultrathink: Full protocol (plan, implement, verify). For complex tasks.
 - quick: Skip ceremony, minimal verification. For typos and small fixes.
@@ -31,25 +28,18 @@ export function createSetuModeTool(
 - collab: Discuss options before implementing. For architecture decisions.`,
     
     args: {
-      mode: {
-        type: 'string' as const,
-        description: 'The mode to switch to: ultrathink, quick, expert, or collab',
-        required: true
-      }
+      mode: tool.schema.string().describe(
+        'The mode to switch to: ultrathink, quick, expert, or collab'
+      )
     },
     
-    async execute(args: SetuModeArgs): Promise<SetuModeResult> {
+    async execute(args, _context): Promise<string> {
       const normalizedMode = args.mode.toLowerCase() as SetuMode;
       
       // Validate mode
       const validModes: SetuMode[] = ['ultrathink', 'quick', 'expert', 'collab'];
       if (!validModes.includes(normalizedMode)) {
-        return {
-          success: false,
-          previousMode: getModeState().current,
-          newMode: getModeState().current,
-          message: `Invalid mode: ${args.mode}. Valid modes: ${validModes.join(', ')}`
-        };
+        return `Invalid mode: ${args.mode}. Valid modes: ${validModes.join(', ')}`;
       }
       
       const previousMode = getModeState().current;
@@ -57,18 +47,13 @@ export function createSetuModeTool(
       
       const modeDesc = MODE_DESCRIPTIONS[normalizedMode];
       
-      return {
-        success: true,
-        previousMode,
-        newMode: normalizedMode,
-        message: `${getModePrefix(normalizedMode)}
+      return `${getModePrefix(normalizedMode)}
 
 Switched from ${previousMode} to ${normalizedMode}.
 
 ${modeDesc}
 
-Mode will persist until changed.`
-      };
+Mode will persist until changed.`;
     }
-  };
+  });
 }

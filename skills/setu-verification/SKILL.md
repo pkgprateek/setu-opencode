@@ -1,6 +1,6 @@
 ---
 name: setu-verification
-description: Run verification protocol before completing tasks. Checks build, tests, lint based on mode. Use when finishing a task, before claiming completion, asked to "verify", "check", or "validate" changes.
+description: Run verification protocol before completing tasks. Checks build, tests, lint based on mode. Use when finishing a task, before claiming completion, or asked to "verify", "validate", "check", "test", or "run tests".
 ---
 
 # Verification Protocol

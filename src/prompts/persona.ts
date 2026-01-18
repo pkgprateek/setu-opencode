@@ -58,7 +58,8 @@ Before I begin, is there any additional context, specific focus, or details you'
 (You can specify a mode: Quick, Expert, or Collab — Ultrathink applies otherwise.)`;
 };
 
-export const getModePrefix = (mode: string): string => {
+export const getModePrefix = (mode: string, isDefault: boolean = false): string => {
   const capitalizedMode = mode.charAt(0).toUpperCase() + mode.slice(1).toLowerCase();
-  return `[Mode: ${capitalizedMode}]`;
+  const defaultSuffix = isDefault ? ' (Default)' : '';
+  return `[Mode: ${capitalizedMode}${defaultSuffix}]`;
 };

@@ -33,7 +33,7 @@ Setu adapts to your task:
 | **Expert** | "mode: expert" | Trust your judgment, propose but don't block |
 | **Collab** | "let's discuss" | Explore options together before implementing |
 
-Every response starts with `[Mode: Ultrathink]` so you always know what to expect.
+Every response starts with `[Mode: Ultrathink (Default)]` so you always know what to expect.
 
 ### Enforcement
 
@@ -215,12 +215,18 @@ If you want an AI that feels like a thoughtful senior colleague rather than a ta
 
 ## Contributing
 
-Contributions welcome! Areas needing help:
+Contributions welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup and guidelines.
+
+Areas needing help:
 
 - Testing on diverse projects
 - Additional skills
 - Documentation improvements
 - Performance optimization
+
+## Roadmap
+
+See [ROADMAP.md](./ROADMAP.md) for planned features and development status.
 
 ## License
 

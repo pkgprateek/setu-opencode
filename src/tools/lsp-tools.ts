@@ -3,6 +3,10 @@
  * 
  * These tools provide high-value refactoring and diagnostics capabilities
  * that are safer and more accurate than grep/replace.
+ * 
+ * NOTE: The ctx.lsp API is not documented in OpenCode's plugin docs.
+ * These tools need validation and may not work until the API is confirmed.
+ * See ROADMAP.md for investigation status.
  */
 
 import { tool } from '@opencode-ai/plugin';
@@ -16,7 +20,9 @@ import { tool } from '@opencode-ai/plugin';
 export const lspDiagnosticsTool = tool({
   description: `Get diagnostics (errors, warnings) from the LSP server for a file or workspace.
 Use this to check for issues before building, or to understand what's broken.
-Much faster than running a full build.`,
+Much faster than running a full build.
+
+NOTE: This tool requires LSP integration which may not be available in all environments.`,
   
   args: {
     filePath: tool.schema.string().optional().describe(
@@ -30,57 +36,23 @@ Much faster than running a full build.`,
     )
   },
   
-  async execute(args, ctx) {
-    const { filePath, severity = 'warning', limit = 50 } = args;
+  async execute(args, _context): Promise<string> {
+    const { filePath } = args;
     
-    try {
-      // Query LSP diagnostics via OpenCode's LSP integration
-      const diagnostics = await ctx.lsp.getDiagnostics({
-        uri: filePath ? `file://${filePath}` : undefined,
-        minSeverity: severity
-      });
-      
-      if (!diagnostics || diagnostics.length === 0) {
-        return {
-          success: true,
-          count: 0,
-          message: filePath 
-            ? `No diagnostics found for ${filePath}`
-            : 'No diagnostics found in workspace'
-        };
-      }
-      
-      // Format diagnostics for readability
-      const formatted = diagnostics
-        .slice(0, limit)
-        .map(d => ({
-          file: d.uri.replace('file://', ''),
-          line: d.range.start.line + 1,
-          severity: d.severity,
-          message: d.message,
-          source: d.source
-        }));
-      
-      const summary = {
-        errors: diagnostics.filter(d => d.severity === 'error').length,
-        warnings: diagnostics.filter(d => d.severity === 'warning').length,
-        total: diagnostics.length
-      };
-      
-      return {
-        success: true,
-        count: formatted.length,
-        summary,
-        diagnostics: formatted,
-        message: `Found ${summary.errors} errors, ${summary.warnings} warnings`
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: String(error),
-        message: 'Failed to get diagnostics. Is the LSP server running?'
-      };
-    }
+    // LSP API is not available in the current OpenCode plugin API
+    // This tool is a placeholder for future implementation
+    return `## LSP Diagnostics
+
+**Status:** LSP integration is not yet available in the OpenCode plugin API.
+
+**Workaround:** Use the following command instead:
+\`\`\`bash
+npm run build 2>&1 | tail -30
+\`\`\`
+
+${filePath ? `Requested file: ${filePath}` : 'Requested: workspace-wide diagnostics'}
+
+See setu-opencode ROADMAP.md for LSP integration status.`;
   }
 });
 
@@ -93,7 +65,9 @@ Much faster than running a full build.`,
 export const lspRenameTool = tool({
   description: `Rename a symbol (variable, function, class, etc.) across the entire workspace.
 Uses LSP for accurate, safe renaming that updates all references.
-Much safer than grep/replace which can cause false positives.`,
+Much safer than grep/replace which can cause false positives.
+
+NOTE: This tool requires LSP integration which may not be available in all environments.`,
   
   args: {
     filePath: tool.schema.string().describe(
@@ -113,90 +87,27 @@ Much safer than grep/replace which can cause false positives.`,
     )
   },
   
-  async execute(args, ctx) {
-    const { filePath, line, column, newName, preview = false } = args;
+  async execute(args, _context): Promise<string> {
+    const { filePath, line, column, newName, preview } = args;
     
-    try {
-      // First, prepare the rename to validate it's possible
-      const prepareResult = await ctx.lsp.prepareRename({
-        uri: `file://${filePath}`,
-        position: { line: line - 1, character: column - 1 }
-      });
-      
-      if (!prepareResult) {
-        return {
-          success: false,
-          message: 'Cannot rename symbol at this position. It may not be a renamable identifier.'
-        };
-      }
-      
-      // Get the current name
-      const currentName = prepareResult.placeholder || '(unknown)';
-      
-      // Perform the rename (or preview)
-      const edits = await ctx.lsp.rename({
-        uri: `file://${filePath}`,
-        position: { line: line - 1, character: column - 1 },
-        newName
-      });
-      
-      if (!edits || Object.keys(edits.changes || {}).length === 0) {
-        return {
-          success: false,
-          message: 'No changes would result from this rename.'
-        };
-      }
-      
-      // Count affected files and locations
-      const changes = edits.changes || {};
-      const fileCount = Object.keys(changes).length;
-      const totalEdits = Object.values(changes).reduce(
-        (sum, fileEdits) => sum + fileEdits.length, 
-        0
-      );
-      
-      // Format for preview
-      const preview_changes = Object.entries(changes).map(([uri, fileEdits]) => ({
-        file: uri.replace('file://', ''),
-        locations: fileEdits.map(e => ({
-          line: e.range.start.line + 1,
-          column: e.range.start.character + 1
-        }))
-      }));
-      
-      if (preview) {
-        return {
-          success: true,
-          preview: true,
-          currentName,
-          newName,
-          fileCount,
-          totalEdits,
-          changes: preview_changes,
-          message: `Would rename '${currentName}' to '${newName}' in ${fileCount} files (${totalEdits} locations)`
-        };
-      }
-      
-      // Apply the edits
-      await ctx.lsp.applyWorkspaceEdit(edits);
-      
-      return {
-        success: true,
-        applied: true,
-        currentName,
-        newName,
-        fileCount,
-        totalEdits,
-        changes: preview_changes,
-        message: `Renamed '${currentName}' to '${newName}' in ${fileCount} files (${totalEdits} locations)`
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: String(error),
-        message: 'Rename failed. Check if the symbol exists and LSP is available.'
-      };
-    }
+    // LSP API is not available in the current OpenCode plugin API
+    // This tool is a placeholder for future implementation
+    return `## LSP Rename
+
+**Status:** LSP integration is not yet available in the OpenCode plugin API.
+
+**Workaround:** Use grep and edit tools instead:
+1. Search: \`grep -rn "symbolName" --include="*.ts"\`
+2. Review matches carefully
+3. Edit each file
+
+**Requested rename:**
+- File: ${filePath}
+- Position: line ${line}, column ${column}
+- New name: ${newName}
+- Preview: ${preview ? 'yes' : 'no'}
+
+See setu-opencode ROADMAP.md for LSP integration status.`;
   }
 });
 

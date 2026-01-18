@@ -8,15 +8,19 @@
  * - Enforcement: Todo continuation, verification before completion
  * - Skills: Bootstrap, verification, rules creation, code quality, and more
  * 
- * @see https://github.com/prateekkumargoel/setu-opencode
+ * @see https://github.com/pkgprateek/setu-opencode
  */
 
 import type { Plugin } from '@opencode-ai/plugin';
-import { type SetuMode, type ModeState } from './prompts/modes';
-import { createSessionStartHook } from './hooks/session-start';
-import { createPromptAppendHook } from './hooks/prompt-append';
-import { createSessionIdleHook, type Todo } from './hooks/session-idle';
-import { createToolExecuteAfterHook, createAttemptTracker } from './hooks/tool-execute';
+import { type ModeState } from './prompts/modes';
+import {
+  createSystemTransformHook,
+  createChatMessageHook,
+  createToolExecuteAfterHook,
+  createAttemptTracker,
+  createEventHook,
+  type VerificationStep
+} from './hooks';
 import { createSetuModeTool } from './tools/setu-mode';
 import { createSetuVerifyTool } from './tools/setu-verify';
 import { lspTools } from './tools/lsp-tools';
@@ -25,17 +29,21 @@ import { lspTools } from './tools/lsp-tools';
 interface SetuState {
   mode: ModeState;
   isFirstSession: boolean;
-  verificationSteps: Set<'build' | 'test' | 'lint'>;
+  verificationSteps: Set<VerificationStep>;
   verificationComplete: boolean;
-  sessionVerificationReminders: Set<string>;
 }
 
 /**
  * Setu Plugin for OpenCode
+ * 
+ * Uses available hooks from the OpenCode Plugin API:
+ * - experimental.chat.system.transform: Inject persona into system prompt
+ * - chat.message: Detect mode keywords in user messages
+ * - tool.execute.after: Track verification steps
+ * - event: Handle session lifecycle
+ * - tool: Custom tools (setu_mode, setu_verify, lsp_*)
  */
-export const SetuPlugin: Plugin = async (ctx) => {
-  const { client } = ctx;
-  
+export const SetuPlugin: Plugin = async (_ctx) => {
   // Initialize state
   const state: SetuState = {
     mode: {
@@ -44,22 +52,22 @@ export const SetuPlugin: Plugin = async (ctx) => {
     },
     isFirstSession: true,
     verificationSteps: new Set(),
-    verificationComplete: false,
-    sessionVerificationReminders: new Set()
+    verificationComplete: false
   };
   
-  // Attempt tracker for the 2-tries-then-ask pattern
+  // Create attempt tracker for "2 tries then ask" pattern
   const attemptTracker = createAttemptTracker();
   
   // State accessors
   const getModeState = () => state.mode;
   const setModeState = (newState: ModeState) => { state.mode = newState; };
-  const isFirstSession = () => state.isFirstSession;
-  const setFirstSessionDone = () => { state.isFirstSession = false; };
-  const getDefaultMode = (): SetuMode => 'ultrathink';
   
-  // Verification tracking
-  const markVerificationStep = (step: 'build' | 'test' | 'lint') => {
+  const getVerificationState = () => ({
+    complete: state.verificationComplete,
+    stepsRun: state.verificationSteps
+  });
+  
+  const markVerificationStep = (step: VerificationStep) => {
     state.verificationSteps.add(step);
     // Consider verified if build and test have run
     if (state.verificationSteps.has('build') && state.verificationSteps.has('test')) {
@@ -67,79 +75,52 @@ export const SetuPlugin: Plugin = async (ctx) => {
     }
   };
   
-  const getVerificationRan = (sessionId: string): boolean => {
-    return state.verificationComplete || state.sessionVerificationReminders.has(sessionId);
-  };
-  
-  const setVerificationReminder = (sessionId: string) => {
-    state.sessionVerificationReminders.add(sessionId);
+  const resetVerificationState = () => {
+    state.verificationSteps.clear();
+    state.verificationComplete = false;
   };
   
   const markVerificationComplete = () => {
     state.verificationComplete = true;
   };
   
-  // Todo fetching (uses OpenCode's todo system)
-  const getTodos = async (sessionId: string): Promise<Todo[]> => {
-    try {
-      // OpenCode stores todos in session state
-      // This is a placeholder - actual implementation depends on OpenCode's API
-      const response = await client.todo.list({ sessionId });
-      return response?.todos || [];
-    } catch {
-      return [];
-    }
+  const setFirstSessionDone = () => {
+    state.isFirstSession = false;
   };
   
   // Log plugin initialization
-  await client.app.log({
-    service: 'setu',
-    level: 'info',
-    message: 'Setu plugin initialized',
-    extra: { mode: state.mode.current }
-  });
+  console.log('[Setu] Plugin initialized');
+  console.log('[Setu] Default mode:', state.mode.current);
+  console.log('[Setu] Skills bundled: setu-bootstrap, setu-verification, setu-rules-creation, code-quality, refine-code, commit-helper, pr-review');
   
   return {
-    // Session created - inject persona
-    'session.created': createSessionStartHook(
+    // Inject Setu persona into system prompt
+    'experimental.chat.system.transform': createSystemTransformHook(
       getModeState,
-      isFirstSession,
+      getVerificationState
+    ),
+    
+    // Detect mode keywords in user messages
+    'chat.message': createChatMessageHook(
+      getModeState,
+      setModeState
+    ),
+    
+    // Track verification steps from tool executions
+    'tool.execute.after': createToolExecuteAfterHook(markVerificationStep),
+    
+    // Handle session lifecycle events
+    event: createEventHook(
+      resetVerificationState,
+      () => attemptTracker.clearAll(),
       setFirstSessionDone
     ),
-    
-    // Prompt append - detect mode keywords
-    'tui.prompt.append': createPromptAppendHook(
-      getModeState,
-      setModeState,
-      getDefaultMode
-    ),
-    
-    // Session idle - enforce verification and todo completion
-    'session.idle': createSessionIdleHook(
-      getModeState,
-      getTodos,
-      getVerificationRan,
-      setVerificationReminder
-    ),
-    
-    // Tool execute after - track verification steps
-    'tool.execute.after': createToolExecuteAfterHook(markVerificationStep),
     
     // Custom tools
     tool: {
       setu_mode: createSetuModeTool(getModeState, setModeState),
       setu_verify: createSetuVerifyTool(getModeState, markVerificationComplete),
-      // LSP tools for IDE-like capabilities
       ...lspTools
-    },
-    
-    // Event handler for general events
-    event: async ({ event }) => {
-      // Reset verification state on new session
-      if (event.type === 'session.created') {
-        state.verificationSteps.clear();
-        state.verificationComplete = false;
-      }
     }
   };
 };
