@@ -20,16 +20,18 @@
 - [x] Basic plugin entry point
 - [x] `system-transform` hook — Injects lean persona (~500 tokens)
 - [x] `chat.message` hook — Mode detection from keywords
+- [x] `tool.execute.before` hook — Phase 0 blocking (pre-emptive enforcement)
 - [x] `tool.execute.after` hook — Verification tracking
 - [x] `event` hook — Session lifecycle handling
 - [x] `setu_mode` tool — Switch operating modes
 - [x] `setu_verify` tool — Run verification protocol
+- [x] `setu_context` tool — Confirm context to unlock side-effect tools
 - [x] 7 bundled skills (bootstrap, verification, rules-creation, code-quality, refine-code, commit-helper, pr-review)
 
 ### Not Yet Implemented
-- [ ] `tool.execute.before` hook — Phase 0 blocking (**API confirmed available**)
 - [ ] `session.idle` hook — Verification enforcement (waiting for API)
 - [ ] LSP tools — API investigation needed
+- [ ] Subagent tool interception — Defense in depth for child sessions
 
 ---
 
@@ -72,13 +74,14 @@ Three movements to production-ready.
 
 > **Intent:** The #1 cause of wasted work is wrong assumptions. Block execution until context is confirmed.
 
-- [ ] **Phase 0 Hard Enforcement**
+- [x] **Phase 0 Hard Enforcement**
     - **Why:** Models ignore soft "wait" instructions to be helpful. They dive in anyway.
     - **What:** Block SIDE-EFFECT tools until user responds to context question. Allow read-only tools so agent can form smart questions.
     - **How:** Use `tool.execute.before` hook to intercept and block.
-    - **Allow:** `read`, `glob`, `grep` (read-only — "look but don't touch")
-    - **Allow:** `bash` when command starts with: `ls`, `cat`, `head`, `tail`, `grep`, `find`, `pwd`, `echo`, `which`, `env`
-    - **Block:** `write`, `edit`, `bash` (other commands), `git` (write operations)
+    - **Allow:** `read`, `glob`, `grep`, `webfetch`, `todoread` (read-only — "look but don't touch")
+    - **Allow:** `bash` when command starts with: `ls`, `cat`, `head`, `tail`, `grep`, `find`, `pwd`, `echo`, `which`, `env`, `git status`, `git log`, `git diff`, `git branch`, `git show`
+    - **Block:** `write`, `edit`, `todowrite`, `bash` (other commands), `git` (write operations)
+    - **Unlock:** Agent calls `setu_context` tool after gathering context
     - **Proof:** Screenshot showing blocked write attempt before user responds.
 
 - [ ] **Subagent Tool Interception (Defense in Depth)**
