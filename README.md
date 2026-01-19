@@ -217,6 +217,8 @@ Setu is named after the bridge in mythology — built not by force, but by disci
 
 See [ROADMAP.md](./ROADMAP.md) for the path to v1.0.
 
+**Coming in v1.1:** Visual verification via [agent-browser](https://github.com/vercel-labs/agent-browser) — Setu will finally be able to *see* what it builds.
+
 ---
 
 ## Contributing

@@ -270,21 +270,94 @@ Three movements to production-ready.
 
 ## Future Horizons
 
-### v1.1: Extended LSP
+### v1.1: Visual Verification & Agent Browser Integration
+
+> **Intent:** AI agents can finally *see* what they build. Visual verification closes the loop.
+
+#### Agent Browser Detection
+
+- [ ] **CLI + Skill Detection**
+    - **Why:** Smart behavior without bundling. If user has agent-browser, Setu adapts.
+    - **What:** Detect if `agent-browser` CLI exists AND skill file is present.
+    - **How:** 
+      1. Check CLI: `which agent-browser` or check in `node_modules/.bin/`
+      2. Check skill: Look for `node_modules/agent-browser/skills/agent-browser/SKILL.md`
+    - **If detected:** Inject prompt: "Visual verification available via agent-browser."
+    - **If not detected:** Normal Setu behavior, no mention.
+
+#### Visual Verification in Default Mode
+
+- [ ] **Conditional Visual Check**
+    - **Why:** "Please verify the UI" is a cop-out. Setu should actually look.
+    - **What:** When agent-browser detected + web project, include visual verification.
+    - **How:** 
+      1. Detect web project (package.json has `dev` script, uses React/Vue/Next/etc.)
+      2. In `setu-verification` skill, add visual check step if conditions met
+      3. Use `agent-browser snapshot -i` for accessibility tree
+      4. Use `agent-browser screenshot` for visual proof
+    - **Proof:** Screenshot stored as verification artifact.
+
+#### Visual-Verify Subagent
+
+- [ ] **Token-Efficient Visual Checks**
+    - **Why:** Screenshots are 5-10k tokens. Don't pollute main session context.
+    - **What:** Define `visual-verify` subagent that handles all visual verification.
+    - **How:** Create subagent config (via `.opencode/agents/visual-verify.md`):
+      ```yaml
+      ---
+      description: Visual verification using agent-browser. Takes screenshots and accessibility snapshots.
+      mode: subagent
+      hidden: true  # Only invoked programmatically
+      tools:
+        bash: true  # For agent-browser CLI
+        write: false
+        edit: false
+      permission:
+        bash:
+          "agent-browser *": allow
+          "*": deny
+      ---
+      
+      You are a visual verification agent. Use agent-browser to:
+      1. Take accessibility snapshot: `agent-browser snapshot -i`
+      2. Take screenshot if needed: `agent-browser screenshot`
+      3. Analyze and report: PASS/FAIL + specific findings
+      
+      Return a concise summary (under 100 tokens) to the main agent.
+      ```
+    - **Result:** Main agent gets "PASS: Login button found, form accessible" instead of raw screenshot data.
+
+#### E2E Testing (Opt-in)
+
+- [ ] **Web Project Smoke Tests**
+    - **Why:** For web projects, visual verification can include basic E2E checks.
+    - **What:** Ask user if they want E2E verification after code changes.
+    - **When:** Collab mode OR explicit user request.
+    - **Flow:**
+      1. Detect dev server running (port 3000, 5173, 8080, etc.)
+      2. Ask: "Would you like me to verify the UI after changes?"
+      3. If yes, spawn visual-verify subagent
+    - **Not automatic:** E2E is opt-in, not forced.
+
+### v1.1: Extended LSP (Lower Priority)
+
 - [ ] Diagnostics: Pre-build error detection
 - [ ] Rename: Safe refactoring via `lsp_rename`
 
 ### v1.2: Claude Code Compatibility
+
 - [ ] Hook compatibility: Load Claude Code's settings.json hooks
 - [ ] Skill compatibility: Load skills from `.claude/skills/`
 - [ ] Command compatibility: Load commands from `.claude/commands/`
 
 ### v2.0: Disciplined Delegation
+
 - [ ] Multi-agent: Setu spawns sub-agents but enforces verification on results
 - [ ] Model routing: Delegate to best model for task type
 - [ ] Transparent mode: Show delegation in UI
 
 ### v2.1: Infinite Context
+
 - [ ] RLM Integration: Recursive context decomposition
 - [ ] Cross-session memory: Remember project patterns
 
@@ -296,11 +369,13 @@ Three movements to production-ready.
 
 ### Tested With
 - [ ] **Other OpenCode plugins**: Document coexistence workflow
-- [ ] **context7 MCP**: Official docs integration
+- [ ] **agent-browser**: Visual verification and E2E testing
+- [ ] **context7 MCP**: Official docs integration (preferred for docs)
 - [ ] **grep.app MCP**: GitHub code search
 
 ### Detection Strategy
 - [ ] Auto-detect installed plugins at startup
+- [ ] Auto-detect agent-browser CLI + skill file
 - [ ] Adapt hooks based on what's already registered
 - [ ] Load after detected plugins (don't interfere)
 

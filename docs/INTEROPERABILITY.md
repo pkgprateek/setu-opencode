@@ -48,13 +48,40 @@ If hooks overlap with another plugin, you may need to disable one or the other. 
 
 ---
 
-## Recommended MCPs
+## Recommended Tools
 
-Setu doesn't bundle MCPs (keeps the plugin lean), but these work well:
+Setu doesn't bundle external tools (keeps the plugin lean), but these work well:
+
+### agent-browser (Visual Verification)
+
+[agent-browser](https://github.com/vercel-labs/agent-browser) enables AI agents to control a real browser — taking screenshots, reading accessibility trees, and running E2E tests.
+
+**Why it matters:** Setu can finally *see* what it builds instead of asking you to verify visually.
+
+**Installation:**
+```bash
+npm install -g agent-browser
+agent-browser install  # Download Chromium
+```
+
+**How Setu uses it (v1.1+):**
+- Setu auto-detects if agent-browser is installed
+- If detected, visual verification becomes available in Default mode
+- Token-efficient: Uses a subagent to handle screenshots, keeping main context clean
+
+**Manual usage:**
+```bash
+agent-browser open http://localhost:3000
+agent-browser snapshot -i  # Get accessibility tree with refs
+agent-browser screenshot page.png
+agent-browser close
+```
+
+### Recommended MCPs
 
 | MCP | Purpose | Cost |
 |-----|---------|------|
-| [context7](https://github.com/upstash/context7) | Official documentation lookup | Free |
+| [context7](https://github.com/upstash/context7) | Official documentation lookup (preferred) | Free |
 | [grep.app](https://grep.app) | GitHub code search | Free |
 
 **Installation:**
@@ -71,14 +98,17 @@ Setu doesn't bundle MCPs (keeps the plugin lean), but these work well:
 }
 ```
 
+**Note on documentation:** Use context7 for docs lookup (token-efficient). agent-browser can fetch JS-rendered docs as a fallback, but at higher token cost.
+
 ---
 
 ## Detection (Future)
 
-In a future version, Setu will auto-detect installed plugins and adapt:
+In a future version, Setu will auto-detect installed tools and adapt:
 
 | If Detected | Setu Behavior |
 |-------------|---------------|
+| agent-browser | Enable visual verification in Default mode |
 | Other discipline plugins | Disable duplicate hooks |
 | LSP tools available | Use them for verification |
 | Session management tools | Integrate for context hygiene |
