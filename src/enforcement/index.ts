@@ -3,6 +3,7 @@
  */
 
 export {
+  isSetuTool,
   isReadOnlyTool,
   isReadOnlyBashCommand,
   isSideEffectTool,

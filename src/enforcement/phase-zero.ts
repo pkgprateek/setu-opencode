@@ -9,6 +9,12 @@
  */
 
 /**
+ * Setu's own tools - always allowed regardless of Phase 0 state
+ * These are tools provided by this plugin
+ */
+const SETU_TOOLS = ['setu_mode', 'setu_verify', 'setu_context'] as const;
+
+/**
  * Read-only tools that are always allowed
  * These let the agent "look but don't touch"
  */
@@ -47,6 +53,13 @@ export interface Phase0State {
   sessionId: string;
   /** Timestamp when Phase 0 started */
   startedAt: number;
+}
+
+/**
+ * Check if a tool is one of Setu's own tools
+ */
+export function isSetuTool(toolName: string): boolean {
+  return SETU_TOOLS.includes(toolName as typeof SETU_TOOLS[number]);
 }
 
 /**
@@ -107,6 +120,11 @@ export function shouldBlockInPhase0(
   toolName: string,
   args?: Record<string, unknown>
 ): { blocked: boolean; reason?: string } {
+  // Setu's own tools - always allowed
+  if (isSetuTool(toolName)) {
+    return { blocked: false };
+  }
+  
   // Always allow read-only tools
   if (isReadOnlyTool(toolName)) {
     return { blocked: false };
