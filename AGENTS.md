@@ -21,18 +21,21 @@ src/
 ├── hooks/            # OpenCode hook implementations
 │   ├── system-transform.ts   # Injects Setu persona
 │   ├── chat-message.ts       # Mode detection
-│   └── tool-execute.ts       # Verification tracking
-├── tools/            # Custom tools exposed to agent
-│   ├── setu-mode.ts          # Mode switching
-│   └── setu-verify.ts        # Verification trigger
-└── state/            # Session state management
-    └── session.ts            # Mode, attempt tracking
+│   └── tool-execute.ts       # Tool interception (before/after)
+├── enforcement/      # Phase 0 blocking logic
+├── prompts/          # Persona and system prompt fragments
+└── tools/            # Custom tools exposed to agent
+    ├── setu-mode.ts          # Mode switching
+    └── setu-verify.ts        # Verification trigger
 
 skills/               # Bundled skills (loaded on-demand)
-├── setu-bootstrap/
-├── setu-verification/
-├── code-quality/
-└── ...
+├── setu-bootstrap/         # Initial context gathering
+├── setu-verification/      # Build/test/lint protocol
+├── setu-rules-creation/    # AGENTS.md generation
+├── code-quality/           # Code standards enforcement
+├── refine-code/            # Code cleanup and polish
+├── commit-helper/          # Conventional commit messages
+└── pr-review/              # Pull request analysis
 ```
 
 ### Key Patterns
@@ -41,6 +44,7 @@ skills/               # Bundled skills (loaded on-demand)
 2. **State isolation**: Each session has independent mode/attempt state
 3. **Progressive loading**: Skills load on-demand, not upfront
 4. **Pre-emptive blocking**: Use `tool.execute.before` to block, not fix after
+5. **Defense in depth**: Both hook + wrapper pattern for subagent coverage
 
 ## Code Style
 
@@ -87,7 +91,7 @@ Setu is **pre-emptive**, not reactive. This means:
 ### Phase 0 Rule
 
 **Allow (read-only):** `read`, `glob`, `grep`
-**Allow (bash read-only):** `ls`, `cat`, `head`, `tail`, `grep`, `find`, `pwd`, `echo`, `which`
+**Allow (bash read-only):** `ls`, `cat`, `head`, `tail`, `grep`, `find`, `pwd`, `echo`, `which`, `env`
 **Block (side-effects):** `write`, `edit`, `bash` (other commands), `git` (write operations)
 
 This lets the agent "look but don't touch" until context is confirmed.
@@ -106,6 +110,11 @@ This lets the agent "look but don't touch" until context is confirmed.
 - Mode persists for session until changed
 - Attempt counter resets on success or user guidance
 - After 2 failed attempts → ask for guidance, don't retry
+
+### v1.1 Preview
+
+- **Visual verification**: Detect `agent-browser` (Vercel), enable screenshot-based verification for web projects
+- **E2E testing**: Opt-in automated tests before claiming "done"
 
 ## Git Workflow
 
