@@ -25,3 +25,7 @@ npm-debug.log*
 
 # TypeScript cache
 *.tsbuildinfo
+
+# Personal/local files
+MARKETING_TASKS.md
+*.personal.md
