@@ -13,7 +13,7 @@
 
 ## Why Setu Exists
 
-AI coding agents are fast. But speed without discipline creates three problems:
+AI coding agents are fast. But speed without discipline creates problems:
 
 | Problem | What Happens | The Real Cost |
 |---------|--------------|---------------|
@@ -21,22 +21,9 @@ AI coding agents are fast. But speed without discipline creates three problems:
 | **Unverified output** | Agent claims "done!" but tests would fail | Broken code reaches production |
 | **Infinite loops** | Agent retries the same wrong approach forever | Burned tokens, wasted time, no progress |
 
-**The root cause:** These agents are reactive, not proactive. They run first, fix later.
+**The root cause:** Most agents are reactive — they run first, fix later.
 
 **Setu's approach:** Block wrong actions *before* they execute. Make the agent think first.
-
----
-
-## The Key Difference
-
-| Approach | Reactive Tools (oh-my-opencode, etc.) | Setu (Pre-emptive) |
-|----------|-----------------------------|--------------------|
-| **When it acts** | After the agent makes a mistake | Before the agent executes |
-| **How it works** | Fixes errors, retries, continues | Blocks execution, forces reflection |
-| **Philosophy** | "Keep going until it works" | "Think first, then act correctly" |
-| **Best for** | Rapid prototyping, exploration | Production code, correctness-critical work |
-
-**Setu doesn't replace reactive tools.** It adds a discipline layer on top. Use both if you want power AND correctness.
 
 ---
 
@@ -62,8 +49,9 @@ AI coding agents are fast. But speed without discipline creates three problems:
                            ▼
 ┌─────────────────────────────────────────────────────────┐
 │  PHASE 0: Context Gate                                  │
-│  → Blocks ALL tools until you respond                   │
-│  → Agent cannot proceed on assumptions                  │
+│  → Agent can READ files (look but don't touch)          │
+│  → Agent CANNOT write, execute, or modify               │
+│  → Forms smart questions based on what it reads         │
 └─────────────────────────────────────────────────────────┘
                            │
                     (You respond)
@@ -124,18 +112,18 @@ Every response shows `[Mode: X]` so you always know what level of rigor is activ
 
 ---
 
-## Zero Configuration
+## Installation
 
-**Intent:** Friction kills adoption. Setu should "just work."
+**Prerequisite:** [OpenCode](https://opencode.ai) must be installed.
 
-```bash
-# Add to your opencode.json
+Add to your `opencode.json`:
+```json
 {
   "plugin": ["setu-opencode"]
 }
 ```
 
-That's it. No JSON configuration required. Setu works with sensible defaults.
+That's it. OpenCode automatically installs the plugin on next startup.
 
 **Optional overrides** (if you want them):
 ```json
@@ -149,33 +137,22 @@ That's it. No JSON configuration required. Setu works with sensible defaults.
 
 ---
 
-## Works With Everything
+## Works With Other Plugins
 
-**Intent:** Setu is a discipline layer, not a replacement for your tools.
-
-### With oh-my-opencode
-
-OMOC gives you power (multi-agent, LSP, MCPs). Setu adds discipline.
+Setu is a discipline layer, not a replacement for your tools.
 
 ```json
 {
-  "plugin": ["oh-my-opencode", "setu-opencode"]
+  "plugin": ["your-other-plugin", "setu-opencode"]
 }
 ```
-
-Setu detects OMOC and adapts:
-- Loads after OMOC (doesn't interfere)
-- Wraps OMOC's agents with Phase 0 and verification
-- Uses OMOC's tools when available
-
-### With Any Plugin
 
 Setu hooks into OpenCode's system layer:
 - `system-transform` — Injects discipline protocol
 - `tool.execute.before` — Phase 0 blocking
 - `session.idle` — Verification enforcement
 
-Your MCPs, tools, and workflows work unchanged.
+Your MCPs, tools, and workflows work unchanged. Setu wraps them with discipline.
 
 ---
 
@@ -192,15 +169,11 @@ Your MCPs, tools, and workflows work unchanged.
 - Exploration where you want the agent to try everything
 - Users who prefer maximum autonomy
 
-**The market positioning:**
-> OMOC wins the indie hacker who wants powerful tools.
-> Setu wins the senior engineer who needs their agent to stop hallucinating.
-
 ---
 
 ## Token Efficiency
 
-**Intent:** Discipline shouldn't cost you your token budget.
+Discipline shouldn't cost you your token budget.
 
 | State | Token Cost |
 |-------|------------|
@@ -210,16 +183,12 @@ Your MCPs, tools, and workflows work unchanged.
 
 Setu's persona is lean. Skills load on-demand, not upfront.
 
-**Compare:** Heavy setups load 4,000+ tokens before you type anything.
-
 ---
 
 ## Skills Included
 
-**Intent:** Reduce friction for doing things correctly.
-
-| Skill | Why It Exists |
-|-------|---------------|
+| Skill | Purpose |
+|-------|---------|
 | `setu-bootstrap` | Project setup that follows the discipline protocol |
 | `setu-verification` | Mode-specific verification steps |
 | `setu-rules-creation` | Create effective AGENTS.md files |
@@ -232,15 +201,9 @@ Skills load when relevant, not at startup.
 
 ---
 
-## Roadmap
-
-See [ROADMAP.md](./ROADMAP.md) for the path to v1.0.
-
----
-
 ## The Philosophy
 
-Setu is named after the bridge in Hindu mythology — built not by force, but by discipline, cooperation, and engineering.
+Setu is named after the bridge in mythology — built not by force, but by discipline, cooperation, and engineering.
 
 **Core principles:**
 1. **Think before acting** — Phase 0 prevents wrong assumptions
@@ -248,19 +211,17 @@ Setu is named after the bridge in Hindu mythology — built not by force, but by
 3. **Ask before spinning** — Attempt limits prevent waste
 4. **Adapt to context** — Modes match rigor to risk
 
-**The tagline:**
-> *Think first. Verify always.*
+---
+
+## Roadmap
+
+See [ROADMAP.md](./ROADMAP.md) for the path to v1.0.
 
 ---
 
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md).
-
-Priority areas:
-- Testing enforcement on diverse projects
-- Additional verification patterns
-- Documentation with real examples
 
 ---
 
@@ -270,4 +231,4 @@ Apache 2.0 — See [LICENSE](./LICENSE)
 
 ---
 
-**Setu:** *Pre-emptive discipline for AI coding.*
+**Setu:** *Think first. Verify always.*

@@ -15,48 +15,40 @@ This means Setu:
 
 ---
 
-## Tested Companions
+## How It Works
 
-### oh-my-opencode
+Setu hooks into OpenCode's system layer:
 
-[oh-my-opencode](https://github.com/code-yeongyu/oh-my-opencode) is a feature-rich OpenCode plugin with multi-agent orchestration, LSP tools, and extensive hooks.
+| Hook | Purpose |
+|------|---------|
+| `system-transform` | Injects lean persona (~500 tokens) |
+| `tool.execute.before` | Phase 0 blocking |
+| `tool.execute.after` | Tracks verification steps |
+| `session.idle` | Enforces verification before completion |
 
-**How they work together:**
+**What Setu doesn't touch:**
+- Tool implementations (uses what's available)
+- MCP servers (your MCPs work as-is)
+- File operations (doesn't modify your workflow)
 
-| OMOC Provides | Setu Adds |
-|---------------|-----------|
-| Multiple specialized agents | Verification before delegation |
-| LSP refactoring tools | Verification after refactoring |
-| Background agent execution | Phase 0 context check before spawning |
-| "Ultrawork" mode (max effort) | Operating modes (match effort to task) |
-| Todo continuation | Build/test/lint verification |
+---
 
-**Configuration:**
-
-When using both, some hooks may overlap. Recommended config:
-
-```json
-// In oh-my-opencode.json
-{
-  "disabled_hooks": [
-    // Let Setu handle these
-    "todo-continuation-enforcer"
-  ]
-}
-```
+## Using With Other Plugins
 
 ```json
 // In opencode.json
 {
-  "plugin": ["oh-my-opencode", "setu-opencode"]
+  "plugin": ["your-plugin", "setu-opencode"]
 }
 ```
 
-**Load order matters**: Setu should load after OMOC so it can wrap OMOC's behavior with discipline.
+**Load order:** Setu should load last so it can wrap other plugins' behavior with discipline.
+
+If hooks overlap with another plugin, you may need to disable one or the other. See the other plugin's docs for `disabled_hooks` configuration.
 
 ---
 
-### Recommended MCPs
+## Recommended MCPs
 
 Setu doesn't bundle MCPs (keeps the plugin lean), but these work well:
 
@@ -64,7 +56,6 @@ Setu doesn't bundle MCPs (keeps the plugin lean), but these work well:
 |-----|---------|------|
 | [context7](https://github.com/upstash/context7) | Official documentation lookup | Free |
 | [grep.app](https://grep.app) | GitHub code search | Free |
-| [Exa](https://exa.ai) | Web search | Requires API key |
 
 **Installation:**
 
@@ -82,32 +73,15 @@ Setu doesn't bundle MCPs (keeps the plugin lean), but these work well:
 
 ---
 
-### Any OpenCode Plugin
-
-Setu is designed to be non-interfering. It works with any plugin that follows OpenCode's plugin API.
-
-**What Setu hooks:**
-- `system-transform` — Injects lean persona (~500 tokens)
-- `chat.message` — Detects mode switches
-- `tool.execute.after` — Tracks verification steps
-- `session.idle` — Enforces verification before completion
-
-**What Setu doesn't touch:**
-- Tool implementations (uses what's available)
-- MCP servers (your MCPs work as-is)
-- File operations (doesn't modify your workflow)
-
----
-
 ## Detection (Future)
 
 In a future version, Setu will auto-detect installed plugins and adapt:
 
 | If Detected | Setu Behavior |
 |-------------|---------------|
-| OMOC present | Disable duplicate hooks, leverage OMOC's LSP |
-| Custom LSP tools | Use them for verification |
-| Session tools | Integrate for context hygiene |
+| Other discipline plugins | Disable duplicate hooks |
+| LSP tools available | Use them for verification |
+| Session management tools | Integrate for context hygiene |
 
 For now, Setu stays compatible through non-interference.
 

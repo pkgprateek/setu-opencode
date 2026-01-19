@@ -12,6 +12,27 @@
 
 ---
 
+## Current State (v0.1 - Alpha)
+
+### Implemented
+- [x] Package structure (`src/`, `skills/`)
+- [x] TypeScript configuration
+- [x] Basic plugin entry point
+- [x] `system-transform` hook — Injects lean persona (~500 tokens)
+- [x] `chat.message` hook — Mode detection from keywords
+- [x] `tool.execute.after` hook — Verification tracking
+- [x] `event` hook — Session lifecycle handling
+- [x] `setu_mode` tool — Switch operating modes
+- [x] `setu_verify` tool — Run verification protocol
+- [x] 7 bundled skills (bootstrap, verification, rules-creation, code-quality, refine-code, commit-helper, pr-review)
+
+### Not Yet Implemented
+- [ ] `tool.execute.before` hook — Phase 0 blocking (**API confirmed available**)
+- [ ] `session.idle` hook — Verification enforcement (waiting for API)
+- [ ] LSP tools — API investigation needed
+
+---
+
 ## Design Principles
 
 These guide every feature decision:
@@ -20,8 +41,23 @@ These guide every feature decision:
 |-----------|----------------|----------------|
 | **Pre-emptive, not reactive** | Fixing mistakes costs more than preventing them | Phase 0 blocks tools until context confirmed |
 | **Zero-config by default** | Friction kills adoption | Works out of box, config is optional override |
-| **Discipline layer, not replacement** | Users have existing tools they love | Detect OMOC/others, adapt, enhance |
+| **Discipline layer, not replacement** | Users have existing tools they love | Detect other plugins, adapt, enhance |
 | **Intent-driven** | Models perform better when they know "why" | Every feature documents its purpose |
+
+---
+
+## v1.0 Release Checklist
+
+Before publishing:
+- [ ] Build and test plugin end-to-end
+- [ ] Publish to npm as `setu-opencode`
+- [ ] Verify installation process works
+- [ ] Test all 4 operating modes
+- [ ] Mode persistence (`mode: quick` persists until changed)
+- [ ] Temporary mode ("quick fix this" applies to single task only)
+- [ ] Mode indicator (every response starts with `[Mode: X]`)
+- [ ] **Verify subagent tool interception** (Phase 0 blocks tools in child sessions)
+- [ ] Documentation (usage examples, configuration options)
 
 ---
 
@@ -38,10 +74,31 @@ Three movements to production-ready.
 
 - [ ] **Phase 0 Hard Enforcement**
     - **Why:** Models ignore soft "wait" instructions to be helpful. They dive in anyway.
-    - **What:** Block ALL tools (except `ls`) until user responds to context question.
+    - **What:** Block SIDE-EFFECT tools until user responds to context question. Allow read-only tools so agent can form smart questions.
     - **How:** Use `tool.execute.before` hook to intercept and block.
-    - **Proof:** Screenshot showing blocked tool call before user responds.
-    - **Difference from OMOC:** OMOC lets agent run, then fixes. Setu blocks first.
+    - **Allow:** `read`, `glob`, `grep` (read-only — "look but don't touch")
+    - **Allow:** `bash` when command starts with: `ls`, `cat`, `head`, `tail`, `grep`, `find`, `pwd`, `echo`, `which`, `env`
+    - **Block:** `write`, `edit`, `bash` (other commands), `git` (write operations)
+    - **Proof:** Screenshot showing blocked write attempt before user responds.
+
+- [ ] **Subagent Tool Interception (Defense in Depth)**
+    - **Why:** Subagents create child sessions. It's undocumented whether `tool.execute.before` hooks fire for child session tool calls. If not, Phase 0 has a backdoor.
+    - **Risk:** User says "@general edit that file" → subagent runs in child session → hook doesn't fire → Phase 0 bypassed.
+    - **What:** Implement both hook-based blocking AND tool wrapper pattern for complete coverage.
+    - **How:**
+      1. Primary: `tool.execute.before` hook (elegant, fires for most cases)
+      2. Fallback: Wrap tool definitions at plugin startup:
+         ```javascript
+         const originalExec = tool.execute;
+         tool.execute = async (args) => {
+             if (isPhase0() && isSideEffectTool(tool.name, args)) {
+                 throw new Error("Phase 0: Confirm context before modifying files.");
+             }
+             return originalExec(args);
+         };
+         ```
+    - **Verification:** Test explicitly with subagent invocation to confirm coverage.
+    - **Proof:** Recording showing Phase 0 blocking a subagent's write attempt.
 
 #### Verification Before "Done"
 
@@ -58,6 +115,12 @@ Three movements to production-ready.
     - **What:** Create `setu_todos_read` tool.
     - **How:** Wrap `client.session.todo({ id: sessionID })`.
 
+- [ ] **Session Cost Audit**
+    - **Why:** Cost is a metric of completion. "Did I finish? Yes. How much did it cost?"
+    - **What:** Log token usage and estimated cost at session end.
+    - **How:** Track tokens in `tool.execute.after`, output summary in `session.idle`.
+    - **Output:** "Session complete. Tokens used: 4,500. Estimated cost: $0.04."
+
 #### Attempt Limits
 
 > **Intent:** When the approach is wrong, retrying wastes tokens. Ask for help instead.
@@ -67,7 +130,6 @@ Three movements to production-ready.
     - **What:** After 2 failures, stop and ask for guidance.
     - **How:** Track in `tool.execute.after` (check exit code), enforce in `session.idle`.
     - **Proof:** Recording showing "I've tried X and Y..." after 2 failures.
-    - **Difference from OMOC:** OMOC's "bouldering" keeps going. Setu stops and reflects.
 
 #### Session Resilience
 
@@ -101,14 +163,14 @@ Three movements to production-ready.
 
 > **Intent:** Inject right context, detect environment, play nice with others.
 
-- [ ] **OMOC Detection**
-    - **Why:** If OMOC is present, Setu should enhance, not conflict.
-    - **What:** Detect OMOC installation; adapt behavior accordingly.
-    - **How:** Check for OMOC hooks/tools in plugin registry; load after OMOC.
-    - **Behavior when OMOC present:**
-      - Skip duplicate hooks (let OMOC handle todo enforcement)
-      - Use OMOC's LSP tools if available
-      - Wrap OMOC's agents with Phase 0 and verification
+- [ ] **Plugin Detection**
+    - **Why:** If other plugins are present, Setu should enhance, not conflict.
+    - **What:** Detect other plugin installations; adapt behavior accordingly.
+    - **How:** Check for known hooks/tools in plugin registry; load after them.
+    - **Behavior when other plugins present:**
+      - Skip duplicate hooks (avoid conflicts)
+      - Use their LSP tools if available
+      - Wrap their agents with Phase 0 and verification
 
 - [ ] **Context Injection**
     - **Why:** Phase 1 discovery costs tokens/time.
@@ -233,7 +295,7 @@ Three movements to production-ready.
 > **Intent:** Be a good citizen. Enhance, don't replace.
 
 ### Tested With
-- [ ] **oh-my-opencode**: Full Setu + OMOC workflow documented
+- [ ] **Other OpenCode plugins**: Document coexistence workflow
 - [ ] **context7 MCP**: Official docs integration
 - [ ] **grep.app MCP**: GitHub code search
 
