@@ -359,12 +359,12 @@ export function loadContext(projectDir: string): SetuContext | null {
 | 3.1 | `src/prompts/persona.ts` | Add parallel execution guidance section |
 | 3.2 | `src/prompts/persona.ts` | Add `[SETU:]` prefix to all injections |
 
-#### Phase 4: omoc Detection (v1.0 Nice-to-have)
+#### Phase 4: Other Plugin Detection (v1.0 Nice-to-have)
 
 | Step | File to Create/Modify | What to Do |
 |------|----------------------|------------|
-| 4.1 | `src/detection/omoc.ts` | Detect `.sisyphus/` or `oh-my-opencode.json` |
-| 4.2 | `src/index.ts` | Enter minimal mode if omoc detected |
+| 4.1 | `src/detection/plugins.ts` | Detect other discipline plugins |
+| 4.2 | `src/index.ts` | Enter minimal mode if other plugin detected |
 
 ### Reference: Existing Files
 
