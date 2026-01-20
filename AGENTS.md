@@ -203,12 +203,20 @@ read("package.json")  // Message 3
 
 ## Testing Strategy
 
+### Test Environment
+
+A test folder exists at `../setu-test/` with:
+- `opencode.json` configured to load the plugin from `dist/`
+- Uses `opencode/grok-code` model (free tier)
+
+### Testing Steps
+
 1. Build plugin: `bun run build`
-2. Add to local `opencode.json`: `{ "plugin": ["./path/to/dist"] }`
-3. Start OpenCode session
+2. Navigate to test folder: `cd ../setu-test`
+3. Start OpenCode: `opencode`
 4. Verify Setu appears in Tab cycle
-5. Test Phase 0 blocking
-6. Test context persistence
+5. Test Phase 0 blocking (try to write before context confirmed)
+6. Test context persistence (check `.setu/` directory)
 7. Test verification flow
 8. Verify token efficiency
 
