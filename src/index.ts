@@ -5,7 +5,7 @@
  * 
  * Features:
  * - Operating modes: Ultrathink, Quick, Expert, Collab
- * - Enforcement: Todo continuation, verification before completion
+ * - Enforcement: Phase 0 blocking, verification before completion
  * - Skills: Bootstrap, verification, rules creation, code quality, and more
  * 
  * @see https://github.com/pkgprateek/setu-opencode
@@ -16,13 +16,16 @@ import { type ModeState } from './prompts/modes';
 import {
   createSystemTransformHook,
   createChatMessageHook,
+  createToolExecuteBeforeHook,
   createToolExecuteAfterHook,
   createAttemptTracker,
   createEventHook,
   type VerificationStep
 } from './hooks';
+import { type Phase0State } from './enforcement';
 import { createSetuModeTool } from './tools/setu-mode';
 import { createSetuVerifyTool } from './tools/setu-verify';
+import { createSetuContextTool } from './tools/setu-context';
 import { lspTools } from './tools/lsp-tools';
 
 // Plugin state
@@ -31,6 +34,7 @@ interface SetuState {
   isFirstSession: boolean;
   verificationSteps: Set<VerificationStep>;
   verificationComplete: boolean;
+  phase0: Phase0State;
 }
 
 /**
@@ -39,9 +43,10 @@ interface SetuState {
  * Uses available hooks from the OpenCode Plugin API:
  * - experimental.chat.system.transform: Inject persona into system prompt
  * - chat.message: Detect mode keywords in user messages
+ * - tool.execute.before: Phase 0 enforcement (block side-effects until context confirmed)
  * - tool.execute.after: Track verification steps
  * - event: Handle session lifecycle
- * - tool: Custom tools (setu_mode, setu_verify, lsp_*)
+ * - tool: Custom tools (setu_mode, setu_verify, setu_context, lsp_*)
  */
 export const SetuPlugin: Plugin = async (_ctx) => {
   // Initialize state
@@ -52,7 +57,12 @@ export const SetuPlugin: Plugin = async (_ctx) => {
     },
     isFirstSession: true,
     verificationSteps: new Set(),
-    verificationComplete: false
+    verificationComplete: false,
+    phase0: {
+      contextConfirmed: false,
+      sessionId: '',
+      startedAt: Date.now()
+    }
   };
   
   // Create attempt tracker for "2 tries then ask" pattern
@@ -61,6 +71,20 @@ export const SetuPlugin: Plugin = async (_ctx) => {
   // State accessors
   const getModeState = () => state.mode;
   const setModeState = (newState: ModeState) => { state.mode = newState; };
+  
+  const getPhase0State = () => state.phase0;
+  const confirmContext = () => {
+    state.phase0.contextConfirmed = true;
+    console.log('[Setu] Phase 0: Context confirmed - side-effect tools now allowed');
+  };
+  const resetPhase0 = (sessionId: string) => {
+    state.phase0 = {
+      contextConfirmed: false,
+      sessionId,
+      startedAt: Date.now()
+    };
+    console.log('[Setu] Phase 0: Reset for new session');
+  };
   
   const getVerificationState = () => ({
     complete: state.verificationComplete,
@@ -91,6 +115,7 @@ export const SetuPlugin: Plugin = async (_ctx) => {
   // Log plugin initialization
   console.log('[Setu] Plugin initialized');
   console.log('[Setu] Default mode:', state.mode.current);
+  console.log('[Setu] Phase 0 enforcement: ACTIVE');
   console.log('[Setu] Skills bundled: setu-bootstrap, setu-verification, setu-rules-creation, code-quality, refine-code, commit-helper, pr-review');
   
   return {
@@ -106,6 +131,9 @@ export const SetuPlugin: Plugin = async (_ctx) => {
       setModeState
     ),
     
+    // Phase 0: Block side-effect tools until context is confirmed
+    'tool.execute.before': createToolExecuteBeforeHook(getPhase0State),
+    
     // Track verification steps from tool executions
     'tool.execute.after': createToolExecuteAfterHook(markVerificationStep),
     
@@ -113,13 +141,15 @@ export const SetuPlugin: Plugin = async (_ctx) => {
     event: createEventHook(
       resetVerificationState,
       () => attemptTracker.clearAll(),
-      setFirstSessionDone
+      setFirstSessionDone,
+      resetPhase0
     ),
     
     // Custom tools
     tool: {
       setu_mode: createSetuModeTool(getModeState, setModeState),
       setu_verify: createSetuVerifyTool(getModeState, markVerificationComplete),
+      setu_context: createSetuContextTool(getPhase0State, confirmContext),
       ...lspTools
     }
   };

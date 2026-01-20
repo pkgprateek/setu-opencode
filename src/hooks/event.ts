@@ -12,21 +12,26 @@
  * Creates the event hook for session lifecycle
  * 
  * Handles:
- * - session.created: Reset verification state, log session start
+ * - session.created: Reset verification state, Phase 0, log session start
  * - session.deleted: Cleanup if needed
  */
 export function createEventHook(
   resetVerificationState: () => void,
   resetAttemptTracker: () => void,
-  setFirstSessionDone: () => void
+  setFirstSessionDone: () => void,
+  resetPhase0?: (sessionId: string) => void
 ) {
-  return async ({ event }: { event: { type: string; properties?: unknown } }): Promise<void> => {
+  return async ({ event }: { event: { type: string; properties?: Record<string, unknown> } }): Promise<void> => {
     switch (event.type) {
       case 'session.created':
         console.log('[Setu] New session started');
         resetVerificationState();
         resetAttemptTracker();
         setFirstSessionDone();
+        if (resetPhase0) {
+          const sessionId = (event.properties?.sessionID as string) || '';
+          resetPhase0(sessionId);
+        }
         break;
         
       case 'session.deleted':

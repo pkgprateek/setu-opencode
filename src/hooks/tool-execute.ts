@@ -3,14 +3,72 @@
  * 
  * Uses: tool.execute.before, tool.execute.after
  * 
- * Tracks when build/test/lint commands are run for verification,
- * and implements the "2 attempts then ask" pattern.
+ * - tool.execute.before: Phase 0 blocking (pre-emptive enforcement)
+ * - tool.execute.after: Tracks verification steps and attempt limits
  */
+
+import {
+  shouldBlockInPhase0,
+  createPhase0BlockMessage,
+  type Phase0State
+} from '../enforcement';
 
 /**
  * Verification step tracking
  */
 export type VerificationStep = 'build' | 'test' | 'lint';
+
+/**
+ * Input type for tool.execute.before hook (from OpenCode API)
+ */
+export interface ToolExecuteBeforeInput {
+  tool: string;
+  sessionID: string;
+  callID: string;
+}
+
+/**
+ * Output type for tool.execute.before hook (from OpenCode API)
+ */
+export interface ToolExecuteBeforeOutput {
+  args: Record<string, unknown>;
+}
+
+/**
+ * Creates the tool.execute.before hook for Phase 0 enforcement
+ * 
+ * Blocks side-effect tools until context is confirmed.
+ * Allows read-only tools for reconnaissance.
+ * 
+ * @param getPhase0State - Accessor for Phase 0 state
+ * @returns Hook function that throws if blocked
+ */
+export function createToolExecuteBeforeHook(
+  getPhase0State: () => Phase0State
+) {
+  return async (
+    input: ToolExecuteBeforeInput,
+    output: ToolExecuteBeforeOutput
+  ): Promise<void> => {
+    const state = getPhase0State();
+    
+    // If context is confirmed, allow everything
+    if (state.contextConfirmed) {
+      return;
+    }
+    
+    // Check if this tool should be blocked
+    const { blocked, reason } = shouldBlockInPhase0(input.tool, output.args);
+    
+    if (blocked && reason) {
+      console.log(`[Setu] Phase 0 BLOCKED: ${input.tool}`);
+      throw new Error(createPhase0BlockMessage(reason));
+    }
+    
+    // Allowed - log for debugging
+    console.log(`[Setu] Phase 0 ALLOWED: ${input.tool}`);
+  };
+}
 
 /**
  * Creates the tool.execute.after hook for verification tracking
