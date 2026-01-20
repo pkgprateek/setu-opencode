@@ -15,36 +15,119 @@ This means Setu:
 
 ---
 
+## Setu as Primary Agent
+
+Setu registers as a **primary agent** in OpenCode, appearing in the Tab cycle:
+
+```
+Tab → Setu (default) → Build → Plan → (cycle)
+```
+
+**Benefits:**
+- Permission-based blocking (CANNOT edit, not just "doesn't edit")
+- Clear user experience (you know when you're in Setu mode)
+- Easy escape hatch (Tab to Build if needed)
+- No conflicts (doesn't interfere with Plan/Build modes)
+
+---
+
 ## How It Works
 
-Setu hooks into OpenCode's system layer:
+Setu uses both **permissions** (agent-level) and **hooks** (plugin-level):
+
+### Permission System (Agent-Level)
+
+When in Setu mode, the agent has restricted permissions:
+
+```yaml
+permission:
+  edit:
+    "*": ask  # Must ask before editing
+  bash:
+    "*": ask  # Must ask before bash commands
+```
+
+This means the agent **CANNOT** freely edit - OpenCode enforces this.
+
+### Hook System (Plugin-Level)
 
 | Hook | Purpose |
 |------|---------|
 | `system-transform` | Injects lean persona (~500 tokens) |
-| `tool.execute.before` | Phase 0 blocking |
+| `chat.message` | Tracks current agent for mode-aware behavior |
+| `tool.execute.before` | Phase 0 blocking (until context confirmed) |
 | `tool.execute.after` | Tracks verification steps |
-| `session.idle` | Enforces verification before completion |
+| `config` | Sets Setu as default agent, creates agent file |
+| `event` | Handles session lifecycle, context loading |
 
-**What Setu doesn't touch:**
-- Tool implementations (uses what's available)
-- MCP servers (your MCPs work as-is)
-- File operations (doesn't modify your workflow)
+**Why both?**
+- Permissions provide hard blocking (CANNOT bypass)
+- Hooks provide intelligence (context tracking, injection)
+
+---
+
+## Mode-Aware Behavior
+
+Setu adapts based on which mode the user is in:
+
+| Mode | Setu Behavior |
+|------|---------------|
+| **Setu** | Full enforcement: Phase 0 + verification + context persistence |
+| **Build** | Light enforcement: Verification reminders, context tracking |
+| **Plan** | Deferred: OpenCode handles blocking, Setu tracks context only |
+
+**Why defer in Plan mode?**
+- OpenCode's Plan mode already blocks edits via permissions
+- Double blocking wastes tokens and confuses logs
+- Setu focuses on context gathering instead
 
 ---
 
 ## Using With Other Plugins
 
+When other discipline plugins are detected, Setu enters **minimal mode**:
+
+### Minimal Mode Behavior
+
+| Feature | With Other Plugin | Without |
+|---------|-------------------|---------|
+| Context injection | **Disabled** (other plugin handles) | Enabled |
+| Auto-inject AGENTS.md | **Disabled** | Enabled |
+| Phase 0 blocking | Enabled | Enabled |
+| Verification enforcement | Enabled | Enabled |
+| Context persistence | Enabled (uses `.setu/`) | Enabled |
+
+### Why Minimal Mode?
+
+When another plugin already handles context injection or orchestration, Setu avoids duplication:
+- **Other plugin** handles: Context injection, agent orchestration
+- **Setu** handles: Pre-emptive blocking, verification, attempt limits
+
+### Configuration
+
 ```json
 // In opencode.json
 {
-  "plugin": ["your-plugin", "setu-opencode"]
+  "plugin": ["other-plugin", "setu-opencode"]
 }
 ```
 
-**Load order:** Setu should load last so it can wrap other plugins' behavior with discipline.
+**Load order:** Setu should load last so it can detect other plugins.
 
-If hooks overlap with another plugin, you may need to disable one or the other. See the other plugin's docs for `disabled_hooks` configuration.
+---
+
+## Context Persistence
+
+Setu persists context to `.setu/` directory:
+
+```
+.setu/
+├── context.md     # Human-readable understanding
+├── context.json   # Machine-parseable for injection
+└── verification.log  # Build/test/lint results
+```
+
+This directory is independent and doesn't conflict with other plugins.
 
 ---
 
@@ -64,10 +147,10 @@ npm install -g agent-browser
 agent-browser install  # Download Chromium
 ```
 
-**How Setu uses it (v1.1+):**
+**How Setu uses it (v2.1+):**
 - Setu auto-detects if agent-browser is installed
-- If detected, visual verification becomes available in Default mode
-- Token-efficient: Uses a subagent to handle screenshots, keeping main context clean
+- If detected, visual verification becomes available
+- Token-efficient: Uses a subagent to handle screenshots
 
 **Manual usage:**
 ```bash
@@ -98,22 +181,19 @@ agent-browser close
 }
 ```
 
-**Note on documentation:** Use context7 for docs lookup (token-efficient). agent-browser can fetch JS-rendered docs as a fallback, but at higher token cost.
-
 ---
 
-## Detection (Future)
+## Detection Strategy (Future)
 
-In a future version, Setu will auto-detect installed tools and adapt:
+In future versions, Setu will auto-detect installed tools and adapt:
 
 | If Detected | Setu Behavior |
 |-------------|---------------|
-| agent-browser | Enable visual verification in Default mode |
-| Other discipline plugins | Disable duplicate hooks |
-| LSP tools available | Use them for verification |
-| Session management tools | Integrate for context hygiene |
+| Other discipline plugins | Enter minimal mode |
+| agent-browser | Enable visual verification |
+| LSP tools | Use for precision reading |
 
-For now, Setu stays compatible through non-interference.
+For now, Setu stays compatible through mode-awareness and minimal mode.
 
 ---
 
@@ -121,10 +201,12 @@ For now, Setu stays compatible through non-interference.
 
 If Setu conflicts with another plugin:
 
-1. Check if hooks overlap (see above)
-2. Try disabling conflicting hooks in the other plugin
-3. [Open an issue](https://github.com/pkgprateek/setu-opencode/issues) with:
+1. Check which mode you're in (Tab to see)
+2. Check if hooks overlap (see above)
+3. Try Tab to Build to escape Setu enforcement
+4. [Open an issue](https://github.com/pkgprateek/setu-opencode/issues) with:
    - Plugin names and versions
+   - Current mode (Setu/Build/Plan)
    - Observed behavior
    - Expected behavior
 
