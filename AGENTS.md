@@ -234,13 +234,13 @@ Setu is a primary agent. OpenCode's Plan/Build remain accessible via Tab.
 - In Plan mode: Setu hooks defer to OpenCode
 - In Build mode: Light enforcement
 
-### With oh-my-opencode (omoc)
+### With Other Plugins
 
-When omoc is detected:
+When other discipline plugins are detected:
 - Setu enters minimal mode
-- Defers context injection to omoc
+- Defers context injection to the other plugin
 - Focuses on Phase 0 and verification only
-- Doesn't conflict with `.sisyphus/` directory
+- Avoids conflicting with other plugin directories
 
 ---
 

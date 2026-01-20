@@ -386,20 +386,21 @@ Setu as a primary agent means:
 - OpenCode features (Plan/Build) remain accessible
 - No breaking changes to OpenCode behavior
 
-### Priority: omoc Compatibility (MEDIUM)
+### Priority: Other Plugin Compatibility (MEDIUM)
 
-When oh-my-opencode is detected:
-- Setu defers context injection (omoc handles it)
-- Setu focuses on Phase 0 and verification only
-- Don't conflict with `.sisyphus/` directory
+When other discipline plugins are detected:
+- Setu enters minimal mode
+- Defers context injection (other plugin handles it)
+- Focuses on Phase 0 and verification only
+- Avoids conflicting with other plugin directories
 
 ### Detection Strategy
 
 ```typescript
-// At plugin init
-const hasOmoc = existsSync('.sisyphus') || existsSync('oh-my-opencode.json');
-if (hasOmoc) {
-  console.log('[Setu] oh-my-opencode detected - minimal mode');
+// At plugin init - detect other plugins
+const hasOtherPlugin = detectOtherPlugins(projectDir);
+if (hasOtherPlugin) {
+  console.log('[Setu] Other plugin detected - minimal mode');
   // Disable: context injection, auto-inject
   // Enable: Phase 0, verification, attempt limits
 }

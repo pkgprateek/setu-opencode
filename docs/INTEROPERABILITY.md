@@ -83,22 +83,15 @@ Setu adapts based on which mode the user is in:
 
 ---
 
-## Using With oh-my-opencode (omoc)
+## Using With Other Plugins
 
-When omoc is detected, Setu enters **minimal mode**:
-
-### Detection
-
-```typescript
-// Setu detects omoc via:
-const hasOmoc = existsSync('.sisyphus') || existsSync('oh-my-opencode.json');
-```
+When other discipline plugins are detected, Setu enters **minimal mode**:
 
 ### Minimal Mode Behavior
 
-| Feature | With omoc | Without omoc |
-|---------|-----------|--------------|
-| Context injection | **Disabled** (omoc handles) | Enabled |
+| Feature | With Other Plugin | Without |
+|---------|-------------------|---------|
+| Context injection | **Disabled** (other plugin handles) | Enabled |
 | Auto-inject AGENTS.md | **Disabled** | Enabled |
 | Phase 0 blocking | Enabled | Enabled |
 | Verification enforcement | Enabled | Enabled |
@@ -106,14 +99,8 @@ const hasOmoc = existsSync('.sisyphus') || existsSync('oh-my-opencode.json');
 
 ### Why Minimal Mode?
 
-omoc is a comprehensive plugin with:
-- 30+ hooks for various features
-- 10+ specialized agents
-- Context injection via directoryAgentsInjector
-- Session recovery, todo enforcement, etc.
-
-Setu doesn't duplicate what omoc does well. Instead:
-- **omoc** handles: Context injection, agent orchestration, session recovery
+When another plugin already handles context injection or orchestration, Setu avoids duplication:
+- **Other plugin** handles: Context injection, agent orchestration
 - **Setu** handles: Pre-emptive blocking, verification, attempt limits
 
 ### Configuration
@@ -121,11 +108,11 @@ Setu doesn't duplicate what omoc does well. Instead:
 ```json
 // In opencode.json
 {
-  "plugin": ["oh-my-opencode", "setu-opencode"]
+  "plugin": ["other-plugin", "setu-opencode"]
 }
 ```
 
-**Load order:** Setu should load after omoc so it can detect omoc's presence.
+**Load order:** Setu should load last so it can detect other plugins.
 
 ---
 
@@ -140,10 +127,7 @@ Setu persists context to `.setu/` directory:
 └── verification.log  # Build/test/lint results
 ```
 
-**With omoc:**
-- Setu uses `.setu/` for its context
-- omoc uses `.sisyphus/` for its state
-- No conflict between directories
+This directory is independent and doesn't conflict with other plugins.
 
 ---
 
@@ -199,44 +183,15 @@ agent-browser close
 
 ---
 
-## Comparison: Setu vs omoc
-
-| Aspect | Setu | omoc |
-|--------|------|------|
-| **Philosophy** | Discipline layer | Full enhancement platform |
-| **Agents** | 1 primary (Setu) + subagents in v2.0 | 10+ specialized agents |
-| **Hooks** | ~8 focused hooks | 30+ comprehensive hooks |
-| **Context** | `.setu/` directory | `.sisyphus/` directory |
-| **Focus** | Pre-emptive blocking, verification | Orchestration, delegation, recovery |
-| **Token cost** | ~500 token persona | 1000+ line prompts per agent |
-| **Configuration** | Zero-config default | Extensive configuration |
-
-**Use Setu if:**
-- You want discipline without complexity
-- You prefer lean, focused enforcement
-- You want zero-config defaults
-
-**Use omoc if:**
-- You want comprehensive orchestration
-- You need 10+ specialized agents
-- You want extensive customization
-
-**Use both if:**
-- You want omoc's orchestration + Setu's verification
-- Setu enters minimal mode, adds Phase 0 + verification
-
----
-
 ## Detection Strategy (Future)
 
 In future versions, Setu will auto-detect installed tools and adapt:
 
 | If Detected | Setu Behavior |
 |-------------|---------------|
-| oh-my-opencode | Enter minimal mode (Phase 0 + verification only) |
+| Other discipline plugins | Enter minimal mode |
 | agent-browser | Enable visual verification |
 | LSP tools | Use for precision reading |
-| Other discipline plugins | Disable duplicate hooks |
 
 For now, Setu stays compatible through mode-awareness and minimal mode.
 
