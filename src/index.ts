@@ -6,6 +6,7 @@
  * Features:
  * - Operating modes: Ultrathink, Quick, Expert, Collab
  * - Enforcement: Phase 0 blocking, verification before completion
+ * - Context persistence: .setu/ directory for session continuity
  * - Skills: Bootstrap, verification, rules creation, code quality, and more
  * 
  * @see https://github.com/pkgprateek/setu-opencode
@@ -26,35 +27,77 @@ import { type Phase0State } from './enforcement';
 import { createSetuModeTool } from './tools/setu-mode';
 import { createSetuVerifyTool } from './tools/setu-verify';
 import { createSetuContextTool } from './tools/setu-context';
+import { createSetuFeedbackTool } from './tools/setu-feedback';
 import { lspTools } from './tools/lsp-tools';
+import { createSetuAgent } from './agent/setu-agent';
+import { 
+  initializeFeedbackFile, 
+  createContextCollector,
+  type ContextCollector 
+} from './context';
 
 // Plugin state
 interface SetuState {
   mode: ModeState;
+  currentAgent: string;
   isFirstSession: boolean;
   verificationSteps: Set<VerificationStep>;
   verificationComplete: boolean;
   phase0: Phase0State;
+  contextCollector: ContextCollector | null;
 }
 
 /**
  * Setu Plugin for OpenCode
  * 
  * Uses available hooks from the OpenCode Plugin API:
+ * - config: Set default_agent to "setu"
  * - experimental.chat.system.transform: Inject persona into system prompt
- * - chat.message: Detect mode keywords in user messages
+ * - chat.message: Detect mode keywords in user messages, track current agent
  * - tool.execute.before: Phase 0 enforcement (block side-effects until context confirmed)
- * - tool.execute.after: Track verification steps
- * - event: Handle session lifecycle
+ * - tool.execute.after: Track verification steps, file reads, searches
+ * - event: Handle session lifecycle, load context on start
  * - tool: Custom tools (setu_mode, setu_verify, setu_context, lsp_*)
  */
-export const SetuPlugin: Plugin = async (_ctx) => {
+export const SetuPlugin: Plugin = async (ctx) => {
+  // Create the Setu agent configuration file on plugin init
+  // This creates .opencode/agents/setu.md with the Setu persona and permissions
+  const projectDir = ctx.directory || process.cwd();
+  try {
+    await createSetuAgent(projectDir);
+  } catch (error) {
+    console.error('[Setu] Failed to create agent config:', error);
+  }
+  
+  // Initialize feedback file for transparency
+  try {
+    initializeFeedbackFile(projectDir);
+  } catch (error) {
+    // Non-critical - log but don't fail
+    console.log('[Setu] Could not initialize feedback file:', error);
+  }
+  
+  // Create context collector for .setu/ persistence
+  let contextCollector: ContextCollector | null = null;
+  try {
+    contextCollector = createContextCollector(projectDir);
+    // Try to load existing context
+    contextCollector.loadFromDisk();
+    console.log('[Setu] Context collector initialized');
+  } catch (error) {
+    console.log('[Setu] Could not initialize context collector:', error);
+  }
+  
+  // Project directory accessor for tools
+  const getProjectDir = () => projectDir;
+  
   // Initialize state
   const state: SetuState = {
     mode: {
       current: 'ultrathink',
       isPersistent: true
     },
+    currentAgent: 'setu', // Default to setu since we set it as default_agent
     isFirstSession: true,
     verificationSteps: new Set(),
     verificationComplete: false,
@@ -62,7 +105,8 @@ export const SetuPlugin: Plugin = async (_ctx) => {
       contextConfirmed: false,
       sessionId: '',
       startedAt: Date.now()
-    }
+    },
+    contextCollector
   };
   
   // Create attempt tracker for "2 tries then ask" pattern
@@ -71,6 +115,14 @@ export const SetuPlugin: Plugin = async (_ctx) => {
   // State accessors
   const getModeState = () => state.mode;
   const setModeState = (newState: ModeState) => { state.mode = newState; };
+  
+  const getCurrentAgent = () => state.currentAgent;
+  const setCurrentAgent = (agent: string) => {
+    if (agent !== state.currentAgent) {
+      console.log(`[Setu] Agent changed: ${state.currentAgent} → ${agent}`);
+      state.currentAgent = agent;
+    }
+  };
   
   const getPhase0State = () => state.phase0;
   const confirmContext = () => {
@@ -85,6 +137,8 @@ export const SetuPlugin: Plugin = async (_ctx) => {
     };
     console.log('[Setu] Phase 0: Reset for new session');
   };
+  
+  const getContextCollector = (): ContextCollector | null => state.contextCollector;
   
   const getVerificationState = () => ({
     complete: state.verificationComplete,
@@ -116,40 +170,67 @@ export const SetuPlugin: Plugin = async (_ctx) => {
   console.log('[Setu] Plugin initialized');
   console.log('[Setu] Default mode:', state.mode.current);
   console.log('[Setu] Phase 0 enforcement: ACTIVE');
+  console.log('[Setu] Context persistence: .setu/ directory');
+  console.log('[Setu] Tools: setu_mode, setu_verify, setu_context, setu_feedback, lsp_*');
   console.log('[Setu] Skills bundled: setu-bootstrap, setu-verification, setu-rules-creation, code-quality, refine-code, commit-helper, pr-review');
   
   return {
+    // Set Setu as the default agent
+    // This hook receives the config and can modify it
+    config: async (input: { default_agent?: string; [key: string]: unknown }) => {
+      // Only set if not already configured by user
+      if (!input.default_agent) {
+        input.default_agent = 'setu';
+        console.log('[Setu] Set as default agent');
+      } else {
+        console.log(`[Setu] User configured default_agent: ${input.default_agent}`);
+      }
+    },
+    
     // Inject Setu persona into system prompt
     'experimental.chat.system.transform': createSystemTransformHook(
       getModeState,
       getVerificationState
     ),
     
-    // Detect mode keywords in user messages
+    // Detect mode keywords in user messages and track current agent
     'chat.message': createChatMessageHook(
       getModeState,
-      setModeState
+      setModeState,
+      setCurrentAgent
     ),
     
     // Phase 0: Block side-effect tools until context is confirmed
-    'tool.execute.before': createToolExecuteBeforeHook(getPhase0State),
+    // Mode-aware: Full enforcement in Setu, light in Build, defer in Plan
+    // Context injection: Injects context into subagent prompts
+    'tool.execute.before': createToolExecuteBeforeHook(
+      getPhase0State, 
+      getCurrentAgent,
+      getContextCollector
+    ),
     
-    // Track verification steps from tool executions
-    'tool.execute.after': createToolExecuteAfterHook(markVerificationStep),
+    // Track verification steps and context (file reads, searches)
+    'tool.execute.after': createToolExecuteAfterHook(
+      markVerificationStep,
+      getContextCollector
+    ),
     
     // Handle session lifecycle events
+    // Loads existing context on session start for continuity
     event: createEventHook(
       resetVerificationState,
       () => attemptTracker.clearAll(),
       setFirstSessionDone,
-      resetPhase0
+      resetPhase0,
+      getContextCollector
     ),
     
     // Custom tools
     tool: {
       setu_mode: createSetuModeTool(getModeState, setModeState),
       setu_verify: createSetuVerifyTool(getModeState, markVerificationComplete),
-      setu_context: createSetuContextTool(getPhase0State, confirmContext),
+      setu_context: createSetuContextTool(getPhase0State, confirmContext, getContextCollector),
+      setu_feedback: createSetuFeedbackTool(getProjectDir),
       ...lspTools
     }
   };

@@ -42,13 +42,16 @@ src/
 │   └── tool-execute.ts       # Tool interception (before/after)
 ├── enforcement/      # Phase 0 blocking logic
 ├── context/          # Context persistence (.setu/ directory)
-│   ├── storage.ts          # Read/write context files
-│   └── types.ts            # Context type definitions
+│   ├── index.ts            # Module exports
+│   ├── types.ts            # Context type definitions (SetuContext, etc.)
+│   ├── storage.ts          # Read/write context files, ContextCollector
+│   └── feedback.ts         # User feedback mechanism
 ├── prompts/          # Persona and system prompt fragments
 └── tools/            # Custom tools exposed to agent
     ├── setu-mode.ts          # Operational profile switching
     ├── setu-verify.ts        # Verification trigger
-    └── setu-context.ts       # Context confirmation
+    ├── setu-context.ts       # Context confirmation + persistence
+    └── setu-feedback.ts      # User feedback submission
 
 skills/               # Bundled skills (loaded on-demand)
 ├── setu-bootstrap/         # Initial context gathering
@@ -62,6 +65,8 @@ skills/               # Bundled skills (loaded on-demand)
 .setu/                # Context persistence directory (created per-project)
 ├── context.md              # Human-readable understanding
 ├── context.json            # Machine-parseable for injection
+├── active.json             # Current task, mode, constraints (survives compaction)
+├── feedback.md             # User feedback on Setu behavior
 └── verification.log        # Build/test/lint audit trail
 ```
 
@@ -205,14 +210,14 @@ read("package.json")  // Message 3
 
 ### Test Environment
 
-A test folder exists at `../setu-test/` with:
+A test folder exists at `./tests/` within the repo (gitignored):
 - `opencode.json` configured to load the plugin from `dist/`
 - Uses `opencode/grok-code` model (free tier)
 
 ### Testing Steps
 
 1. Build plugin: `bun run build`
-2. Navigate to test folder: `cd ../setu-test`
+2. Navigate to test folder: `cd tests`
 3. Start OpenCode: `opencode`
 4. Verify Setu appears in Tab cycle
 5. Test Phase 0 blocking (try to write before context confirmed)
@@ -393,3 +398,71 @@ After implementation, verify:
 4. Context persists to `.setu/` directory
 5. Context loads on session start
 6. Context injects into subagent prompts
+
+---
+
+## MCP Tools
+
+MCP (Model Context Protocol) servers extend capabilities. Use the right tool for the right job.
+
+### Available MCP Tools
+
+| Tool | When to Use | Rules |
+|------|-------------|-------|
+| **Context7** | Code/library context, API verification, function signatures | Prefer over memory. Never hallucinate APIs if Context7 can verify. |
+| **Exa** (`web_search_exa`) | Web search, docs, blogs, discussions, fresh info | The ONLY search tool. Summarize findings, cite sources. |
+| **Firecrawl** | Scraping a specific known URL | Never use for search. If URL unknown → use Exa first. Treat as expensive. |
+| **Zread** | Long-form reading (PDFs, specs, RFCs) | Use before summarizing large inputs. Accuracy > brevity. |
+
+### Tool Selection Order
+
+1. **Code or library question?** → Context7
+2. **Search or discovery needed?** → Exa
+3. **Known URL to fetch?** → Firecrawl
+4. **Large or dense content?** → Zread
+
+*Pattern: Search → Fetch → Read → Explain*
+
+### Prohibited
+
+- Hallucinating APIs or web content
+- Using Firecrawl as a search engine
+- Skipping tools when they're applicable
+- Guessing URLs (use Exa to find them first)
+
+---
+
+## Target Personas
+
+Setu serves different users differently:
+
+| Persona | What They Need | Setu Value |
+|---------|----------------|------------|
+| **Junior Dev** | Guidance without feeling blocked | "AI that thinks before acting" |
+| **Senior Dev** | Speed without sacrificing quality | "Enforcement without friction" |
+| **Tech Lead** | Predictable agent behavior | "Consistent agent behavior" |
+| **PM** | Features that ship working | "Features that actually work" |
+| **Startup Founder** | Fast iteration, no wasted cycles | "Stop burning tokens on wrong approaches" |
+| **AI Engineer** | Discipline layer for their tools | "Add discipline to your own tools" |
+
+---
+
+## OpenCode Reference
+
+When working within OpenCode, these docs may be helpful:
+
+| Topic | URL |
+|-------|-----|
+| Agents (Primary/Subagent) | https://opencode.ai/docs/agents |
+| Plugins (Hooks, Tools) | https://opencode.ai/docs/plugins |
+| Permissions (Ask/Allow/Deny) | https://opencode.ai/docs/permissions |
+| Skills (SKILL.md format) | https://opencode.ai/docs/skills |
+| Rules (AGENTS.md) | https://opencode.ai/docs/rules |
+
+### Key OpenCode Concepts
+
+- **Tab** cycles between primary agents (Plan, Build, Setu)
+- **@mention** invokes subagents
+- **Permissions** can be `ask`, `allow`, or `deny` per tool/pattern
+- **Skills** are loaded on-demand via the `skill` tool
+- **Plugins** can hook into `tool.execute.before`, `session.compacting`, etc.
