@@ -43,12 +43,10 @@ export interface ToolExecuteBeforeOutput {
 export type EnforcementLevel = 'full' | 'light' | 'none';
 
 /**
- * Determines enforcement level based on current agent
- * 
- * - setu: Full Phase 0 enforcement
- * - build: Light enforcement (reminders only, no blocking)
- * - plan: No enforcement (Plan is already read-only by design)
- * - other: Light enforcement
+ * Map an agent identifier to its Phase 0 enforcement level.
+ *
+ * @param currentAgent - The agent name (case-insensitive)
+ * @returns `'full'` for `'setu'`, `'none'` for `'plan'`, `'light'` for all other agents
  */
 export function getEnforcementLevel(currentAgent: string): EnforcementLevel {
   const agent = currentAgent.toLowerCase();
@@ -67,21 +65,16 @@ export function getEnforcementLevel(currentAgent: string): EnforcementLevel {
 }
 
 /**
- * Creates the tool.execute.before hook for Phase 0 enforcement
- * 
- * Blocks side-effect tools until context is confirmed.
- * Allows read-only tools for reconnaissance.
- * Injects context into subagent prompts (task tool).
- * 
- * Mode-aware enforcement:
- * - In Setu mode: Full Phase 0 blocking
- * - In Plan mode: No blocking (already read-only)
- * - In Build mode: Light enforcement (log only, no block)
- * 
- * @param getPhase0State - Accessor for Phase 0 state
- * @param getCurrentAgent - Accessor for current agent (optional)
- * @param getContextCollector - Accessor for context collector (for injection)
- * @returns Hook function that throws if blocked
+ * Create a before-execution hook that enforces Phase 0 rules for tool execution.
+ *
+ * The returned hook injects confirmed context into `task` (subagent) prompts when available,
+ * honors agent-specific enforcement levels (setu => full, plan => none, build/other => light),
+ * and blocks or warns about disallowed tools based on Phase 0 state.
+ *
+ * @param getPhase0State - Accessor that returns the current Phase 0 state
+ * @param getCurrentAgent - Optional accessor for the current agent identifier; defaults to "setu" when omitted
+ * @param getContextCollector - Optional accessor for a ContextCollector used to obtain and format confirmed context for injection
+ * @returns A hook function invoked before tool execution that enforces Phase 0 rules and may throw an Error when a tool is blocked under full enforcement
  */
 export function createToolExecuteBeforeHook(
   getPhase0State: () => Phase0State,
@@ -145,11 +138,13 @@ export function createToolExecuteBeforeHook(
 }
 
 /**
- * Creates the tool.execute.after hook for verification and context tracking
- * 
- * - Monitors bash commands for build/test/lint patterns
- * - Tracks file reads during Phase 0 for context collection
- * - Tracks grep/glob searches for context collection
+ * Creates a post-tool-execution hook that records verification steps and context events.
+ *
+ * Calls `markVerificationStep` when bash command output or titles indicate build, test, or lint activity.
+ * When a `ContextCollector` is available it records file reads and grep/glob searches (pattern and result count).
+ *
+ * @param markVerificationStep - Callback invoked with a verification step ('build' | 'test' | 'lint') when the hook detects the corresponding command.
+ * @param getContextCollector - Optional function that returns a `ContextCollector` used to record file reads and search actions; if omitted or it returns `null`, context tracking is disabled.
  */
 export function createToolExecuteAfterHook(
   markVerificationStep: (step: VerificationStep) => void,

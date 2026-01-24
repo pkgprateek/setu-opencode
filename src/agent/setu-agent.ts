@@ -210,7 +210,10 @@ export function getSetuAgentPath(projectDir: string): string {
 }
 
 /**
- * Checks if the Setu agent is already configured for a project
+ * Determine whether the Setu agent file exists in the given project.
+ *
+ * @param projectDir - Root directory of the project
+ * @returns `true` if `.opencode/agents/setu.md` exists for the project, `false` otherwise.
  */
 export function isSetuAgentConfigured(projectDir: string): boolean {
   return existsSync(getSetuAgentPath(projectDir));

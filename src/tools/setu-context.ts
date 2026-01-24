@@ -21,11 +21,16 @@ export interface SetuContextResult {
 }
 
 /**
- * Creates the setu_context tool definition
- * 
- * @param getPhase0State - Accessor for Phase 0 state
- * @param confirmContext - Callback to mark context as confirmed
- * @param getContextCollector - Optional accessor for context collector (for persistence)
+ * Create a tool that confirms Phase 0 context, unlocks side-effect tools, and optionally persists the confirmed context.
+ *
+ * When executed the tool marks context as confirmed, may persist the provided summary/task/plan via a ContextCollector,
+ * and returns a formatted status message including how long Phase 0 took.
+ *
+ * @param getPhase0State - Accessor that returns the current Phase 0 state
+ * @param confirmContext - Callback used to mark Phase 0 context as confirmed
+ * @param getContextCollector - Optional accessor that returns a ContextCollector or `null`; if provided and non-null,
+ *                              the collector is used to persist the confirmed context to disk
+ * @returns A tool definition that performs the context confirmation, optional persistence, and produces a status string
  */
 export function createSetuContextTool(
   getPhase0State: () => Phase0State,

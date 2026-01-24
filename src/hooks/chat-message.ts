@@ -21,11 +21,16 @@ export interface AgentState {
 }
 
 /**
- * Creates the chat message hook
- * 
- * Scans user message parts for mode keywords and updates state.
- * Supports both persistent ("mode: quick") and temporary ("quick fix") modes.
- * Also tracks the current agent for mode-aware Phase 0 enforcement.
+ * Creates a chat-message processing hook that detects mode keywords and updates mode state.
+ *
+ * The returned hook scans message parts for persistent or temporary mode keywords and updates
+ * the provided mode state accordingly. If provided, the optional `setAgentState` callback is
+ * invoked with the message agent to track the active agent.
+ *
+ * @param getModeState - Callback that returns the current mode state
+ * @param setModeState - Callback to apply a new mode state
+ * @param setAgentState - Optional callback invoked with the message's agent identifier when present
+ * @returns A hook function that processes an input message and its output parts, updating mode and agent state
  */
 export function createChatMessageHook(
   getModeState: () => ModeState,

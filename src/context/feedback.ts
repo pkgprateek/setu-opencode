@@ -53,7 +53,10 @@ This helps the Setu team understand gaps between intention and reality.
 `;
 
 /**
- * Ensures the .setu directory exists
+ * Ensure a Setu metadata directory ('.setu') exists inside the given project directory.
+ *
+ * @param projectDir - Path to the project root where the '.setu' directory should be located
+ * @returns The full path to the '.setu' directory
  */
 export function ensureSetuDir(projectDir: string): string {
   const setuDir = join(projectDir, SETU_DIR);
@@ -82,9 +85,12 @@ export function initializeFeedbackFile(projectDir: string): string {
 }
 
 /**
- * Appends a feedback entry to the file
- * 
- * @param projectDir - Project root directory
+ * Append a formatted feedback entry to the Setu feedback file.
+ *
+ * Ensures the feedback file exists and appends a Markdown entry containing the entry's
+ * timestamp, type, optional context, and description.
+ *
+ * @param projectDir - Project root directory where the `.setu/feedback.md` file is stored
  * @param entry - Feedback entry to add
  */
 export function appendFeedback(projectDir: string, entry: FeedbackEntry): void {
@@ -100,14 +106,20 @@ ${entry.context ? `**Context:** ${entry.context}\n` : ''}**Description:** ${entr
 }
 
 /**
- * Gets the feedback file path
+ * Construct the expected full path to the Setu feedback file inside a project.
+ *
+ * @param projectDir - Path to the project root directory
+ * @returns The full path to the feedback.md file located in the project's `.setu` directory
  */
 export function getFeedbackPath(projectDir: string): string {
   return join(projectDir, SETU_DIR, FEEDBACK_FILE);
 }
 
 /**
- * Checks if feedback file exists
+ * Determines whether a Setu feedback file exists in the project's .setu directory.
+ *
+ * @param projectDir - Path to the project root
+ * @returns `true` if the `feedback.md` file exists at `.setu/feedback.md` inside `projectDir`, `false` otherwise.
  */
 export function hasFeedbackFile(projectDir: string): boolean {
   return existsSync(getFeedbackPath(projectDir));
