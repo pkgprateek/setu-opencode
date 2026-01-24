@@ -19,11 +19,13 @@ Use when:
 
 | Hook | Purpose | Returns |
 |------|---------|---------|
+| `config` | Modify OpenCode config (set default_agent) | Void |
 | `experimental.chat.system.transform` | Inject into system prompt | Modified system string |
-| `chat.message` | Intercept user messages | Modified message |
-| `tool.execute.before` | Block/modify before execution | Continue or throw |
-| `tool.execute.after` | Track results after execution | Void |
-| `event` | Session lifecycle | Void |
+| `chat.message` | Intercept user messages, track current agent | Modified message |
+| `tool.execute.before` | Block/modify before execution, inject context | Continue or throw |
+| `tool.execute.after` | Track results, file reads, searches | Void |
+| `event` | Session lifecycle, load context | Void |
+| `experimental.session.compacting` | Inject context into compaction summary | Void |
 
 ### Hook File Structure
 
@@ -147,3 +149,96 @@ description: Brief description with trigger terms users would naturally say.
 2. **Blocking read-only tools**: Phase 0 must allow reconnaissance
 3. **Shared mutable state**: Always use session-scoped state
 4. **Silent failures**: Log errors with `[Setu]` prefix
+
+## Recently Added Patterns
+
+### Config Hook (Set Default Agent)
+
+Location: `src/index.ts`
+
+```typescript
+config: async (input: { default_agent?: string }) => {
+  if (!input.default_agent) {
+    input.default_agent = 'setu';
+    console.log('[Setu] Set as default agent');
+  }
+}
+```
+
+### Context Collector Pattern
+
+Location: `src/context/storage.ts`
+
+```typescript
+export function createContextCollector(projectDir: string): ContextCollector {
+  let context: SetuContext = createEmptyContext();
+  
+  return {
+    getContext: () => context,
+    recordFileRead: (filePath: string, summary?: string) => { /* ... */ },
+    recordSearch: (pattern: string, tool: 'grep' | 'glob', resultCount: number) => { /* ... */ },
+    confirm: (summary: string, currentTask: string, plan?: string) => { /* ... */ },
+    saveToDisk: () => saveContext(projectDir, context),
+    loadFromDisk: () => { /* ... */ }
+  };
+}
+```
+
+### Agent Tracking Pattern
+
+Location: `src/hooks/chat-message.ts`
+
+```typescript
+// Track current agent from chat messages
+export function createChatMessageHook(
+  getModeState: () => ModeState,
+  setModeState: (state: ModeState) => void,
+  setCurrentAgent: (agent: string) => void
+) {
+  return async (input: { agent?: string }, output: unknown) => {
+    if (input.agent) {
+      setCurrentAgent(input.agent);
+    }
+    // ... mode detection logic
+  };
+}
+```
+
+### Compaction Hook Pattern (Planned)
+
+Location: `src/hooks/compaction.ts`
+
+```typescript
+// Inject active task into compaction summary
+"experimental.session.compacting": async (input, output) => {
+  const activeTask = loadActiveTask(projectDir);
+  if (activeTask) {
+    output.context.push(`## Active Task (CRITICAL)
+Task: ${activeTask.task}
+Mode: ${activeTask.mode}
+Constraints: ${activeTask.constraints.join(', ')}
+IMPORTANT: Resume this task. Do NOT start unrelated work.`);
+  }
+}
+```
+
+Reference: https://opencode.ai/docs/plugins#compaction-hooks
+
+### Feedback Mechanism Pattern
+
+Location: `src/context/feedback.ts`
+
+```typescript
+export function appendFeedback(projectDir: string, entry: FeedbackEntry): void {
+  const feedbackPath = initializeFeedbackFile(projectDir);
+  const entryText = `\n### ${entry.timestamp} - ${entry.type}\n**Description:** ${entry.description}\n`;
+  appendFileSync(feedbackPath, entryText, 'utf-8');
+}
+```
+
+## Reference Links
+
+- OpenCode Plugins: https://opencode.ai/docs/plugins
+- OpenCode Agents: https://opencode.ai/docs/agents
+- OpenCode Permissions: https://opencode.ai/docs/permissions
+- Anthropic Constitution: https://www.anthropic.com/news/claude-new-constitution

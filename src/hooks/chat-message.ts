@@ -5,29 +5,47 @@
  * 
  * Detects mode keywords like "mode: quick" or "quick fix this" and updates
  * the plugin state accordingly.
+ * 
+ * Also tracks the current agent for mode-aware enforcement.
  */
 
 import { detectMode, type ModeState } from '../prompts/modes';
+
+/**
+ * Agent state tracking
+ * Tracks which OpenCode agent is currently active (setu, build, plan, etc.)
+ */
+export interface AgentState {
+  current: string;
+  isSetuActive: boolean;
+}
 
 /**
  * Creates the chat message hook
  * 
  * Scans user message parts for mode keywords and updates state.
  * Supports both persistent ("mode: quick") and temporary ("quick fix") modes.
+ * Also tracks the current agent for mode-aware Phase 0 enforcement.
  */
 export function createChatMessageHook(
   getModeState: () => ModeState,
-  setModeState: (state: ModeState) => void
+  setModeState: (state: ModeState) => void,
+  setAgentState?: (agent: string) => void
 ) {
   // Track temporary mode for restoration after one task
   let temporaryModeActive = false;
   let modeBeforeTemporary: ModeState['current'] | null = null;
 
   return async (
-    _input: { sessionID: string; agent?: string; messageID?: string },
+    input: { sessionID: string; agent?: string; messageID?: string },
     output: { message: { id: string }; parts: Array<{ type: string; content?: string }> }
   ): Promise<void> => {
     const currentState = getModeState();
+    
+    // Track the current agent if provided
+    if (input.agent && setAgentState) {
+      setAgentState(input.agent);
+    }
     
     // Scan parts for mode keywords
     for (const part of output.parts) {

@@ -6,6 +6,11 @@
  * 
  * This is pre-emptive, not reactive. We prevent wrong actions rather
  * than fixing them after the damage is done.
+ * 
+ * Philosophy (from Anthropic's Constitution approach):
+ * - Explain "why" not just "what" - models need to understand reasoning
+ * - Prioritization: Safe → Contextual → Efficient → Helpful
+ * - Hard constraints as bright lines, soft guidance for judgment
  */
 
 /**
@@ -110,16 +115,25 @@ export function isSideEffectTool(toolName: string): boolean {
 }
 
 /**
+ * Result of Phase 0 blocking check
+ */
+export interface Phase0BlockResult {
+  blocked: boolean;
+  reason?: string;
+  details?: string;
+}
+
+/**
  * Determine if a tool call should be blocked during Phase 0
  * 
  * @param toolName - Name of the tool being called
  * @param args - Arguments passed to the tool
- * @returns Object with blocked status and reason
+ * @returns Object with blocked status, reason code, and details
  */
 export function shouldBlockInPhase0(
   toolName: string,
   args?: Record<string, unknown>
-): { blocked: boolean; reason?: string } {
+): Phase0BlockResult {
   // Setu's own tools - always allowed
   if (isSetuTool(toolName)) {
     return { blocked: false };
@@ -138,7 +152,8 @@ export function shouldBlockInPhase0(
     }
     return { 
       blocked: true, 
-      reason: `Phase 0: Cannot run '${command.slice(0, 50)}...' before context is confirmed. Use read-only commands or confirm context first.`
+      reason: 'bash_blocked',
+      details: command.slice(0, 50)
     };
   }
   
@@ -146,7 +161,8 @@ export function shouldBlockInPhase0(
   if (isSideEffectTool(toolName)) {
     return { 
       blocked: true, 
-      reason: `Phase 0: Cannot use '${toolName}' before context is confirmed. Read the codebase first, then ask clarifying questions.`
+      reason: 'side_effect_blocked',
+      details: toolName
     };
   }
   
@@ -162,18 +178,65 @@ export function shouldBlockInPhase0(
 }
 
 /**
- * Create the Phase 0 blocking message
+ * Enhanced Phase 0 block messages with "why" reasoning
+ * 
+ * Philosophy: Explain the benefit, not just the rule.
+ * Models (and users) respond better when they understand the reasoning.
  */
-export function createPhase0BlockMessage(reason: string): string {
+const PHASE0_MESSAGES = {
+  bash_blocked: {
+    what: "Cannot run this command before context is confirmed.",
+    why: "Commands with side effects could modify files based on wrong assumptions. Understanding the project first ensures you modify the right things.",
+    howToFix: "Use read-only commands (ls, cat, grep, git status) to explore, then confirm context."
+  },
+  side_effect_blocked: {
+    what: "Cannot use this tool before context is confirmed.",
+    why: "Editing or writing files without understanding the codebase leads to wasted work and potential bugs. Taking time to understand first saves time overall.",
+    howToFix: "Read relevant files, understand the patterns, then call setu_context to confirm."
+  }
+} as const;
+
+/**
+ * Create the Phase 0 blocking message with enhanced "why" reasoning
+ * 
+ * @param reason - Reason code (bash_blocked, side_effect_blocked)
+ * @param details - Additional details (command name, tool name)
+ */
+export function createPhase0BlockMessage(reason: string, details?: string): string {
+  const message = PHASE0_MESSAGES[reason as keyof typeof PHASE0_MESSAGES];
+  
+  if (!message) {
+    // Fallback for unknown reason codes
+    return `
+Phase 0: Action blocked before context is confirmed.
+
+**Why this matters:**
+Understanding the codebase first prevents wasted work from wrong assumptions.
+Once context is confirmed, you'll build the right thing the first time.
+
+**Next steps:**
+1. Read files and explore the codebase (allowed)
+2. Ask clarifying questions about the task  
+3. Call setu_context to confirm understanding
+4. Then proceed with modifications
+`.trim();
+  }
+  
+  const detailsLine = details ? `\n**Attempted:** \`${details}\`` : '';
+  
   return `
-${reason}
+**Phase 0: ${message.what}**${detailsLine}
+
+**Why this matters:**
+${message.why}
+
+**How to proceed:**
+${message.howToFix}
 
 **Phase 0 Protocol:**
 1. Read files and explore the codebase (allowed)
 2. Ask clarifying questions about the task
-3. Wait for user to confirm understanding
+3. Call \`setu_context\` to confirm understanding
 4. Then proceed with modifications
-
-This prevents wasted work from wrong assumptions.
 `.trim();
 }

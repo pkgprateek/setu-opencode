@@ -4,7 +4,9 @@
  * Uses: tool.execute.before, tool.execute.after
  * 
  * - tool.execute.before: Phase 0 blocking (pre-emptive enforcement)
- * - tool.execute.after: Tracks verification steps and attempt limits
+ *   - Mode-aware: Full enforcement in Setu, light in Build, defer in Plan
+ *   - Context injection: Injects context into subagent prompts (task tool)
+ * - tool.execute.after: Tracks verification steps, file reads, searches
  */
 
 import {
@@ -12,6 +14,7 @@ import {
   createPhase0BlockMessage,
   type Phase0State
 } from '../enforcement';
+import { type ContextCollector, formatContextForInjection, contextToSummary } from '../context';
 
 /**
  * Verification step tracking
@@ -35,22 +38,84 @@ export interface ToolExecuteBeforeOutput {
 }
 
 /**
+ * Enforcement level based on current agent
+ */
+export type EnforcementLevel = 'full' | 'light' | 'none';
+
+/**
+ * Determines enforcement level based on current agent
+ * 
+ * - setu: Full Phase 0 enforcement
+ * - build: Light enforcement (reminders only, no blocking)
+ * - plan: No enforcement (Plan is already read-only by design)
+ * - other: Light enforcement
+ */
+export function getEnforcementLevel(currentAgent: string): EnforcementLevel {
+  const agent = currentAgent.toLowerCase();
+  
+  if (agent === 'setu') {
+    return 'full';
+  }
+  
+  if (agent === 'plan') {
+    // Plan mode is already read-only by OpenCode design
+    return 'none';
+  }
+  
+  // Build and other agents get light enforcement
+  return 'light';
+}
+
+/**
  * Creates the tool.execute.before hook for Phase 0 enforcement
  * 
  * Blocks side-effect tools until context is confirmed.
  * Allows read-only tools for reconnaissance.
+ * Injects context into subagent prompts (task tool).
+ * 
+ * Mode-aware enforcement:
+ * - In Setu mode: Full Phase 0 blocking
+ * - In Plan mode: No blocking (already read-only)
+ * - In Build mode: Light enforcement (log only, no block)
  * 
  * @param getPhase0State - Accessor for Phase 0 state
+ * @param getCurrentAgent - Accessor for current agent (optional)
+ * @param getContextCollector - Accessor for context collector (for injection)
  * @returns Hook function that throws if blocked
  */
 export function createToolExecuteBeforeHook(
-  getPhase0State: () => Phase0State
+  getPhase0State: () => Phase0State,
+  getCurrentAgent?: () => string,
+  getContextCollector?: () => ContextCollector | null
 ) {
   return async (
     input: ToolExecuteBeforeInput,
     output: ToolExecuteBeforeOutput
   ): Promise<void> => {
     const state = getPhase0State();
+    const currentAgent = getCurrentAgent ? getCurrentAgent() : 'setu';
+    const enforcementLevel = getEnforcementLevel(currentAgent);
+    
+    // Context injection for task tool (subagent prompts)
+    if (input.tool === 'task' && getContextCollector) {
+      const collector = getContextCollector();
+      if (collector && collector.getContext().confirmed) {
+        const context = collector.getContext();
+        const summary = contextToSummary(context);
+        const contextBlock = formatContextForInjection(summary);
+        
+        // Inject context at the beginning of the prompt
+        const originalPrompt = output.args.prompt as string || '';
+        output.args.prompt = `${contextBlock}\n\n[TASK]\n${originalPrompt}`;
+        
+        console.log('[Setu] Injected context into subagent prompt');
+      }
+    }
+    
+    // No enforcement in Plan mode (OpenCode handles it)
+    if (enforcementLevel === 'none') {
+      return;
+    }
     
     // If context is confirmed, allow everything
     if (state.contextConfirmed) {
@@ -58,31 +123,76 @@ export function createToolExecuteBeforeHook(
     }
     
     // Check if this tool should be blocked
-    const { blocked, reason } = shouldBlockInPhase0(input.tool, output.args);
+    const { blocked, reason, details } = shouldBlockInPhase0(input.tool, output.args);
     
     if (blocked && reason) {
-      console.log(`[Setu] Phase 0 BLOCKED: ${input.tool}`);
-      throw new Error(createPhase0BlockMessage(reason));
+      if (enforcementLevel === 'full') {
+        // Full enforcement in Setu mode - throw to block
+        console.log(`[Setu] Phase 0 BLOCKED: ${input.tool}`);
+        throw new Error(createPhase0BlockMessage(reason, details));
+      } else {
+        // Light enforcement - log warning but don't block
+        console.log(`[Setu] Phase 0 WARNING (not in Setu mode): ${input.tool} - ${reason}`);
+        return;
+      }
     }
     
     // Allowed - log for debugging
-    console.log(`[Setu] Phase 0 ALLOWED: ${input.tool}`);
+    if (enforcementLevel === 'full') {
+      console.log(`[Setu] Phase 0 ALLOWED: ${input.tool}`);
+    }
   };
 }
 
 /**
- * Creates the tool.execute.after hook for verification tracking
+ * Creates the tool.execute.after hook for verification and context tracking
  * 
- * Monitors bash commands for build/test/lint patterns and marks them as run.
+ * - Monitors bash commands for build/test/lint patterns
+ * - Tracks file reads during Phase 0 for context collection
+ * - Tracks grep/glob searches for context collection
  */
 export function createToolExecuteAfterHook(
-  markVerificationStep: (step: VerificationStep) => void
+  markVerificationStep: (step: VerificationStep) => void,
+  getContextCollector?: () => ContextCollector | null
 ) {
   return async (
-    input: { tool: string; sessionID: string; callID: string },
+    input: { tool: string; sessionID: string; callID: string; args?: Record<string, unknown> },
     output: { title: string; output: string; metadata: unknown }
   ): Promise<void> => {
-    // Only track bash tool executions
+    const collector = getContextCollector ? getContextCollector() : null;
+    
+    // Track file reads for context collection
+    if (input.tool === 'read' && collector) {
+      const filePath = input.args?.filePath as string;
+      if (filePath) {
+        collector.recordFileRead(filePath);
+        console.log(`[Setu] Context: Recorded file read: ${filePath}`);
+      }
+    }
+    
+    // Track grep searches for context collection
+    if (input.tool === 'grep' && collector) {
+      const pattern = input.args?.pattern as string;
+      if (pattern) {
+        // Try to count results from output
+        const lines = output.output.split('\n').filter(l => l.trim());
+        collector.recordSearch(pattern, 'grep', lines.length);
+        console.log(`[Setu] Context: Recorded grep search: ${pattern}`);
+      }
+    }
+    
+    // Track glob searches for context collection
+    if (input.tool === 'glob' && collector) {
+      const pattern = input.args?.pattern as string;
+      if (pattern) {
+        // Try to count results from output
+        const lines = output.output.split('\n').filter(l => l.trim());
+        collector.recordSearch(pattern, 'glob', lines.length);
+        console.log(`[Setu] Context: Recorded glob search: ${pattern}`);
+      }
+    }
+    
+    // Only track verification for bash tool executions
     if (input.tool !== 'bash') return;
     
     const commandOutput = output.output.toLowerCase();

@@ -11,10 +11,12 @@ On first run in any project, establish the foundation.
 
 When starting work on a new project:
 
+0. **Check for existing context**: If `.setu/active.json` exists with `status: "in_progress"`, ask: "Last session you were working on [task]. Would you like to continue, or start something new?"
 1. **Acknowledge** the project briefly
 2. **Ask before proceeding**: "Before I begin, is there any additional context, specific focus, or details you'd like to share?"
 3. **Wait for response** — do not proceed until user responds
 4. **Incorporate context** from user's response into all subsequent phases
+5. **Save to active.json** — Record the task, mode, and any constraints mentioned
 
 *This ensures no tokens are wasted on analysis that misses critical context.*
 
@@ -30,9 +32,25 @@ Perform reconnaissance to understand the project:
 3. Check the identified project root for existing infrastructure
 
 **Check for:**
+- Existing `.setu/` directory (previous Setu context)
 - Existing rules files (`AGENTS.md`, `CLAUDE.md`) in project root
 - Existing skills in `.opencode/skills/` or `.claude/skills/`
 - Codebase structure (technology stack, architecture patterns, conventions)
+
+## Phase 1.5: Setu Context Initialization
+
+If `.setu/` directory doesn't exist, create it:
+
+```
+.setu/
+├── context.md      # Human-readable understanding
+├── context.json    # Machine-parseable (for injection)
+├── active.json     # Current task, mode, constraints
+├── feedback.md     # User feedback on behavior
+└── verification.log  # Audit trail
+```
+
+If `.setu/context.json` exists, load it and verify it's still accurate.
 
 ## Phase 2: Infrastructure Initialization
 
@@ -61,6 +79,12 @@ Handle all five scenarios (checked in order — first match wins):
 ### Scenario E: Both exist
 1. Read and apply existing rules and skills
 2. Proceed with the task
+
+### Scenario F: .setu/ exists (Previous Setu Context)
+1. Load `.setu/context.json` for project understanding
+2. Check `.setu/active.json` for in-progress task
+3. If active task exists, ask: "Continue with [task] or start something new?"
+4. Proceed with task, leveraging existing context
 
 ## Phase 2.5: Project Inception (For New Projects Only)
 
@@ -104,7 +128,7 @@ Create `.opencode/skills/project-patterns/SKILL.md` with:
 ```
 Bootstrap Flow:
 ┌─────────────────┐
-│ Phase 0: Ask    │ ← "Any additional context?"
+│ Phase 0: Ask    │ ← Check active.json, "Any additional context?"
 └────────┬────────┘
          ▼
 ┌─────────────────┐
@@ -112,7 +136,11 @@ Bootstrap Flow:
 └────────┬────────┘
          ▼
 ┌─────────────────┐
-│ Phase 2: Init   │ ← Scenario A/B/C/D/E
+│ Phase 1.5: Setu │ ← Create/load .setu/ directory
+└────────┬────────┘
+         ▼
+┌─────────────────┐
+│ Phase 2: Init   │ ← Scenario A/B/C/D/E/F
 └────────┬────────┘
          ▼
 ┌─────────────────┐

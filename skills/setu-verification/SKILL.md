@@ -129,3 +129,36 @@ Still verify in Quick mode for:
 - New dependencies added
 - Configuration changes
 - Any logic changes
+
+## Verification Logging
+
+After each verification cycle, append results to `.setu/verification.log`:
+
+```markdown
+## [2025-01-24T10:30:00Z] - Task: Implement context persistence
+
+### Build
+- **Status:** PASS
+- **Command:** `bun run build`
+- **Output:** Bundled 92 modules in 23ms
+
+### Test  
+- **Status:** SKIP (no tests configured)
+
+### Lint
+- **Status:** PASS
+- **Command:** `bun run lint`
+
+### Type Check
+- **Status:** PASS
+- **Command:** `bun run typecheck`
+```
+
+This provides an audit trail and helps debug issues that appear later.
+
+## Update Active Task on Completion
+
+After successful verification:
+1. Update `.setu/active.json` with `status: "completed"`
+2. Clear or archive the active task
+3. The task is now safe to commit

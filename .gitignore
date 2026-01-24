@@ -31,3 +31,6 @@ MARKETING_TASKS.md
 *.personal.md
 docs/OMOC_ANALYSIS.md
 IDEAS.md
+
+# Local Tests
+tests/
