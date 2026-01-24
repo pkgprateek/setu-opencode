@@ -34,3 +34,6 @@ IDEAS.md
 
 # Local Tests
 tests/
+
+# Setu session state (active.json is session-specific, context files can be committed)
+.setu/active.json
