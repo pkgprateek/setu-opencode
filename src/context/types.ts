@@ -121,7 +121,9 @@ export interface SetuContextSummary {
 }
 
 /**
- * Creates an empty context for a new session
+ * Create a new, empty SetuContext populated with initial metadata and timestamps.
+ *
+ * @returns A SetuContext initialized with version "1.0", current ISO timestamps for `createdAt` and `updatedAt`, `confirmed` set to `false`, an empty `project` object, and empty arrays for `filesRead`, `searchesPerformed`, and `patterns`.
  */
 export function createEmptyContext(): SetuContext {
   const now = new Date().toISOString();
@@ -138,7 +140,10 @@ export function createEmptyContext(): SetuContext {
 }
 
 /**
- * Converts full context to a summary for injection
+ * Create a compact SetuContextSummary from a full SetuContext for prompt injection.
+ *
+ * @param context - The full persisted context to summarize
+ * @returns A summary containing a human-readable `project` string, `filesRead` paths, `patterns` names, and optional `task`
  */
 export function contextToSummary(context: SetuContext): SetuContextSummary {
   // Format project info
@@ -159,7 +164,10 @@ export function contextToSummary(context: SetuContext): SetuContextSummary {
 }
 
 /**
- * Formats a context summary for injection into prompts
+ * Format a SetuContextSummary into a multi-line block suitable for prompt injection.
+ *
+ * @param summary - The compact context summary to include in the formatted block
+ * @returns The formatted multi-line string enclosed by "[SETU CONTEXT]" and "[/SETU CONTEXT]". Includes a "Project: ..." line, an optional "Files already read: ..." line listing up to 10 file paths (with " (+N more)" if truncated), an optional "Patterns: ..." line, and an optional "Task: ..." line.
  */
 export function formatContextForInjection(summary: SetuContextSummary): string {
   const lines: string[] = [

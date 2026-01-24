@@ -108,7 +108,9 @@ export function isReadOnlyBashCommand(command: string): boolean {
 }
 
 /**
- * Check if a tool is a side-effect tool that should be blocked
+ * Determines whether a tool is considered a side-effect tool and should be blocked in Phase 0.
+ *
+ * @returns `true` if `toolName` is listed in `SIDE_EFFECT_TOOLS`, `false` otherwise.
  */
 export function isSideEffectTool(toolName: string): boolean {
   return SIDE_EFFECT_TOOLS.includes(toolName as typeof SIDE_EFFECT_TOOLS[number]);
@@ -124,11 +126,11 @@ export interface Phase0BlockResult {
 }
 
 /**
- * Determine if a tool call should be blocked during Phase 0
- * 
- * @param toolName - Name of the tool being called
- * @param args - Arguments passed to the tool
- * @returns Object with blocked status, reason code, and details
+ * Decide whether a tool invocation should be blocked by Phase 0 safeguards.
+ *
+ * @param toolName - Name of the tool being invoked
+ * @param args - Optional tool arguments; for `bash` the `command` string is examined to determine read-only status
+ * @returns A Phase0BlockResult: `blocked` is `true` when the call should be prevented; `reason` is a block code (e.g., `bash_blocked`, `side_effect_blocked`) and `details` contains contextual information when available
  */
 export function shouldBlockInPhase0(
   toolName: string,

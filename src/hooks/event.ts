@@ -10,17 +10,14 @@
 import { type ContextCollector, detectProjectInfo } from '../context';
 
 /**
- * Creates the event hook for session lifecycle
- * 
- * Handles:
- * - session.created: Reset verification state, Phase 0, load context
- * - session.deleted: Cleanup if needed
- * 
- * @param resetVerificationState - Callback to reset verification state
- * @param resetAttemptTracker - Callback to reset attempt tracker
- * @param setFirstSessionDone - Callback to mark first session complete
- * @param resetPhase0 - Callback to reset Phase 0 state
- * @param getContextCollector - Accessor for context collector (for loading)
+ * Create an event handler for session lifecycle events.
+ *
+ * @param resetVerificationState - Resets verification-related state when a new session starts
+ * @param resetAttemptTracker - Resets attempt tracking when a new session starts
+ * @param setFirstSessionDone - Marks that the first session has completed
+ * @param resetPhase0 - Optional callback to reset Phase 0 state for the given `sessionId`
+ * @param getContextCollector - Optional accessor that returns a `ContextCollector` (or `null`) used to load or update session context from disk
+ * @returns The event handler function that processes session events and updates internal state and context
  */
 export function createEventHook(
   resetVerificationState: () => void,

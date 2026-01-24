@@ -28,10 +28,10 @@ const CONTEXT_MD = 'context.md';
 const VERIFICATION_LOG = 'verification.log';
 
 /**
- * Loads existing context from .setu/context.json
- * 
- * @param projectDir - Project root directory
- * @returns The loaded context or null if not found
+ * Load the Setu context stored at `.setu/context.json` inside the given project directory.
+ *
+ * @param projectDir - The project root directory to look up `.setu/context.json`
+ * @returns `SetuContext` if the file exists and parses successfully, `null` otherwise
  */
 export function loadContext(projectDir: string): SetuContext | null {
   const contextPath = join(projectDir, '.setu', CONTEXT_JSON);
@@ -73,7 +73,14 @@ export function saveContext(projectDir: string, context: SetuContext): void {
 }
 
 /**
- * Generates human-readable markdown from context
+ * Create a human-readable Markdown representation of a SetuContext.
+ *
+ * The output includes header metadata (last updated, confirmation), and optional
+ * sections for Summary, Current Task, Plan, Project details, Files Read, Searches
+ * Performed, and Patterns Observed when those fields are present.
+ *
+ * @param context - The SetuContext to render as Markdown
+ * @returns A single Markdown-formatted string representing the provided context
  */
 function generateContextMarkdown(context: SetuContext): string {
   const lines: string[] = [
@@ -182,10 +189,10 @@ export interface ContextCollector {
 }
 
 /**
- * Creates a context collector for a project
- * 
- * @param projectDir - Project root directory
- * @returns Context collector instance
+ * Creates a context collector bound to the given project directory.
+ *
+ * @param projectDir - The project root directory used to compute relative file paths and locate on-disk context
+ * @returns A ContextCollector for recording, updating, and persisting Setu context for the project
  */
 export function createContextCollector(projectDir: string): ContextCollector {
   let context: SetuContext = createEmptyContext();
@@ -270,12 +277,15 @@ export function createContextCollector(projectDir: string): ContextCollector {
 }
 
 /**
- * Appends a verification result to the log
- * 
- * @param projectDir - Project root directory
- * @param step - The verification step (build, test, lint)
- * @param success - Whether the step passed
- * @param output - Output from the command (truncated)
+ * Record a verification step result in .setu/verification.log.
+ *
+ * Creates the log file with a header if missing and appends a timestamped entry
+ * containing the step name, PASS/FAIL status, and optional command output.
+ *
+ * @param projectDir - Project root directory containing (or to create) the .setu directory
+ * @param step - The verification step name (e.g., "build", "test", "lint")
+ * @param success - `true` if the step passed, `false` if it failed
+ * @param output - Optional command output to include; truncated to 500 characters if longer
  */
 export function logVerification(
   projectDir: string,
@@ -308,10 +318,10 @@ export function logVerification(
 }
 
 /**
- * Detects project info from common files
- * 
- * @param projectDir - Project root directory
- * @returns Detected project info
+ * Infer project metadata (type, runtime, build tool, test framework, and frameworks) by inspecting common project files in the given directory.
+ *
+ * @param projectDir - Project root directory to inspect
+ * @returns An object containing detected fields such as `type`, `runtime`, `buildTool`, `testFramework`, and `frameworks` when identifiable
  */
 export function detectProjectInfo(projectDir: string): SetuContext['project'] {
   const project: SetuContext['project'] = {};
