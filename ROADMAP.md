@@ -114,6 +114,54 @@ Before publishing:
 - [x] Character evaluation guidance in metrics
 - [x] Transparency/feedback mechanism (`.setu/feedback.md`)
 
+### Phase 0 Silent Reconnaissance (Required for v1.0)
+
+> **Why:** Asking questions that `AGENTS.md` or `.setu/` already answers wastes tokens and frustrates users. Setu should "know" project context before speaking.
+
+- [ ] **Automatic Context Injection on Session Start**
+    - **Why:** setu.md mandates parallel reads of context files before any user interaction. This ensures Setu starts informed, not ignorant. Hooks are reliable — the model cannot skip or forget.
+    - **What:** On `session.created`, automatically read and inject project context.
+    - **How:**
+      1. In `src/hooks/event.ts`, on session start:
+         - Parallel read: `.setu/active.json`, `.setu/context.json`, `AGENTS.md`, `CLAUDE.md`
+         - If `.setu/active.json` has `status: "in_progress"`, prepare resume prompt
+         - Inject summary into session context via system-transform
+      2. In `src/prompts/persona.ts`, add: "You have already read project context from `.setu/` and `AGENTS.md`."
+    - **Trigger:** `session.created` event
+    - **Implementation:** `src/hooks/event.ts`, `src/prompts/persona.ts`
+    - **Reference:** setu.md lines 42-57
+
+### Git Discipline (Required for v1.0)
+
+> **Why:** The repository is sacred ground. Careless commits create chaos. Agents should never commit without explicit approval.
+
+- [ ] **Git Repo Detection**
+    - **Why:** Non-git projects shouldn't be nagged about commits. Ask once, remember forever.
+    - **What:** Detect if current directory is a git repo; ask ONCE if user wants to initialize.
+    - **How:**
+      1. On session start, check if `.git/` exists
+      2. If not, ask: "This project isn't a git repository. Would you like me to initialize one?"
+      3. Store decision in `.setu/context.json` under `git.initialized: boolean`
+      4. If user declines, skip all git discipline for this project permanently
+    - **Trigger:** Session start (part of Silent Reconnaissance)
+    - **Implementation:** `src/hooks/event.ts`, `src/context/storage.ts`
+
+- [ ] **Commit Approval Protocol**
+    - **Why:** Agents commit without asking, creating messy histories.
+    - **What:** Always ask before every commit and push.
+    - **How:**
+      1. Add to persona: "ALWAYS ask before EVERY commit. ALWAYS ask before push."
+      2. Intercept `git commit` and `git push` in `tool.execute.before` to enforce
+    - **Implementation:** `src/prompts/persona.ts`, `src/hooks/tool-execute.ts`
+    - **Reference:** setu.md lines 345-358
+
+- [ ] **Branch Safety Warnings**
+    - **Why:** Accidental commits to main on complex tasks cause problems.
+    - **What:** Warn if on main/master and task is non-trivial.
+    - **How:** Check current branch; if `main`/`master` + complex task, suggest feature branch
+    - **Trigger:** Before commit in non-trivial tasks
+    - **Implementation:** Part of commit approval flow in `src/hooks/tool-execute.ts`
+
 ### Skill Updates (Required for v1.0)
 
 The bundled skills and local development skills need updates to reflect recent changes:
@@ -369,12 +417,78 @@ IMPORTANT: Resume this task. Do NOT start unrelated work.`);
     - **What:** Compact proactively at 85% context usage
     - **How:** Monitor context depth, trigger compaction before limit
 
-### Verification Logging
+### Environment Health
+
+> **Why:** Agents get stuck in "Ghost Loops" trying to fix code when the environment is broken. This wastes tokens and frustrates users.
+
+- [ ] **Create `setu-environment-doctor` skill** (`skills/`)
+    - **Why:** When build/test fails, the error might be environment (missing deps, wrong node version) not code. Setu should diagnose the root cause before attempting code fixes.
+    - **What:** Diagnostic skill that checks runtime, dependencies, and config health.
+    - **How:**
+      - Check runtime versions (`node -v`, `bun -v`) against `package.json` engines
+      - Compare `package.json` dependencies vs lockfile (missing installs?)
+      - Validate `tsconfig.json` paths and references
+      - Check for missing `node_modules` directory
+      - Check for common env issues: wrong CWD, missing env vars
+    - **Trigger:** Called by `setu-verification` ONLY when verification fails with environment-specific errors
+    - **Error Classification:**
+      | Pattern | Classification |
+      |---------|---------------|
+      | `ENOENT`, `command not found`, exit 127 | Environment |
+      | `MODULE_NOT_FOUND`, `Cannot find module` | Environment |
+      | `node: command not found`, `bun: command not found` | Environment |
+      | `SyntaxError`, `TypeError`, test failures | Code |
+    - **Implementation:** `skills/setu-environment-doctor/SKILL.md`
+
+- [ ] **Update `setu-verification` skill for env-doctor routing**
+    - **Why:** Verification skill needs to classify errors and route to env-doctor when appropriate.
+    - **What:** Add error classification logic and conditional skill loading.
+    - **How:**
+      - Parse error output for environment patterns (see table above)
+      - If environment error detected: `use_skill("setu-environment-doctor")`
+      - If code error: proceed with normal fix flow
+    - **Implementation:** `skills/setu-verification/SKILL.md`
+
+### Verification & Regression
+
+> **Why:** "Done" should mean "verified working." Audit trails and regression tests prevent bugs from returning.
 
 - [ ] **Verification Log**
     - **Why:** Audit trail of build/test/lint results
     - **What:** Append to `.setu/verification.log`
     - **Format:** Markdown with timestamps
+
+- [ ] **Gold Test Generation (Opt-in)**
+    - **Why:** When a bug is fixed, that scenario becomes a valuable regression test. Capturing it prevents the same bug from returning. ("Freeze state" for reproducible benchmarks.)
+    - **What:** After successful verification, offer to generate a regression test.
+    - **How:**
+      1. After `setu_verify` returns success, add follow-up prompt:
+         > "✅ Verification passed. Would you like me to create a regression test for this fix?"
+      2. If user agrees:
+         - Capture: files changed, error that was fixed, expected behavior
+         - Generate test case appropriate to project's test framework
+         - Save to appropriate test directory
+      3. This creates "gold" benchmarks for future model evaluation
+    - **Trigger:** User opt-in after `setu_verify` success
+    - **Implementation:** `src/tools/setu-verify.ts` (add follow-up prompt)
+    - **Reference:** Report 1 "Creating Gold Tests"
+
+### Pre-Commit Checklist (Hail Mary Prevention)
+
+> **Why:** Users sometimes ask agents to fix problems they don't understand ("Hail Mary"). This leads to blind fixes. A checklist forces reflection.
+
+- [ ] **Pre-Commit Verification Prompt**
+    - **Why:** Ensures both user and agent understand what's being committed.
+    - **What:** Before committing, verify understanding.
+    - **How:**
+      - Before `git commit`, prompt with checklist:
+        > "Before committing, let's verify:
+        > 1. Do you understand what was changed? [Y/N]
+        > 2. Has the change been verified (build/test)? [Y/N]
+        > 3. Is this the right branch? [branch name]"
+      - If any N, pause and discuss
+    - **Trigger:** Before any commit (part of Git Discipline)
+    - **Implementation:** `src/prompts/persona.ts` (guidance), `src/hooks/tool-execute.ts` (enforcement)
 
 ### TOON Evaluation
 
@@ -411,9 +525,110 @@ IMPORTANT: Resume this task. Do NOT start unrelated work.`);
     - **What:** Warn if on main + complex task
     - **How:** Check branch + task complexity in bootstrap
 
+### Scratchpad Profile
+
+> **Why:** "Vibe coding" and disposable scripts shouldn't be blocked by strict verification. Sometimes users want to write one-off scripts without friction.
+
+- [ ] **Add `scratchpad` profile to `setu_mode`**
+    - **Why:** Report 2 identifies "Disposable Software" as a valid use case. Setu's strictness is counterproductive for throwaway scripts.
+    - **What:** 5th operational profile that bypasses Setu's enforcement.
+    - **How:**
+      - `phase0: "bypass"` — No blocking, allow all tools immediately
+      - `verification: "none"` — No build/test enforcement
+      - `context: "persist"` — Still save to `.setu/` for future reference
+    - **Behavior:**
+      - Disables Phase 0 blocking completely
+      - Disables verification prompts
+      - Allows rapid iteration without ceremony
+      - Still tracks files read and patterns found (in case script graduates to "real" software)
+    - **Trigger:** User says "scratchpad", "vibe", "quick and dirty", "throwaway"
+    - **Implementation:** `src/tools/setu-mode.ts`, `src/prompts/modes.ts`
+
+### Context Hygiene (The Ralph Loop)
+
+> **Why:** "Context Rot" makes agents dumber over time. Long chat histories pollute next-token prediction. Users dumping lots of info, agents trying to fix things — overall quality degrades. The most reliable workflow is: Task → Verify → Wipe Memory → Next Task.
+
+- [ ] **Context Loop Protocol**
+    - **Why:** Manually restarting sessions to clear context is high friction. Setu should manage its own memory hygiene proactively.
+    - **What:** Automate the "Wipe & Reload" cycle while preserving project understanding in `.setu/`.
+    - **How:**
+      1. **Stash Good Context:** Before any reset, save critical info to `.setu/context.json`:
+         - Files read and their summaries
+         - Decisions made during the task
+         - Patterns discovered
+         - AGENTS.md rules applied
+      2. **Trigger Reset:** After task completion + verification success:
+         - Prompt: "Task complete. Verification passed. Shall I clear my short-term memory and reload project context for the next task?"
+      3. **Execute Reset:** If user agrees:
+         - Update `.setu/context.md` with task summary (append)
+         - Clear `.setu/active.json` (task complete)
+         - Trigger session compaction (aggressive summary) or session reset
+         - Reload `.setu/context.json` for fresh start
+      4. **Fresh Start:** Agent has full project context but zero conversation pollution
+    - **Implementation:**
+      - `src/hooks/compaction.ts` (enhanced compaction logic)
+      - `src/tools/setu-verify.ts` (post-verification prompt)
+      - `src/context/storage.ts` (context stashing helpers)
+    - **Reference:** Report 2 "Ralph Loop" concept
+
+- [ ] **Context Size Warning**
+    - **Why:** If context is becoming too large despite hygiene, warn user.
+    - **What:** Detect context bloat; suggest manual restart if needed.
+    - **How:**
+      - Monitor `.setu/context.json` size
+      - If exceeding threshold (e.g., 50KB), prompt: "Context is getting large. Would you like to clean the rot and refresh?"
+    - **Implementation:** `src/context/storage.ts`
+
 ---
 
-## v2.0: Disciplined Delegation
+## v1.3: Disciplined Delegation
+
+### Batch Mode (Auto-Ralph at Scale)
+
+> **Why:** For large tasks (refactoring 50 files, migrations), running the Context Loop automatically is more efficient than manual resets.
+
+- [ ] **Batch Mode Orchestration**
+    - **Why:** Users shouldn't have to manually trigger reset after each subtask.
+    - **What:** High-level plan → Break into N tasks → Execute each with auto-reset between.
+    - **How:**
+      1. User provides high-level plan (or Setu generates from request)
+      2. Setu breaks into discrete tasks (like roadmap or detailed spec)
+      3. Execute Task 1 → Verify → Stash context → Auto-reset
+      4. Reload `.setu/` → Execute Task 2 → ...
+      5. Repeat until all tasks complete
+    - **Value:** Virtually infinite context window for large projects
+    - **Flow:**
+      ```
+      User Plan → [Task 1] → Verify → Stash → Reset
+                         ↓
+                  [Task 2] → Verify → Stash → Reset
+                         ↓
+                  [Task N] → Verify → Complete
+      ```
+    - **Implementation:** `src/orchestration/batch.ts` (new module)
+
+### Communication & Visual Feedback
+
+> **Why:** Setu (as the "Governor" for agents) should feel active and alive. Visual feedback makes blocking and success states clear.
+
+- [ ] **Colored Terminal Output**
+    - **Why:** Red for blocks, green for success, yellow for warnings makes Setu's state immediately visible.
+    - **What:** Use ANSI colors in CLI output for key events.
+    - **How:**
+      - 🔴 Red: Phase 0 blocks, verification failures
+      - 🟢 Green: Verification passed, context confirmed
+      - 🟡 Yellow: Warnings, suggestions, asking for guidance
+      - 🔵 Blue: Information, progress updates
+    - **Implementation:** `src/utils/terminal.ts` (new utility)
+
+- [ ] **Strict Edit Blocking**
+    - **Why:** Agents should NEVER edit a file they haven't read recently.
+    - **What:** Block edits to files not read in last N tool calls (unless user explicitly requested).
+    - **How:**
+      - Track files read in session state
+      - Before `edit` tool, check if file was read recently
+      - If not: Block with red message: "Cannot edit [file] — you haven't read it. Read first, then edit."
+    - **Implementation:** `src/hooks/tool-execute.ts`
 
 ### Setu Subagents
 
@@ -424,6 +639,16 @@ IMPORTANT: Resume this task. Do NOT start unrelated work.`);
     - **Permissions:** Read-only (no edit, no write)
     - **Invocation:** By Setu main agent via `task` tool
     - **Returns:** Concise findings, not raw data
+    - **Cost Optimization (Arbitrage Strategy):**
+      - **Why:** Using expensive models for simple research wastes money. Report 2 identifies this as a key opportunity.
+      - **What:** Simulate "cheap model" tier by restricting subagent capabilities.
+      - **How:**
+        - Shorter system prompt (reduce input tokens)
+        - Limited tool access (read-only subset)
+        - Lower output token limits
+        - Focused task scope (one question at a time)
+      - **Effect:** Tiered work distribution without requiring model routing control
+    - **Reference:** Report 2 "Cost Arbitrage"
 
 - [ ] **setu-reviewer Subagent**
     - **Purpose:** Code review, returns findings
@@ -446,7 +671,7 @@ IMPORTANT: Resume this task. Do NOT start unrelated work.`);
 
 ---
 
-## v2.1: Visual Verification
+## v1.4: Visual Verification
 
 ### Agent Browser Integration
 
@@ -465,7 +690,7 @@ IMPORTANT: Resume this task. Do NOT start unrelated work.`);
 
 ---
 
-## v3.0: Advanced Features
+## v2.0: Advanced Features
 
 ### LSP Integration
 

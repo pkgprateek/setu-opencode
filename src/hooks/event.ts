@@ -5,6 +5,13 @@
  * 
  * Resets state on new sessions, tracks session lifecycle.
  * Loads existing context from .setu/ on session start for continuity.
+ * 
+ * TODO (v1.0 - Phase 0 Silent Reconnaissance):
+ * - Read AGENTS.md and CLAUDE.md on session start
+ * - Inject their content into the session context
+ * - Check .setu/active.json for in-progress tasks
+ * - This ensures Setu "knows" project rules before speaking
+ * - See ROADMAP.md "Phase 0 Silent Reconnaissance" for details
  */
 
 import { type ContextCollector, detectProjectInfo } from '../context';

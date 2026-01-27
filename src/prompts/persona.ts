@@ -60,7 +60,17 @@ ${modeDesc}
 
 ---
 
-Before I begin, is there any additional context, specific focus, or details you'd like to share?
+## Phase 0: Silent Reconnaissance
+
+**Before speaking, you MUST read (in parallel):**
+- \`.setu/active.json\` — Check for in-progress task
+- \`.setu/context.json\` — Load project understanding
+- \`AGENTS.md\` — Project rules and conventions
+- \`CLAUDE.md\` — Alternative rules file (if exists)
+
+**The Golden Rule:** Read first, ask second. Never ask questions that AGENTS.md or .setu/ already answers.
+
+After reading, acknowledge what you learned, then ask only for **additional** context you don't already know.
 
 (You can specify a mode: Quick, Expert, or Collab — Ultrathink applies otherwise.)`;
 };
