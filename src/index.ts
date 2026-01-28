@@ -52,6 +52,9 @@ interface SetuState {
     agentsMd: boolean;     // AGENTS.md
     claudeMd: boolean;     // CLAUDE.md
   };
+  
+  // FIX 5: Cache for file existence checks (avoids repeated fs.existsSync)
+  fileCache: Map<string, { exists: boolean; checkedAt: number }>;
 }
 
 /**
@@ -85,12 +88,12 @@ export const SetuPlugin: Plugin = async (ctx) => {
   }
   
   // Create context collector for .setu/ persistence
+  // NOTE: We create the collector but DON'T load context yet (lazy loading)
+  // Context is loaded on-demand when needed, not at startup
   let contextCollector: ContextCollector | null = null;
   try {
     contextCollector = createContextCollector(projectDir);
-    // Try to load existing context
-    contextCollector.loadFromDisk();
-    console.log('[Setu] Context collector initialized');
+    console.log('[Setu] Context collector initialized (lazy loading enabled)');
   } catch (error) {
     console.log('[Setu] Could not initialize context collector:', error);
   }
@@ -121,7 +124,10 @@ export const SetuPlugin: Plugin = async (ctx) => {
       context: false,
       agentsMd: false,
       claudeMd: false
-    }
+    },
+    
+    // FIX 5: File cache (avoids repeated fs calls)
+    fileCache: new Map()
   };
   
   // Create attempt tracker for "2 tries then ask" pattern
@@ -131,16 +137,34 @@ export const SetuPlugin: Plugin = async (ctx) => {
   const getProfileState = () => state.profile;
   const setProfileState = (newState: ProfileState) => { state.profile = newState; };
   
-  // File existence checker (silent, no errors)
-  const checkSetuFilesExist = () => {
+  // FIX 5: Cached file existence checker (silent, no errors)
+  // Cache lasts 5 seconds to avoid repeated fs.existsSync calls
+  const checkFileExists = (filePath: string): boolean => {
+    const cached = state.fileCache.get(filePath);
+    const now = Date.now();
+    
+    // Return cached result if less than 5 seconds old
+    if (cached && (now - cached.checkedAt < 5000)) {
+      return cached.exists;
+    }
+    
+    // Check file existence and update cache
     const fs = require('fs');
+    const exists = fs.existsSync(filePath);
+    state.fileCache.set(filePath, { exists, checkedAt: now });
+    
+    return exists;
+  };
+  
+  // File existence checker for all Setu files (uses cache)
+  const checkSetuFilesExist = () => {
     const path = require('path');
     
     state.setuFilesExist = {
-      active: fs.existsSync(path.join(projectDir, '.setu', 'active.json')),
-      context: fs.existsSync(path.join(projectDir, '.setu', 'context.json')),
-      agentsMd: fs.existsSync(path.join(projectDir, 'AGENTS.md')),
-      claudeMd: fs.existsSync(path.join(projectDir, 'CLAUDE.md'))
+      active: checkFileExists(path.join(projectDir, '.setu', 'active.json')),
+      context: checkFileExists(path.join(projectDir, '.setu', 'context.json')),
+      agentsMd: checkFileExists(path.join(projectDir, 'AGENTS.md')),
+      claudeMd: checkFileExists(path.join(projectDir, 'CLAUDE.md'))
     };
     
     return state.setuFilesExist;
@@ -220,7 +244,8 @@ export const SetuPlugin: Plugin = async (ctx) => {
     // Inject Setu persona into system prompt
     'experimental.chat.system.transform': createSystemTransformHook(
       getProfileState,
-      getVerificationState
+      getVerificationState,
+      () => state.setuFilesExist  // FIX 4: Pass file existence for lazy loading
     ),
     
     // Detect profile keywords in user messages and track current agent

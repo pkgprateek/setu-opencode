@@ -45,40 +45,33 @@ export function createEventHook(
         // Check file existence silently (no errors on first run)
         const filesExist = checkFilesExist ? checkFilesExist() : null;
         
-        // Only attempt to load context if files exist
-        if (getContextCollector && filesExist?.context) {
-          const collector = getContextCollector();
-          if (collector) {
-            try {
-              const loaded = collector.loadFromDisk();
-              if (loaded) {
-                const context = collector.getContext();
-                console.log(`[Setu] Loaded existing context (confirmed: ${context.confirmed})`);
-                
-                // If context was already confirmed, we might want to keep Phase 0 unlocked
-                // But for now, we reset Phase 0 to require re-confirmation each session
-                // This is safer - user might be working on something different
+        // FIX 4: Lazy loading - DON'T load context at startup
+        // Context will be loaded on-demand when:
+        // 1. User explicitly asks: "load previous context"
+        // 2. Agent calls setu_context tool (reads then updates)
+        // 3. Subagent is spawned (context injected into prompt)
+        
+        // Just log what's available, don't load
+        if (filesExist?.context) {
+          console.log('[Setu] Context file detected (.setu/context.json) - available for lazy load');
+        } else {
+          console.log('[Setu] No existing context - fresh start');
+          
+          // Optional: Detect project info for new context (lightweight operation)
+          if (getContextCollector) {
+            const collector = getContextCollector();
+            if (collector) {
+              try {
+                const projectDir = (event.properties?.projectDir as string) || process.cwd();
+                const projectInfo = detectProjectInfo(projectDir);
+                if (Object.keys(projectInfo).length > 0) {
+                  collector.updateProjectInfo(projectInfo);
+                  console.log(`[Setu] Detected project: ${projectInfo.type || 'unknown'}`);
+                }
+              } catch (error) {
+                // Non-fatal - project detection is optional
+                console.log('[Setu] Could not detect project info');
               }
-            } catch (error) {
-              // Silent fail - don't show red error messages on first run
-              console.log('[Setu] Could not load existing context (first run)');
-            }
-          }
-        } else if (getContextCollector && !filesExist?.context) {
-          // No existing context - detect project info for new context
-          const collector = getContextCollector();
-          if (collector) {
-            try {
-              // Get project dir from properties or use cwd
-              const projectDir = (event.properties?.projectDir as string) || process.cwd();
-              const projectInfo = detectProjectInfo(projectDir);
-              if (Object.keys(projectInfo).length > 0) {
-                collector.updateProjectInfo(projectInfo);
-                console.log(`[Setu] Detected project: ${projectInfo.type || 'unknown'}`);
-              }
-            } catch (error) {
-              // Non-fatal - project detection is optional
-              console.log('[Setu] Could not detect project info');
             }
           }
         }
