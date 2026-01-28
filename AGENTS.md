@@ -212,7 +212,7 @@ read("package.json")  // Message 3
 
 A test folder exists at `./tests/` within the repo (gitignored):
 - `opencode.json` configured to load the plugin from `dist/`
-- Uses `opencode/grok-code` model (free tier)
+- Uses `opencode/big-pickle` model (free tier)
 
 ### Testing Steps
 
