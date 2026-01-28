@@ -36,5 +36,13 @@ IDEAS.md
 # Local Tests
 tests/
 
-# Setu session state (active.json is session-specific, context files can be committed)
+# Setu state files
+# - active.json: Session-specific state (changes every session)
+# - verification.log: Local audit trail
+# - debug.log: Debug output (when SETU_DEBUG=true)
+# - context.json: Can be committed for team context sharing (optional)
+# - feedback.md: User feedback, local only
 .setu/active.json
+.setu/verification.log
+.setu/debug.log
+.setu/feedback.md
