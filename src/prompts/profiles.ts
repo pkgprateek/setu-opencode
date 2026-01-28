@@ -1,49 +1,62 @@
 /**
- * Profile types and utilities for Setu operating profiles
+ * Style types and utilities for Setu operational styles (presets)
+ * 
+ * Terminology:
+ * - "Mode" = OpenCode's IDE-level agents (Plan, Build, Setu)
+ * - "Style" = Setu's operational presets (ultrathink, quick, expert, collab)
  */
 
-export type SetuProfile = 'ultrathink' | 'quick' | 'expert' | 'collab';
+export type SetuStyle = 'ultrathink' | 'quick' | 'expert' | 'collab';
 
-export interface ProfileState {
-  current: SetuProfile;
-  isPersistent: boolean;  // true if set via "mode: x", false if temporary
+// Backwards compatibility alias
+export type SetuProfile = SetuStyle;
+
+export interface StyleState {
+  current: SetuStyle;
+  isPersistent: boolean;  // true if set via "style: x", false if temporary
 }
 
+// Backwards compatibility alias
+export type ProfileState = StyleState;
+
 /**
- * Keywords that trigger profile detection
+ * Keywords that trigger style detection
  * 
- * Only persistent triggers allowed - user must explicitly request profile change.
- * Removed temporary triggers to prevent accidental profile switching.
+ * Only persistent triggers allowed - user must explicitly request style change.
+ * Supports both "style:" and legacy "mode:" prefixes.
  */
-export const PROFILE_TRIGGERS = {
+export const STYLE_TRIGGERS = {
   ultrathink: {
-    persistent: ['mode: ultrathink', 'mode: default', 'mode: full'],
+    persistent: ['style: ultrathink', 'style: default', 'style: full', 'mode: ultrathink', 'mode: default', 'mode: full'],
   },
   quick: {
-    persistent: ['mode: quick', 'mode: fast'],
+    persistent: ['style: quick', 'style: fast', 'mode: quick', 'mode: fast'],
   },
   expert: {
-    persistent: ['mode: expert', 'mode: trust'],
+    persistent: ['style: expert', 'style: trust', 'mode: expert', 'mode: trust'],
   },
   collab: {
-    persistent: ['mode: collab', 'mode: collaborate', 'mode: discuss'],
+    persistent: ['style: collab', 'style: collaborate', 'style: discuss', 'mode: collab', 'mode: collaborate', 'mode: discuss'],
   }
 } as const;
 
+// Backwards compatibility alias
+export const PROFILE_TRIGGERS = STYLE_TRIGGERS;
+
 /**
- * Detect profile from user prompt
+ * Detect style from user prompt
  * 
- * Only checks for persistent triggers (explicit profile declarations).
- * @returns { profile, isPersistent: true } or null if no profile detected
+ * Only checks for persistent triggers (explicit style declarations).
+ * @returns { style, isPersistent: true } or null if no style detected
  */
-export function detectProfile(prompt: string): { profile: SetuProfile; isPersistent: boolean } | null {
+export function detectStyle(prompt: string): { style: SetuStyle; isPersistent: boolean } | null {
   const lowerPrompt = prompt.toLowerCase();
   
-  for (const [profile, triggers] of Object.entries(PROFILE_TRIGGERS)) {
+  for (const [style, triggers] of Object.entries(STYLE_TRIGGERS)) {
     // Check persistent triggers only
     for (const trigger of triggers.persistent) {
       if (lowerPrompt.includes(trigger)) {
-        return { profile: profile as SetuProfile, isPersistent: true };
+        return { style: style as SetuStyle, isPersistent: true };
       }
     }
   }
@@ -51,11 +64,20 @@ export function detectProfile(prompt: string): { profile: SetuProfile; isPersist
   return null;
 }
 
+// Backwards compatibility alias
+export function detectProfile(prompt: string): { profile: SetuStyle; isPersistent: boolean } | null {
+  const result = detectStyle(prompt);
+  if (result) {
+    return { profile: result.style, isPersistent: result.isPersistent };
+  }
+  return null;
+}
+
 /**
- * Get verification requirements for a profile
+ * Get verification requirements for a style
  */
-export function getProfileVerificationLevel(profile: SetuProfile): 'full' | 'minimal' | 'user-driven' | 'discuss' {
-  switch (profile) {
+export function getStyleVerificationLevel(style: SetuStyle): 'full' | 'minimal' | 'user-driven' | 'discuss' {
+  switch (style) {
     case 'ultrathink':
       return 'full';      // Build, test, lint, visual, edge cases
     case 'quick':
@@ -67,11 +89,16 @@ export function getProfileVerificationLevel(profile: SetuProfile): 'full' | 'min
   }
 }
 
+// Backwards compatibility alias
+export function getProfileVerificationLevel(profile: SetuStyle): 'full' | 'minimal' | 'user-driven' | 'discuss' {
+  return getStyleVerificationLevel(profile);
+}
+
 /**
- * Get enforcement level for a profile
+ * Get enforcement level for a style
  */
-export function getProfileEnforcementLevel(profile: SetuProfile): 'strict' | 'light' | 'none' {
-  switch (profile) {
+export function getStyleEnforcementLevel(style: SetuStyle): 'strict' | 'light' | 'none' {
+  switch (style) {
     case 'ultrathink':
       return 'strict';    // Enforce todo completion, verification
     case 'quick':
@@ -81,4 +108,9 @@ export function getProfileEnforcementLevel(profile: SetuProfile): 'strict' | 'li
     case 'collab':
       return 'light';     // Discuss before enforcing
   }
+}
+
+// Backwards compatibility alias
+export function getProfileEnforcementLevel(profile: SetuStyle): 'strict' | 'light' | 'none' {
+  return getStyleEnforcementLevel(profile);
 }
