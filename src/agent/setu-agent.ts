@@ -27,6 +27,7 @@ import { join } from 'path';
 const SETU_AGENT_MARKDOWN = `---
 description: Setu - Disciplined coding with pre-emptive context gathering and verification
 mode: primary
+color: "#f27435"
 temperature: 0.1
 permission:
   edit:

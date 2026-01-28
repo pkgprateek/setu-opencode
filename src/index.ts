@@ -4,7 +4,7 @@
  * A master craftsman persona that transforms AI into a thoughtful, expert colleague.
  * 
  * Features:
- * - Operating modes: Ultrathink, Quick, Expert, Collab
+ * - Operating profiles: Ultrathink, Quick, Expert, Collab
  * - Enforcement: Phase 0 blocking, verification before completion
  * - Context persistence: .setu/ directory for session continuity
  * - Skills: Bootstrap, verification, rules creation, code quality, and more
@@ -13,7 +13,7 @@
  */
 
 import type { Plugin } from '@opencode-ai/plugin';
-import { type ModeState } from './prompts/modes';
+import { type ProfileState } from './prompts/profiles';
 import {
   createSystemTransformHook,
   createChatMessageHook,
@@ -24,7 +24,6 @@ import {
   type VerificationStep
 } from './hooks';
 import { type Phase0State } from './enforcement';
-import { createSetuModeTool } from './tools/setu-mode';
 import { createSetuVerifyTool } from './tools/setu-verify';
 import { createSetuContextTool } from './tools/setu-context';
 import { createSetuFeedbackTool } from './tools/setu-feedback';
@@ -38,13 +37,21 @@ import {
 
 // Plugin state
 interface SetuState {
-  mode: ModeState;
+  profile: ProfileState;
   currentAgent: string;
   isFirstSession: boolean;
   verificationSteps: Set<VerificationStep>;
   verificationComplete: boolean;
   phase0: Phase0State;
   contextCollector: ContextCollector | null;
+  
+  // File existence tracking (checked silently, no auto-read)
+  setuFilesExist: {
+    active: boolean;       // .setu/active.json
+    context: boolean;      // .setu/context.json
+    agentsMd: boolean;     // AGENTS.md
+    claudeMd: boolean;     // CLAUDE.md
+  };
 }
 
 /**
@@ -53,11 +60,11 @@ interface SetuState {
  * Uses available hooks from the OpenCode Plugin API:
  * - config: Set default_agent to "setu"
  * - experimental.chat.system.transform: Inject persona into system prompt
- * - chat.message: Detect mode keywords in user messages, track current agent
+ * - chat.message: Detect profile keywords in user messages, track current agent
  * - tool.execute.before: Phase 0 enforcement (block side-effects until context confirmed)
  * - tool.execute.after: Track verification steps, file reads, searches
  * - event: Handle session lifecycle, load context on start
- * - tool: Custom tools (setu_mode, setu_verify, setu_context, lsp_*)
+ * - tool: Custom tools (setu_verify, setu_context, setu_feedback, lsp_*)
  */
 export const SetuPlugin: Plugin = async (ctx) => {
   // Create the Setu agent configuration file on plugin init
@@ -93,7 +100,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
   
   // Initialize state
   const state: SetuState = {
-    mode: {
+    profile: {
       current: 'ultrathink',
       isPersistent: true
     },
@@ -106,15 +113,38 @@ export const SetuPlugin: Plugin = async (ctx) => {
       sessionId: '',
       startedAt: Date.now()
     },
-    contextCollector
+    contextCollector,
+    
+    // File existence flags - checked silently, no errors on first run
+    setuFilesExist: {
+      active: false,
+      context: false,
+      agentsMd: false,
+      claudeMd: false
+    }
   };
   
   // Create attempt tracker for "2 tries then ask" pattern
   const attemptTracker = createAttemptTracker();
   
   // State accessors
-  const getModeState = () => state.mode;
-  const setModeState = (newState: ModeState) => { state.mode = newState; };
+  const getProfileState = () => state.profile;
+  const setProfileState = (newState: ProfileState) => { state.profile = newState; };
+  
+  // File existence checker (silent, no errors)
+  const checkSetuFilesExist = () => {
+    const fs = require('fs');
+    const path = require('path');
+    
+    state.setuFilesExist = {
+      active: fs.existsSync(path.join(projectDir, '.setu', 'active.json')),
+      context: fs.existsSync(path.join(projectDir, '.setu', 'context.json')),
+      agentsMd: fs.existsSync(path.join(projectDir, 'AGENTS.md')),
+      claudeMd: fs.existsSync(path.join(projectDir, 'CLAUDE.md'))
+    };
+    
+    return state.setuFilesExist;
+  };
   
   const getCurrentAgent = () => state.currentAgent;
   const setCurrentAgent = (agent: string) => {
@@ -168,10 +198,10 @@ export const SetuPlugin: Plugin = async (ctx) => {
   
   // Log plugin initialization
   console.log('[Setu] Plugin initialized');
-  console.log('[Setu] Default mode:', state.mode.current);
+  console.log('[Setu] Default profile:', state.profile.current);
   console.log('[Setu] Phase 0 enforcement: ACTIVE');
   console.log('[Setu] Context persistence: .setu/ directory');
-  console.log('[Setu] Tools: setu_mode, setu_verify, setu_context, setu_feedback, lsp_*');
+  console.log('[Setu] Tools: setu_verify, setu_context, setu_feedback, lsp_*');
   console.log('[Setu] Skills bundled: setu-bootstrap, setu-verification, setu-rules-creation, code-quality, refine-code, commit-helper, pr-review');
   
   return {
@@ -189,14 +219,14 @@ export const SetuPlugin: Plugin = async (ctx) => {
     
     // Inject Setu persona into system prompt
     'experimental.chat.system.transform': createSystemTransformHook(
-      getModeState,
+      getProfileState,
       getVerificationState
     ),
     
-    // Detect mode keywords in user messages and track current agent
+    // Detect profile keywords in user messages and track current agent
     'chat.message': createChatMessageHook(
-      getModeState,
-      setModeState,
+      getProfileState,
+      setProfileState,
       setCurrentAgent
     ),
     
@@ -222,13 +252,13 @@ export const SetuPlugin: Plugin = async (ctx) => {
       () => attemptTracker.clearAll(),
       setFirstSessionDone,
       resetPhase0,
-      getContextCollector
+      getContextCollector,
+      checkSetuFilesExist  // Silent file existence check
     ),
     
     // Custom tools
     tool: {
-      setu_mode: createSetuModeTool(getModeState, setModeState),
-      setu_verify: createSetuVerifyTool(getModeState, markVerificationComplete),
+      setu_verify: createSetuVerifyTool(getProfileState, markVerificationComplete),
       setu_context: createSetuContextTool(getPhase0State, confirmContext, getContextCollector),
       setu_feedback: createSetuFeedbackTool(getProjectDir),
       ...lspTools

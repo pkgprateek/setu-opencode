@@ -1,15 +1,15 @@
 /**
- * Chat message hook - Detects mode keywords and handles mode switching
+ * Chat message hook - Detects profile keywords and handles profile switching
  * 
  * Uses: chat.message
  * 
- * Detects mode keywords like "mode: quick" or "quick fix this" and updates
+ * Detects profile keywords like "mode: quick" or "mode: expert" and updates
  * the plugin state accordingly.
  * 
- * Also tracks the current agent for mode-aware enforcement.
+ * Also tracks the current agent for profile-aware enforcement.
  */
 
-import { detectMode, type ModeState } from '../prompts/modes';
+import { detectProfile, type ProfileState } from '../prompts/profiles';
 
 /**
  * Agent state tracking
@@ -21,31 +21,31 @@ export interface AgentState {
 }
 
 /**
- * Creates a chat-message processing hook that detects mode keywords and updates mode state.
+ * Creates a chat-message processing hook that detects profile keywords and updates profile state.
  *
- * The returned hook scans message parts for persistent or temporary mode keywords and updates
- * the provided mode state accordingly. If provided, the optional `setAgentState` callback is
+ * The returned hook scans message parts for persistent profile keywords and updates
+ * the provided profile state accordingly. If provided, the optional `setAgentState` callback is
  * invoked with the message agent to track the active agent.
  *
- * @param getModeState - Callback that returns the current mode state
- * @param setModeState - Callback to apply a new mode state
+ * @param getProfileState - Callback that returns the current profile state
+ * @param setProfileState - Callback to apply a new profile state
  * @param setAgentState - Optional callback invoked with the message's agent identifier when present
- * @returns A hook function that processes an input message and its output parts, updating mode and agent state
+ * @returns A hook function that processes an input message and its output parts, updating profile and agent state
  */
 export function createChatMessageHook(
-  getModeState: () => ModeState,
-  setModeState: (state: ModeState) => void,
+  getProfileState: () => ProfileState,
+  setProfileState: (state: ProfileState) => void,
   setAgentState?: (agent: string) => void
 ) {
   // Track temporary mode for restoration after one task
   let temporaryModeActive = false;
-  let modeBeforeTemporary: ModeState['current'] | null = null;
+  let modeBeforeTemporary: ProfileState['current'] | null = null;
 
   return async (
     input: { sessionID: string; agent?: string; messageID?: string },
     output: { message: { id: string }; parts: Array<{ type: string; content?: string }> }
   ): Promise<void> => {
-    const currentState = getModeState();
+    const currentState = getProfileState();
     
     // Track the current agent if provided
     if (input.agent && setAgentState) {
@@ -55,29 +55,29 @@ export function createChatMessageHook(
     // Scan parts for mode keywords
     for (const part of output.parts) {
       if (part.type === 'text' && typeof part.content === 'string') {
-        const detected = detectMode(part.content);
+        const detected = detectProfile(part.content);
         
         if (detected) {
           if (detected.isPersistent) {
             // Persistent mode change
-            setModeState({
-              current: detected.mode,
+            setProfileState({
+              current: detected.profile,
               isPersistent: true
             });
             temporaryModeActive = false;
             modeBeforeTemporary = null;
-            console.log(`[Setu] Mode switched to ${detected.mode} (persistent)`);
+            console.log(`[Setu] Mode switched to ${detected.profile} (persistent)`);
           } else {
             // Temporary mode - save current and will restore after
             if (!temporaryModeActive) {
               modeBeforeTemporary = currentState.current;
             }
-            setModeState({
-              current: detected.mode,
+            setProfileState({
+              current: detected.profile,
               isPersistent: false
             });
             temporaryModeActive = true;
-            console.log(`[Setu] Temporary mode: ${detected.mode}`);
+            console.log(`[Setu] Temporary profile: ${detected.profile}`);
           }
           break; // Only process first mode keyword found
         }
@@ -88,11 +88,11 @@ export function createChatMessageHook(
     // Note: This happens on the NEXT message after a temporary mode was used
     if (temporaryModeActive && modeBeforeTemporary && !output.parts.some(p => {
       if (p.type === 'text' && typeof p.content === 'string') {
-        return detectMode(p.content) !== null;
+        return detectProfile(p.content) !== null;
       }
       return false;
     })) {
-      setModeState({
+      setProfileState({
         current: modeBeforeTemporary,
         isPersistent: true
       });

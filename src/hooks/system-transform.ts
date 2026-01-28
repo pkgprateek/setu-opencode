@@ -8,7 +8,7 @@
  */
 
 import { getInitialPrompt, getModePrefix } from '../prompts/persona';
-import type { ModeState } from '../prompts/modes';
+import type { ProfileState } from '../prompts/profiles';
 
 /**
  * Creates the system transform hook
@@ -19,14 +19,14 @@ import type { ModeState } from '../prompts/modes';
  * - Enforcement reminders based on verification state
  */
 export function createSystemTransformHook(
-  getModeState: () => ModeState,
+  getProfileState: () => ProfileState,
   getVerificationState: () => { complete: boolean; stepsRun: Set<string> }
 ) {
   return async (
     _input: { sessionID: string },
     output: { system: string[] }
   ): Promise<void> => {
-    const modeState = getModeState();
+    const modeState = getProfileState();
     const verificationState = getVerificationState();
     
     const persona = getInitialPrompt(modeState.current);

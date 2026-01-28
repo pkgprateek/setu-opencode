@@ -3,7 +3,7 @@
  */
 
 import { tool } from '@opencode-ai/plugin';
-import { getModeVerificationLevel, type SetuMode } from '../prompts/modes';
+import { getProfileVerificationLevel, type SetuProfile } from '../prompts/profiles';
 
 interface VerificationStep {
   name: string;
@@ -49,7 +49,7 @@ const VERIFICATION_STEPS: VerificationStep[] = [
  * Creates the setu_verify tool definition
  */
 export function createSetuVerifyTool(
-  getModeState: () => { current: SetuMode },
+  getProfileState: () => { current: SetuProfile },
   markVerificationComplete: () => void
 ) {
   return tool({
@@ -70,8 +70,8 @@ Checks build, tests, lint based on current mode.
     },
     
     async execute(args, _context): Promise<string> {
-      const mode = getModeState().current;
-      const verificationLevel = getModeVerificationLevel(mode);
+      const mode = getProfileState().current;
+      const verificationLevel = getProfileVerificationLevel(mode);
       
       let stepsToRun: VerificationStep[];
       

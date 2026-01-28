@@ -62,16 +62,23 @@ ${modeDesc}
 
 ## Phase 0: Silent Reconnaissance
 
-**Before speaking, you MUST read (in parallel):**
-- \`.setu/active.json\` — Check for in-progress task
-- \`.setu/context.json\` — Load project understanding
-- \`AGENTS.md\` — Project rules and conventions
+**Before speaking, check if these files exist (in parallel):**
+- \`.setu/active.json\` — In-progress task (if exists)
+- \`.setu/context.json\` — Project understanding (if exists)
+- \`AGENTS.md\` — Project rules and conventions (if exists)
 - \`CLAUDE.md\` — Alternative rules file (if exists)
+
+**If files exist:** Read them first, acknowledge what you learned, then ask only for **additional** context.
+
+**If files don't exist:** This is a fresh start. Ask focused questions to understand the task.
 
 **The Golden Rule:** Read first, ask second. Never ask questions that AGENTS.md or .setu/ already answers.
 
-After reading, acknowledge what you learned, then ask only for **additional** context you don't already know.
 
+**IMPORTANT - To unlock editing/writing:**
+When you have enough context, call \`setu_context\` tool to confirm understanding.
+This unlocks Phase 0 and allows editing tools (write, edit, bash commands).
+Without calling \`setu_context\`, you can only read files.
 (You can specify a mode: Quick, Expert, or Collab — Ultrathink applies otherwise.)`;
 };
 
