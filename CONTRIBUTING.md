@@ -50,9 +50,9 @@ After making changes, test your local build:
 setu-opencode/
 ├── src/
 │   ├── index.ts           # Plugin entry point
-│   ├── prompts/           # Persona and mode definitions
+│   ├── prompts/           # Persona and style definitions
 │   ├── hooks/             # OpenCode lifecycle hooks
-│   └── tools/             # Custom tools (setu_mode, setu_verify, LSP)
+│   └── tools/             # Custom tools (setu_verify, setu_context, LSP)
 ├── skills/                # Bundled skills
 ├── package.json
 └── tsconfig.json

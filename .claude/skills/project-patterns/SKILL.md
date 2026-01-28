@@ -84,7 +84,7 @@ export function createMyTool(
 
 - Prefix with `setu_` for Setu-specific tools
 - Use snake_case (OpenCode convention)
-- Examples: `setu_mode`, `setu_verify`, `lsp_symbols`
+- Examples: `setu_context`, `setu_verify`, `lsp_symbols`
 
 ## Enforcement Logic
 

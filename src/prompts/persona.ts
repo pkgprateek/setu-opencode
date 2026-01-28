@@ -1,82 +1,107 @@
 /**
- * Setu Persona - Lean version (~500 tokens)
+ * Setu Dynamic State Injection
  * 
- * This is injected at session start via the session.created hook.
- * Removes redundant content that OpenCode already provides.
+ * This module provides ONLY dynamic state for injection via hooks.
+ * The full persona is in the agent file (.opencode/agents/setu.md).
+ * 
+ * What this injects:
+ * - Current profile indicator
+ * - File availability
+ * - Smart guidance based on what exists
+ * 
+ * What this does NOT inject:
+ * - Full persona (already in agent file)
+ * - Behavioral instructions (enforced by hooks)
+ * - Phase 0 ceremony (blocked by hooks)
  */
 
-export const SETU_PERSONA = `You are **Setu** — a master craftsman who performs **ultrathink**: deep, systematic reasoning that transforms intent into elegant solutions.
+import type { SetuProfile } from './profiles';
 
-## Priority Order (in conflict, prefer earlier)
+/**
+ * File existence state
+ */
+export interface FileAvailability {
+  active: boolean;
+  context: boolean;
+  agentsMd: boolean;
+  claudeMd: boolean;
+}
 
-1. **Safe** — Don't break things. Verify before claiming done.
-2. **Contextual** — Understand before acting. Wrong assumptions waste time.
-3. **Efficient** — Parallel reads, minimal tokens.
-4. **Helpful** — Solve the real problem elegantly.
-
-## The Covenant
-
-1. **Think Different** — Question assumptions. Find the elegant solution.
-2. **Obsess Over Details** — Understand the patterns and philosophy of this code.
-3. **Plan Like Da Vinci** — Sketch architecture before writing. Document the beauty.
-4. **Craft, Don't Code** — Names should sing. Abstractions should feel natural.
-5. **Iterate Relentlessly** — First version is never enough. Run tests. Refine.
-6. **Simplify Ruthlessly** — Remove complexity. Elegance is nothing left to take away.
-7. **Leave It Better** — Document discoveries. Flag debt. Help the next developer.
-
-## Attempt Limits
-
-Maximum 2 attempts after failure. Then ask: "I've tried X and Y. Would you like me to try Z, or do you have guidance?"
-
-**Hard constraints (yield immediately):**
-- Security boundaries
-- Legal/compliance requirements  
-- Platform fundamental limitations
-- Third-party API contracts`;
-
-export const MODE_DESCRIPTIONS = {
-  ultrathink: `**Ultrathink** (default): Full protocol — plan, implement, verify (build, test, lint).
-Thorough analysis. Question assumptions. Document decisions.`,
-  
-  quick: `**Quick**: Skip ceremony, execute directly, minimal verification.
-For typos, comments, small edits. Just do it.`,
-  
-  expert: `**Expert**: Trust user's judgment, propose but don't block.
-User knows what they want. Skip explanations. User reviews.`,
-  
-  collab: `**Collab**: Discuss options before implementing.
-For architecture decisions, ambiguous requirements, brainstorming.`
+/**
+ * Profile display names
+ */
+const PROFILE_DISPLAY: Record<SetuProfile, string> = {
+  ultrathink: 'Ultrathink',
+  quick: 'Quick',
+  expert: 'Expert',
+  collab: 'Collab'
 };
 
-export const getInitialPrompt = (mode: string): string => {
-  const modeKey = mode.toLowerCase() as keyof typeof MODE_DESCRIPTIONS;
-  const modeDesc = MODE_DESCRIPTIONS[modeKey] || MODE_DESCRIPTIONS.ultrathink;
-  
-  return `${SETU_PERSONA}
-
-## Current Mode
-
-${modeDesc}
-
----
-
-## Phase 0: Silent Reconnaissance
-
-**Before speaking, you MUST read (in parallel):**
-- \`.setu/active.json\` — Check for in-progress task
-- \`.setu/context.json\` — Load project understanding
-- \`AGENTS.md\` — Project rules and conventions
-- \`CLAUDE.md\` — Alternative rules file (if exists)
-
-**The Golden Rule:** Read first, ask second. Never ask questions that AGENTS.md or .setu/ already answers.
-
-After reading, acknowledge what you learned, then ask only for **additional** context you don't already know.
-
-(You can specify a mode: Quick, Expert, or Collab — Ultrathink applies otherwise.)`;
+/**
+ * Get profile prefix for responses
+ */
+export const getModePrefix = (profile: SetuProfile, isDefault: boolean = false): string => {
+  const name = PROFILE_DISPLAY[profile];
+  const suffix = isDefault ? ' (Default)' : '';
+  return `[Profile: ${name}${suffix}]`;
 };
 
-export const getModePrefix = (mode: string, isDefault: boolean = false): string => {
-  const capitalizedMode = mode.charAt(0).toUpperCase() + mode.slice(1).toLowerCase();
-  const defaultSuffix = isDefault ? ' (Default)' : '';
-  return `[Mode: ${capitalizedMode}${defaultSuffix}]`;
+/**
+ * Get file availability message
+ * 
+ * This tells the agent what context files exist WITHOUT instructing it to read them.
+ * The agent can choose to read them if relevant to the task.
+ */
+export const getFileAvailability = (files: FileAvailability): string => {
+  const available: string[] = [];
+  
+  // Priority order: project rules first
+  if (files.agentsMd) available.push('AGENTS.md');
+  if (files.claudeMd) available.push('CLAUDE.md');
+  if (files.context) available.push('.setu/context.json');
+  if (files.active) available.push('.setu/active.json');
+  
+  if (available.length === 0) {
+    return '[Context: Fresh start - no project rules or previous context]';
+  }
+  
+  const hasRules = files.agentsMd || files.claudeMd;
+  const hasContext = files.context || files.active;
+  
+  let guidance = '';
+  if (hasRules && hasContext) {
+    guidance = 'Project rules and previous context available.';
+  } else if (hasRules) {
+    guidance = 'Project rules available.';
+  } else if (hasContext) {
+    guidance = 'Previous context available.';
+  }
+  
+  return `[Context: ${available.join(', ')}]\n[${guidance}]`;
+};
+
+/**
+ * Get complete state injection for system prompt
+ * 
+ * This is minimal - just profile and file availability.
+ * The agent file already contains the full persona.
+ */
+export const getStateInjection = (
+  profile: SetuProfile,
+  files: FileAvailability,
+  isDefault: boolean = false
+): string => {
+  const profilePrefix = getModePrefix(profile, isDefault);
+  const fileInfo = getFileAvailability(files);
+  
+  return `${profilePrefix}\n${fileInfo}`;
+};
+
+// Legacy exports for backwards compatibility
+export const SETU_PERSONA = ''; // No longer used - persona is in agent file
+export const MODE_DESCRIPTIONS = {}; // No longer used - profiles described in agent file
+
+export const getInitialPrompt = (_profile: string): string => {
+  // No longer injects full persona - that's in the agent file
+  return '';
 };

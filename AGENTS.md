@@ -48,7 +48,6 @@ src/
 │   └── feedback.ts         # User feedback mechanism
 ├── prompts/          # Persona and system prompt fragments
 └── tools/            # Custom tools exposed to agent
-    ├── setu-mode.ts          # Operational profile switching
     ├── setu-verify.ts        # Verification trigger
     ├── setu-context.ts       # Context confirmation + persistence
     └── setu-feedback.ts      # User feedback submission
@@ -85,7 +84,7 @@ skills/               # Bundled skills (loaded on-demand)
 | Term | Meaning | Examples |
 |------|---------|----------|
 | **Mode** (OpenCode) | IDE-level agent via Tab | Plan, Build, Setu |
-| **Operational Profile** (Setu) | Verification level within Setu | ultrathink, quick, expert, collab |
+| **Style** (Setu) | Operational preset within Setu | ultrathink, quick, expert, collab |
 
 ## Code Style
 
@@ -101,9 +100,9 @@ skills/               # Bundled skills (loaded on-demand)
 | Entity | Convention | Example |
 |--------|------------|---------|
 | Hook files | `kebab-case.ts` | `system-transform.ts` |
-| Tool files | `kebab-case.ts` | `setu-mode.ts` |
-| Types | `PascalCase` | `SetuMode`, `SessionState` |
-| Constants | `SCREAMING_SNAKE_CASE` | `DEFAULT_PROFILE`, `MAX_ATTEMPTS` |
+| Tool files | `kebab-case.ts` | `setu-context.ts` |
+| Types | `PascalCase` | `SetuStyle`, `SessionState` |
+| Constants | `SCREAMING_SNAKE_CASE` | `DEFAULT_STYLE`, `MAX_ATTEMPTS` |
 
 ### Import Organization
 
@@ -149,10 +148,10 @@ This means:
 
 This lets the agent "look but don't touch" until context is confirmed.
 
-### Operational Profiles
+### Styles (Operational Presets)
 
-| Profile | Verification Level | Use Case |
-|---------|-------------------|----------|
+| Style | Verification Level | Use Case |
+|-------|-------------------|----------|
 | `ultrathink` | Full (build/test/lint) | Features, refactoring |
 | `quick` | Minimal | Typos, comments |
 | `expert` | User reviews | Trusted changes |
