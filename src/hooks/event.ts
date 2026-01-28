@@ -5,10 +5,11 @@
  * 
  * Resets state on new sessions, tracks session lifecycle.
  * Checks file existence silently to avoid errors on first run.
- * Loads existing context only if files exist and user confirms.
+ * Loads existing context on session start for continuity.
  */
 
 import { type ContextCollector, detectProjectInfo } from '../context';
+import { debugLog } from '../debug';
 
 /**
  * Create an event handler for session lifecycle events.
@@ -32,7 +33,7 @@ export function createEventHook(
   return async ({ event }: { event: { type: string; properties?: Record<string, unknown> } }): Promise<void> => {
     switch (event.type) {
       case 'session.created': {
-        console.log('[Setu] New session started');
+        debugLog('New session started');
         resetVerificationState();
         resetAttemptTracker();
         setFirstSessionDone();
@@ -45,17 +46,27 @@ export function createEventHook(
         // Check file existence silently (no errors on first run)
         const filesExist = checkFilesExist ? checkFilesExist() : null;
         
-        // FIX 4: Lazy loading - DON'T load context at startup
-        // Context will be loaded on-demand when:
-        // 1. User explicitly asks: "load previous context"
-        // 2. Agent calls setu_context tool (reads then updates)
-        // 3. Subagent is spawned (context injected into prompt)
-        
-        // Just log what's available, don't load
-        if (filesExist?.context) {
-          console.log('[Setu] Context file detected (.setu/context.json) - available for lazy load');
-        } else {
-          console.log('[Setu] No existing context - fresh start');
+        // Load existing context on session start for continuity
+        // This ensures constraints (like "sandbox only") survive restarts
+        if (filesExist?.context && getContextCollector) {
+          const collector = getContextCollector();
+          if (collector) {
+            const loaded = collector.loadFromDisk();
+            if (loaded) {
+              const ctx = collector.getContext();
+              debugLog('Loaded context from previous session');
+              if (ctx.summary) {
+                debugLog(`Context summary: ${ctx.summary.slice(0, 100)}...`);
+              }
+              if (ctx.currentTask) {
+                debugLog(`Previous task: ${ctx.currentTask.slice(0, 50)}...`);
+              }
+              // Mark as confirmed so Phase 0 doesn't block unnecessarily
+              // User can still update context if needed
+            }
+          }
+        } else if (!filesExist?.context) {
+          debugLog('No existing context - fresh start');
           
           // Optional: Detect project info for new context (lightweight operation)
           if (getContextCollector) {
@@ -66,11 +77,11 @@ export function createEventHook(
                 const projectInfo = detectProjectInfo(projectDir);
                 if (Object.keys(projectInfo).length > 0) {
                   collector.updateProjectInfo(projectInfo);
-                  console.log(`[Setu] Detected project: ${projectInfo.type || 'unknown'}`);
+                  debugLog(`Detected project: ${projectInfo.type || 'unknown'}`);
                 }
               } catch (error) {
                 // Non-fatal - project detection is optional
-                console.log('[Setu] Could not detect project info');
+                debugLog('Could not detect project info');
               }
             }
           }
@@ -79,11 +90,11 @@ export function createEventHook(
       }
         
       case 'session.deleted':
-        console.log('[Setu] Session ended');
+        debugLog('Session ended');
         break;
         
       case 'session.compacted':
-        console.log('[Setu] Session compacted');
+        debugLog('Session compacted');
         break;
     }
   };

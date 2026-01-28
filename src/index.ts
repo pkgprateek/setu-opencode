@@ -34,6 +34,7 @@ import {
   createContextCollector,
   type ContextCollector 
 } from './context';
+import { debugLog, alwaysLog, errorLog } from './debug';
 
 // Plugin state
 interface SetuState {
@@ -53,7 +54,7 @@ interface SetuState {
     claudeMd: boolean;     // CLAUDE.md
   };
   
-  // FIX 5: Cache for file existence checks (avoids repeated fs.existsSync)
+  // Cache for file existence checks (avoids repeated fs.existsSync)
   fileCache: Map<string, { exists: boolean; checkedAt: number }>;
 }
 
@@ -74,28 +75,30 @@ export const SetuPlugin: Plugin = async (ctx) => {
   // This creates .opencode/agents/setu.md with the Setu persona and permissions
   const projectDir = ctx.directory || process.cwd();
   try {
-    await createSetuAgent(projectDir);
+    const created = await createSetuAgent(projectDir);
+    if (created) {
+      alwaysLog('Agent configuration updated. Restart may be required if Setu is missing from Tab cycle.');
+    }
   } catch (error) {
-    console.error('[Setu] Failed to create agent config:', error);
+    errorLog('Failed to create agent config:', error);
   }
   
   // Initialize feedback file for transparency
   try {
     initializeFeedbackFile(projectDir);
   } catch (error) {
-    // Non-critical - log but don't fail
-    console.log('[Setu] Could not initialize feedback file:', error);
+    // Non-critical - only log in debug mode
+    debugLog('Could not initialize feedback file:', error);
   }
   
   // Create context collector for .setu/ persistence
-  // NOTE: We create the collector but DON'T load context yet (lazy loading)
-  // Context is loaded on-demand when needed, not at startup
+  // Context is created but loaded only when context file exists
   let contextCollector: ContextCollector | null = null;
   try {
     contextCollector = createContextCollector(projectDir);
-    console.log('[Setu] Context collector initialized (lazy loading enabled)');
+    debugLog('Context collector initialized');
   } catch (error) {
-    console.log('[Setu] Could not initialize context collector:', error);
+    debugLog('Could not initialize context collector:', error);
   }
   
   // Project directory accessor for tools
@@ -126,7 +129,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
       claudeMd: false
     },
     
-    // FIX 5: File cache (avoids repeated fs calls)
+    // File cache (avoids repeated fs calls)
     fileCache: new Map()
   };
   
@@ -137,7 +140,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
   const getProfileState = () => state.profile;
   const setProfileState = (newState: ProfileState) => { state.profile = newState; };
   
-  // FIX 5: Cached file existence checker (silent, no errors)
+  // Cached file existence checker (silent, no errors)
   // Cache lasts 5 seconds to avoid repeated fs.existsSync calls
   const checkFileExists = (filePath: string): boolean => {
     const cached = state.fileCache.get(filePath);
@@ -173,7 +176,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
   const getCurrentAgent = () => state.currentAgent;
   const setCurrentAgent = (agent: string) => {
     if (agent !== state.currentAgent) {
-      console.log(`[Setu] Agent changed: ${state.currentAgent} → ${agent}`);
+      debugLog(`Agent changed: ${state.currentAgent} → ${agent}`);
       state.currentAgent = agent;
     }
   };
@@ -181,7 +184,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
   const getPhase0State = () => state.phase0;
   const confirmContext = () => {
     state.phase0.contextConfirmed = true;
-    console.log('[Setu] Phase 0: Context confirmed - side-effect tools now allowed');
+    debugLog('Phase 0: Context confirmed - side-effect tools now allowed');
   };
   const resetPhase0 = (sessionId: string) => {
     state.phase0 = {
@@ -189,7 +192,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
       sessionId,
       startedAt: Date.now()
     };
-    console.log('[Setu] Phase 0: Reset for new session');
+    debugLog('Phase 0: Reset for new session');
   };
   
   const getContextCollector = (): ContextCollector | null => state.contextCollector;
@@ -220,13 +223,13 @@ export const SetuPlugin: Plugin = async (ctx) => {
     state.isFirstSession = false;
   };
   
-  // Log plugin initialization
-  console.log('[Setu] Plugin initialized');
-  console.log('[Setu] Default profile:', state.profile.current);
-  console.log('[Setu] Phase 0 enforcement: ACTIVE');
-  console.log('[Setu] Context persistence: .setu/ directory');
-  console.log('[Setu] Tools: setu_verify, setu_context, setu_feedback, lsp_*');
-  console.log('[Setu] Skills bundled: setu-bootstrap, setu-verification, setu-rules-creation, code-quality, refine-code, commit-helper, pr-review');
+  // Log plugin initialization (only in debug mode)
+  debugLog('Plugin initialized');
+  debugLog('Default profile:', state.profile.current);
+  debugLog('Phase 0 enforcement: ACTIVE');
+  debugLog('Context persistence: .setu/ directory');
+  debugLog('Tools: setu_verify, setu_context, setu_feedback, lsp_*');
+  debugLog('Skills bundled: setu-bootstrap, setu-verification, setu-rules-creation, code-quality, refine-code, commit-helper, pr-review');
   
   return {
     // Set Setu as the default agent
@@ -235,17 +238,21 @@ export const SetuPlugin: Plugin = async (ctx) => {
       // Only set if not already configured by user
       if (!input.default_agent) {
         input.default_agent = 'setu';
-        console.log('[Setu] Set as default agent');
+        debugLog('Set as default agent');
       } else {
-        console.log(`[Setu] User configured default_agent: ${input.default_agent}`);
+        debugLog(`User configured default_agent: ${input.default_agent}`);
       }
     },
     
     // Inject Setu persona into system prompt
+    // Only injects when in Setu agent - silent in Build/Plan
+    // Now also injects loaded context content (summary, constraints)
     'experimental.chat.system.transform': createSystemTransformHook(
       getProfileState,
       getVerificationState,
-      () => state.setuFilesExist  // FIX 4: Pass file existence for lazy loading
+      () => state.setuFilesExist, // Pass file existence for lazy loading
+      getCurrentAgent,
+      getContextCollector // Pass context collector for content injection
     ),
     
     // Detect profile keywords in user messages and track current agent
@@ -256,18 +263,21 @@ export const SetuPlugin: Plugin = async (ctx) => {
     ),
     
     // Phase 0: Block side-effect tools until context is confirmed
-    // Mode-aware: Full enforcement in Setu, light in Build, defer in Plan
-    // Context injection: Injects context into subagent prompts
+    // Consolidated enforcement (agent + profile level)
+    // Priority: OpenCode Agent > Setu Profile
     'tool.execute.before': createToolExecuteBeforeHook(
       getPhase0State, 
       getCurrentAgent,
-      getContextCollector
+      getContextCollector,
+      () => state.profile.current
     ),
     
     // Track verification steps and context (file reads, searches)
+    // Only tracks when in Setu agent - silent in Build/Plan
     'tool.execute.after': createToolExecuteAfterHook(
       markVerificationStep,
-      getContextCollector
+      getContextCollector,
+      getCurrentAgent
     ),
     
     // Handle session lifecycle events

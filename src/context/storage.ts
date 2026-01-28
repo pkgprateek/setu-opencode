@@ -20,6 +20,7 @@ import {
   createEmptyContext
 } from './types';
 import { ensureSetuDir } from './feedback';
+import { debugLog, errorLog } from '../debug';
 
 // Re-export for convenience
 export { ensureSetuDir };
@@ -44,7 +45,7 @@ export function loadContext(projectDir: string): SetuContext | null {
     const content = readFileSync(contextPath, 'utf-8');
     return JSON.parse(content) as SetuContext;
   } catch (error) {
-    console.error('[Setu] Failed to load context:', error);
+    errorLog('Failed to load context:', error);
     return null;
   }
 }
@@ -52,9 +53,9 @@ export function loadContext(projectDir: string): SetuContext | null {
 /**
  * Save a SetuContext to `.setu/context.json`.
  * 
- * FIX 12: Optimized context storage
+ * Optimized context storage:
  * - Uses compact JSON (no pretty-printing) to save space
- * - Skips `.setu/context.md` (not needed - AGENTS.md is the human-readable version)
+ * - Skips `.setu/context.md` (AGENTS.md serves as human-readable version)
  * 
  * @param projectDir - Project root directory
  * @param context - The context to save
@@ -65,11 +66,11 @@ export function saveContext(projectDir: string, context: SetuContext): void {
   // Update timestamp
   context.updatedAt = new Date().toISOString();
   
-  // FIX 12: Write compact JSON (no pretty-printing for efficiency)
+  // Write compact JSON for efficiency
   const jsonPath = join(setuDir, CONTEXT_JSON);
   writeFileSync(jsonPath, JSON.stringify(context), 'utf-8');
   
-  console.log('[Setu] Context saved to .setu/context.json');
+  debugLog('Context saved to .setu/context.json');
 }
 
 /**
@@ -182,7 +183,7 @@ export function createContextCollector(projectDir: string): ContextCollector {
       const loaded = loadContext(projectDir);
       if (loaded) {
         context = loaded;
-        console.log('[Setu] Loaded existing context from .setu/context.json');
+        debugLog('Loaded existing context from .setu/context.json');
         return true;
       }
       return false;

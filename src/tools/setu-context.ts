@@ -13,6 +13,7 @@
 import { tool } from '@opencode-ai/plugin';
 import { type Phase0State } from '../enforcement';
 import { type ContextCollector } from '../context';
+import { errorLog } from '../debug';
 
 export interface SetuContextResult {
   success: boolean;
@@ -85,7 +86,7 @@ If you need to update the context or plan, you can continue working.`;
             collector.confirm(args.summary, args.task, args.plan);
             collector.saveToDisk();
           } catch (error) {
-            console.error('[Setu] Failed to persist context:', error);
+            errorLog('Failed to persist context:', error);
             // Non-fatal - continue even if persistence fails
           }
         }

@@ -10,6 +10,7 @@
  */
 
 import { detectProfile, type ProfileState } from '../prompts/profiles';
+import { debugLog } from '../debug';
 
 /**
  * Agent state tracking
@@ -66,7 +67,7 @@ export function createChatMessageHook(
             });
             temporaryModeActive = false;
             modeBeforeTemporary = null;
-            console.log(`[Setu] Mode switched to ${detected.profile} (persistent)`);
+            debugLog(`Mode switched to ${detected.profile} (persistent)`);
           } else {
             // Temporary mode - save current and will restore after
             if (!temporaryModeActive) {
@@ -77,7 +78,7 @@ export function createChatMessageHook(
               isPersistent: false
             });
             temporaryModeActive = true;
-            console.log(`[Setu] Temporary profile: ${detected.profile}`);
+            debugLog(`Temporary profile: ${detected.profile}`);
           }
           break; // Only process first mode keyword found
         }
@@ -96,7 +97,7 @@ export function createChatMessageHook(
         current: modeBeforeTemporary,
         isPersistent: true
       });
-      console.log(`[Setu] Restored mode to ${modeBeforeTemporary}`);
+      debugLog(`Restored mode to ${modeBeforeTemporary}`);
       temporaryModeActive = false;
       modeBeforeTemporary = null;
     }

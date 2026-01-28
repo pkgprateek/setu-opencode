@@ -13,6 +13,8 @@
  * - Hard constraints as bright lines, soft guidance for judgment
  */
 
+import { debugLog } from '../debug';
+
 /**
  * Setu's own tools - always allowed regardless of Phase 0 state
  * These are tools provided by this plugin
@@ -175,13 +177,16 @@ export function shouldBlockInPhase0(
   
   // Default: allow unknown tools (fail open for extensibility)
   // This is a conscious tradeoff - we don't want to break new tools
-  console.log(`[Setu] Phase 0: Unknown tool '${toolName}' - allowing (fail open)`);
+  debugLog(`Phase 0: Unknown tool '${toolName}' - allowing (fail open)`);
   return { blocked: false };
 }
 
 /**
- * Create the Phase 0 blocking message - short and clear
+ * Create the Phase 0 blocking message - natural language, not technical jargon
+ * 
+ * This message is shown to the agent when it tries to use a blocked tool.
+ * In production (debug=false), the agent should respond naturally.
  */
 export function createPhase0BlockMessage(_reason?: string, _details?: string): string {
-  return `[Setu] Phase 0 active. Read files first, then call setu_context to proceed.`;
+  return `I need to understand the context first before making changes. Let me read the relevant files and confirm my understanding.`;
 }
