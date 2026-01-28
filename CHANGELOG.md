@@ -7,112 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### In Progress: fix/stability-and-safety
+## [1.0.0-rc.3] - 2025-01-28
 
-**Critical Safety Fixes (Phase A - P0):** ✅ COMPLETED
-- [x] **Fix 1:** Removed `setu_mode` tool - profile switching is now user-only via message keywords
-- [x] **Fix 2:** Graceful handling of missing .setu files - silent existence checks, no errors on first run
-- [x] **Fix 3:** Clear Phase 0 exit path - simplified block messages, explicit `setu_context` instructions
-- [x] **Fix 14:** Renamed "mode" → "profile" throughout codebase for terminology consistency
-- [x] **Fix 8:** Added `#f27435` to agent frontmatter
+### Terminology
+- **Renamed Profile to Style:** Operational presets are now called "styles" (ultrathink, quick, expert, collab) to avoid confusion with OpenCode's "modes" (Plan, Build, Setu).
+- Supports both `style:` and legacy `mode:` prefixes for backwards compatibility.
 
-**UX Fixes (Phase C - P1):** ✅ COMPLETED  
-- [x] **Fix 7:** Simplified error messages (covered by Fix 3)
-- [x] **Fix 9:** Removed auto-profile triggers (covered by Fix 1)  
-- [x] **Fix 10:** User-only profile switching (covered by Fix 1)
+### Response Discipline
+- **No meta-reasoning:** Agent will no longer recite its instructions aloud or explain what styles mean.
+- **Task-focused output:** Shows reasoning about the task, not self-reflection about persona.
+- **Style switching without tools:** When user says "style: quick", agent just changes behavior - no tool/skill calls needed.
 
-**Architecture Fixes (Phase D - P2):**
-- [x] **Fix 13:** Persona separate from AGENTS.md - already correct, no changes needed
+### Debug Improvements
+- **File-based logging:** Debug output now writes to `.setu/debug.log` when enabled.
+- **Environment variable:** Enable with `SETU_DEBUG=true opencode`
+- **View logs in separate terminal:** `tail -f .setu/debug.log`
+- **Note:** Config file support (`setu.json`) coming in v1.1
 
-**Performance Fixes (Phase B - P1):** ⏸️ NOT STARTED
-- [ ] **Fix 4:** Lazy-load context (don't read on startup)
-- [ ] **Fix 5:** Cache file existence checks
-- [ ] **Fix 6:** Research configurable model selection for subagents
-- [ ] **Fix 12:** Optimize context storage (compact JSON, subagent writes)
+## [1.0.0-rc.2] - 2025-01-28
 
-**Architecture Fixes (Phase D - P2):** ⏸️ NOT STARTED  
-- [ ] **Fix 11:** Research parallel agent architecture
-- [ ] **Fix 15:** Consolidate enforcement (Setu agent > Setu profile)
-- [ ] **Fix 16:** AGENTS.md checked BEFORE context files
+### Context Amnesia Fix (Critical)
+- **Context now loads on session start:** Previously, context was detected but not loaded. Now `.setu/context.json` is fully loaded and injected into the system prompt.
+- **Constraints survive restarts:** Rules like "sandbox only" are now properly remembered across OpenCode restarts.
+- **Context content injection:** The `system-transform` hook now injects actual context content (summary, patterns, current task).
 
-**Additional Findings:**
-- **Fix 17:** Tool calling issue - NOT A BUG, documentation only (tools called by agent, not via `/` or `@`)
+### UX Improvements
+- **Response format enforcement:** Every response starts with `[Style: Ultrathink]` (or current style).
+- **Debug mode toggle:** All internal logging gated behind `SETU_DEBUG=true` environment variable.
+- **Natural error messages:** Phase 0 block message changed to: "I need to understand the context first before making changes."
 
----
+### Efficiency Improvements
+- **Glob-first guidance:** Agent instructed to use `glob` for file discovery, not `ls -R`.
+- **Parallel read guidance:** Agent instructed to parallelize file reads in a single message.
+- **Efficiency Rules section:** Added dedicated section in agent persona.
+
+## [1.0.0-rc.1] - 2025-01-28
+
+### Architecture Overhaul
+- **Soul-Only Agent File:** Agent definition contains ONLY identity and philosophy. Behavioral instructions moved to plugin enforcement.
+- **Plugin-Driven Enforcement:** Behavior enforced by hooks, not prompt instructions.
+- **Dynamic Persona Injection:** Only dynamic state (style, context status) injected.
+
+### Safety Fixes
+- **Phase 0 Blocking:** Side-effect tools blocked by code until context confirmed.
+- **Removed `setu_mode` Tool:** Style switching is user-controlled only. Agent cannot bypass safety.
+- **Graceful Failure:** Silent handling of missing `.setu/` files.
+
+### Performance Improvements
+- **Lazy Loading:** Context loaded only when needed.
+- **File Cache:** File existence checks cached for 5 seconds.
 
 ## [0.1.0-alpha] - 2025-01-24
 
 ### Added
 - Initial plugin structure with TypeScript
-- Phase 0 blocking enforcement (side-effect tools blocked until context confirmed)
+- Phase 0 blocking enforcement
 - Context persistence (`.setu/context.md`, `.setu/context.json`)
 - Setu as primary agent (Tab-accessible, default on startup)
-- Mode-aware enforcement (Setu/Build/Plan)
-- Context injection to subagents
-- 4 operational profiles: Ultrathink, Quick, Expert, Collab
+- 4 operational styles: Ultrathink, Quick, Expert, Collab
 - Custom tools: `setu_verify`, `setu_context`, `setu_feedback`
-- 7 bundled skills: setu-bootstrap, setu-verification, setu-rules-creation, code-quality, refine-code, commit-helper, pr-review
-- Feedback mechanism (`.setu/feedback.md`)
-- Session lifecycle handling (context loading on start)
-
-### Fixed (as of 2025-01-28)
-- ~~Agent can self-override safety by switching to Expert/Quick mode~~ - `setu_mode` tool removed, user-only control
-- ~~Phase 0 infinite loop on first run (missing .setu files)~~ - Silent file existence checks implemented
-- ~~Verbose error messages look like system failures~~ - Simplified to 1-line messages
-- ~~Auto-profile detection triggers incorrectly~~ - Removed temporary triggers, persistent only
-
-### Known Issues (Remaining)
-- Heavy startup (20-30K tokens before first prompt) - Fix 4 pending
-- No caching of file existence checks - Fix 5 pending
+- 7 bundled skills
 
 ---
 
-## Project Milestones
+## Roadmap
 
-### v1.0 - Production Ready (Target: TBD)
-**Requirements:**
-- All Phase A safety issues resolved
-- All Phase B performance issues resolved
-- All Phase C UX issues resolved
-- End-to-end testing completed
-- Documentation complete
-- Published to npm
-
-### v1.1 - Polish & Recovery
-- Active task persistence (`.setu/active.json`)
-- Context loss recovery (compaction hooks)
-- Git discipline (commit approval, branch safety)
-- Environment health checks (setu-environment-doctor skill)
+### v1.1 - Polish & Configuration
+- Verbosity toggle (minimal/standard/verbose)
+- Parallel subagents with configurable model
+- Active task persistence
 
 ### v1.2 - Extended Context
 - Auto-inject AGENTS.md summary
-- Directory-specific rules (walk up tree)
-- Scratchpad profile (for disposable code)
+- Scratchpad style for disposable code
 
 ### v1.3 - Disciplined Delegation
-- Batch mode orchestration
-- Parallel subagents
-- Cost arbitrage (tiered model usage)
+- Fine-grained model routing per subagent
+- Orchestration layer for intelligent model selection
 
 ### v2.0 - Advanced Features
 - LSP integration
 - Cross-session memory
-- Visual verification (agent-browser)
-
-### v3.0 - Intelligent Automation
-- Auto-profile detection (with guardrails)
-- Smart mode switching
-- Predictive context gathering
-
----
-
-## Notes
-
-**Philosophy:**
-- **Necessities** must work flawlessly before luxuries are added
-- **Luxuries** are delayed until core features are stable
-- If a feature exists, it cannot fail
-
-**Current Branch:** `fix/stability-and-safety`
-
-**Testing Environment:** `./tests/` with `opencode/big-pickle` model

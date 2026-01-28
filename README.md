@@ -29,59 +29,58 @@ AI coding agents are fast. But speed without discipline creates problems:
 
 ## How It Works
 
-### Phase 0: Pre-emptive Context Check
+### Phase 0: Pre-emptive Context Gate
 
 **Why this matters:** The #1 cause of wasted work is wrong assumptions. If the agent doesn't understand your context, everything it builds is wrong.
 
-**What Setu does:** Before any tool execution, Setu intercepts and asks:
-
-> "Before I begin, is there any additional context, specific focus, or details you'd like to share?"
+**What Setu does:** Before allowing any side-effect tools, Setu **blocks** execution until context is confirmed. The agent can read files and explore the codebase ("look but don't touch"), but cannot write, edit, or execute commands until it confirms understanding.
 
 **The difference:**
 - Without Setu: Agent assumes JWT auth, builds it, you wanted OAuth
-- With Setu: Agent asks first, you clarify, it builds correctly
+- With Setu: Agent reads first, asks smart questions, builds correctly
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     Your Prompt                         │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                     Your Prompt                             │
+└─────────────────────────────────────────────────────────────┘
                            │
                            ▼
-┌─────────────────────────────────────────────────────────┐
-│  PHASE 0: Context Gate                                  │
-│  → Agent can READ files (look but don't touch)          │
-│  → Agent CANNOT write, execute, or modify               │
-│  → Forms smart questions based on what it reads         │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  PHASE 0: Context Gate                                      │
+│  → Agent can READ files (look but don't touch)              │
+│  → Agent CANNOT write, execute, or modify                   │
+│  → Explores codebase, forms understanding                   │
+│  → Confirms context with setu_context tool                  │
+└─────────────────────────────────────────────────────────────┘
                            │
-                    (You respond)
+                    (Context confirmed)
                            │
                            ▼
-┌─────────────────────────────────────────────────────────┐
-│  Agent executes with correct understanding              │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  Agent executes with correct understanding                  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Operating Modes: Match Rigor to Risk
+### Styles (Operational Presets): Match Rigor to Risk
 
 **Why this matters:** Not every task needs the same level of verification. A typo fix doesn't need full test runs. A new feature does.
 
-**What Setu does:** Four modes that match verification level to task risk.
+**What Setu does:** Four styles that match verification level to task risk.
 
-| Mode | When to Use | What Happens |
-|------|-------------|--------------|
-| **Default** | Features, refactoring | Full verification (build/test/lint) |
-| **Quick** | Typos, comments | Minimal checks, fast execution |
-| **Expert** | You know what you want | Agent proposes, you review |
-| **Collab** | Architecture decisions | Discuss options before implementing |
+| Style | When to Use | What Happens |
+|-------|-------------|--------------|
+| **Ultrathink** | Features, refactoring | Deep analysis, full verification |
+| **Quick** | Typos, comments | Skip ceremony, just do it |
+| **Expert** | You know what you want | Propose, don't block |
+| **Collab** | Architecture decisions | Discuss before implementing |
 
-**Switch modes:**
+**Switch styles** by mentioning them in your message:
 ```
-mode: quick          # Persistent until changed
-quick fix the typo   # Temporary, one task only
+style: ultrathink implement the auth system
+style: quick fix the typo
 ```
 
-Every response shows `[Mode: X]` so you always know what level of rigor is active.
+The system prompt shows the current style so you always know what level of rigor is active.
 
 ### Verification Before "Done"
 
@@ -123,17 +122,9 @@ Add to your `opencode.json`:
 }
 ```
 
-That's it. OpenCode automatically installs the plugin on next startup.
+OpenCode automatically installs the plugin on next startup.
 
-**Optional overrides** (if you want them):
-```json
-{
-  "setu": {
-    "defaultMode": "quick",     // Change default mode
-    "enforcement": false        // Suggestions only, no blocking
-  }
-}
-```
+**First run:** Restart OpenCode once after adding the plugin. Setu will appear in the Tab cycle on second launch. (This is a known limitation being addressed in v1.2.)
 
 ---
 
@@ -147,10 +138,11 @@ Setu is a discipline layer, not a replacement for your tools.
 }
 ```
 
-Setu hooks into OpenCode's system layer:
-- `system-transform` — Injects discipline protocol
+Setu hooks into OpenCode's plugin system:
+- `experimental.chat.system.transform` — Injects Setu persona
 - `tool.execute.before` — Phase 0 blocking
-- `session.idle` — Verification enforcement
+- `tool.execute.after` — Verification tracking, context collection
+- `event` — Session lifecycle, context loading
 
 Your MCPs, tools, and workflows work unchanged. Setu wraps them with discipline.
 
@@ -185,12 +177,22 @@ Setu's persona is lean. Skills load on-demand, not upfront.
 
 ---
 
+## Tools Provided
+
+| Tool | Purpose |
+|------|---------|
+| `setu_context` | Confirm context understanding, unlocks Phase 0 |
+| `setu_verify` | Run verification protocol (build/test/lint) |
+| `setu_feedback` | Record feedback on Setu behavior |
+
+---
+
 ## Skills Included
 
 | Skill | Purpose |
 |-------|---------|
 | `setu-bootstrap` | Project setup that follows the discipline protocol |
-| `setu-verification` | Mode-specific verification steps |
+| `setu-verification` | Style-specific verification steps |
 | `setu-rules-creation` | Create effective AGENTS.md files |
 | `code-quality` | Naming, error handling, testing patterns |
 | `refine-code` | Transform code to match project standards |
@@ -209,7 +211,7 @@ Setu is named after the bridge in mythology — built not by force, but by disci
 1. **Think before acting** — Phase 0 prevents wrong assumptions
 2. **Verify before claiming** — Tests prove correctness
 3. **Ask before spinning** — Attempt limits prevent waste
-4. **Adapt to context** — Modes match rigor to risk
+4. **Adapt to context** — Styles match rigor to risk
 
 ---
 
