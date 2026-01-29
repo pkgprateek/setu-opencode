@@ -306,7 +306,8 @@ export const SetuPlugin: Plugin = async (ctx) => {
       resetPhase0,
       getContextCollector,
       refreshSetuFilesExist,  // Silent file existence check
-      setProjectRules          // Silent Exploration: store loaded rules
+      setProjectRules,         // Silent Exploration: store loaded rules
+      getProjectDir            // Project directory accessor (avoids process.cwd())
     ),
     
     // Custom tools

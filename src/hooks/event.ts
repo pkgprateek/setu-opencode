@@ -23,6 +23,7 @@ import { debugLog } from '../debug';
  * @param getContextCollector - Optional accessor that returns a `ContextCollector` (or `null`) used to load or update session context from disk
  * @param checkFilesExist - Optional callback to silently check file existence without errors
  * @param setProjectRules - Optional callback to store loaded project rules (Silent Exploration)
+ * @param getProjectDir - Optional callback to get the project directory (avoids process.cwd() fallback)
  * @returns The event handler function that processes session events and updates internal state and context
  */
 export function createEventHook(
@@ -33,7 +34,8 @@ export function createEventHook(
   resetPhase0?: (sessionId: string) => void,
   getContextCollector?: () => ContextCollector | null,
   checkFilesExist?: () => { active: boolean; context: boolean; agentsMd: boolean; claudeMd: boolean },
-  setProjectRules?: (rules: ProjectRules | null) => void
+  setProjectRules?: (rules: ProjectRules | null) => void,
+  getProjectDir?: () => string
 ) {
   return async ({ event }: { event: { type: string; properties?: Record<string, unknown> } }): Promise<void> => {
     switch (event.type) {
@@ -48,6 +50,9 @@ export function createEventHook(
           resetPhase0(sessionId);
         }
         
+        // Resolve project directory once for all operations in this session
+        const resolvedProjectDir = getProjectDir ? getProjectDir() : process.cwd();
+        
         // Check file existence silently (no errors on first run)
         const filesExist = checkFilesExist ? checkFilesExist() : null;
         
@@ -56,8 +61,7 @@ export function createEventHook(
         // so Setu starts "informed" rather than asking questions docs already answer
         if (setProjectRules) {
           try {
-            const projectDir = (event.properties?.projectDir as string) || process.cwd();
-            const rules = loadProjectRules(projectDir);
+            const rules = loadProjectRules(resolvedProjectDir);
             setProjectRules(rules);
             debugLog('Silent Exploration: Project rules loaded successfully');
           } catch (error) {
@@ -94,8 +98,7 @@ export function createEventHook(
             const collector = getContextCollector();
             if (collector) {
               try {
-                const projectDir = (event.properties?.projectDir as string) || process.cwd();
-                const projectInfo = detectProjectInfo(projectDir);
+                const projectInfo = detectProjectInfo(resolvedProjectDir);
                 if (Object.keys(projectInfo).length > 0) {
                   collector.updateProjectInfo(projectInfo);
                   debugLog(`Detected project: ${projectInfo.type || 'unknown'}`);

@@ -103,11 +103,24 @@ export function loadProjectRules(projectDir: string): ProjectRules {
   
   // 3. Load .setu/active.json (current task)
   const activeJsonPath = join(projectDir, '.setu', 'active.json');
-  if (existsSync(activeJsonPath)) {
+  const activeContent = readFileSafe(activeJsonPath, MAX_FILE_SIZE);
+  if (activeContent) {
     try {
-      const content = readFileSync(activeJsonPath, 'utf-8');
-      rules.activeTask = JSON.parse(content) as ActiveTask;
-      debugLog(`Loaded active task: ${rules.activeTask.task.slice(0, 50)}...`);
+      const parsed = JSON.parse(activeContent);
+      
+      // Validate ActiveTask shape before using
+      if (
+        parsed &&
+        typeof parsed.task === 'string' &&
+        typeof parsed.mode === 'string' &&
+        typeof parsed.status === 'string' &&
+        Array.isArray(parsed.constraints)
+      ) {
+        rules.activeTask = parsed as ActiveTask;
+        debugLog(`Loaded active task: ${parsed.task.slice(0, 50)}...`);
+      } else {
+        errorLog('Invalid active.json structure - missing required fields');
+      }
     } catch (error) {
       errorLog('Failed to parse active.json:', error);
     }
@@ -169,7 +182,7 @@ export function formatRulesForInjection(rules: ProjectRules): string {
     blocks.push('[RESUME TASK - CRITICAL]');
     blocks.push(`Task: ${rules.activeTask.task}`);
     blocks.push(`Mode: ${rules.activeTask.mode}`);
-    if (rules.activeTask.constraints.length > 0) {
+    if (Array.isArray(rules.activeTask.constraints) && rules.activeTask.constraints.length > 0) {
       blocks.push(`Constraints: ${rules.activeTask.constraints.join(', ')}`);
     }
     if (rules.activeTask.references && rules.activeTask.references.length > 0) {
