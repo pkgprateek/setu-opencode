@@ -41,3 +41,12 @@ export {
   getFeedbackPath,
   hasFeedbackFile
 } from './feedback';
+
+// Project rules (Silent Exploration)
+export type { ProjectRules, ActiveTask } from './project-rules';
+
+export {
+  loadProjectRules,
+  formatRulesForInjection,
+  hasProjectRules
+} from './project-rules';

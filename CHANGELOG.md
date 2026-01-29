@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Silent Exploration:** Setu now automatically reads project rules (AGENTS.md, CLAUDE.md) and context files (.setu/active.json, .setu/context.json) on session start
+- Project rules are injected into system prompt so Setu starts informed rather than asking questions that documentation already answers
+- Active task resume: If a task was in progress when session ended, Setu automatically resumes it instead of starting fresh
+- File size limits: Large files are truncated to 50KB (~12,500 tokens) to prevent token bloat
+- New module: `src/context/project-rules.ts` handles loading and formatting of project context
+
+### Changed
+- Event hook now performs Silent Exploration on `session.created` event
+- System transform hook injects project rules before context (rules are foundational)
+- Project rules injection happens only when in Setu agent mode (silent in Build/Plan)
+
 ## [1.0.0-rc.3] - 2025-01-28
 
 ### Terminology

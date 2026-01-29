@@ -29,10 +29,10 @@ const READ_ONLY_TOOLS = ['read', 'glob', 'grep', 'webfetch', 'todoread'] as cons
 
 /**
  * Bash commands that are read-only
- * Allow reconnaissance, block modification
+ * Allow exploration, block modification
  */
 const READ_ONLY_BASH_COMMANDS = [
-  'ls', 'cat', 'head', 'tail', 'grep', 'rg', 'find', 
+  'glob', 'ls', 'cat', 'head', 'tail', 'grep', 'rg', 'find', 
   'pwd', 'echo', 'which', 'env', 'printenv',
   'git status', 'git log', 'git diff', 'git branch', 'git show',
   'file', 'stat', 'wc', 'tree', 'less', 'more'
@@ -110,9 +110,12 @@ export function isReadOnlyBashCommand(command: string): boolean {
 }
 
 /**
- * Determines whether a tool is considered a side-effect tool and should be blocked in Phase 0.
- *
- * @returns `true` if `toolName` is listed in `SIDE_EFFECT_TOOLS`, `false` otherwise.
+ * Phase 0 enforcement logic
+ * 
+ * Allow exploration, block modification
+ * 
+ * Blocks side-effect tools until context is confirmed via setu_context.
+ * Allows read-only tools so the agent can form smart questions.
  */
 export function isSideEffectTool(toolName: string): boolean {
   return SIDE_EFFECT_TOOLS.includes(toolName as typeof SIDE_EFFECT_TOOLS[number]);

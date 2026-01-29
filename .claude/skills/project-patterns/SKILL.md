@@ -146,7 +146,7 @@ description: Brief description with trigger terms users would naturally say.
 ## Common Mistakes to Avoid
 
 1. **Forgetting to export from index**: All hooks/tools must be exported from `src/index.ts`
-2. **Blocking read-only tools**: Phase 0 must allow reconnaissance
+2. **Blocking read-only tools**: Phase 0 must allow exploration
 3. **Shared mutable state**: Always use session-scoped state
 4. **Silent failures**: Log errors with `[Setu]` prefix
 

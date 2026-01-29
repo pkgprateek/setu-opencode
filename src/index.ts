@@ -34,7 +34,8 @@ import { createSetuAgent } from './agent/setu-agent';
 import { 
   initializeFeedbackFile, 
   createContextCollector,
-  type ContextCollector 
+  type ContextCollector,
+  type ProjectRules
 } from './context';
 import { debugLog, alwaysLog, errorLog } from './debug';
 import { type FileAvailability } from './prompts/persona';
@@ -48,6 +49,7 @@ interface SetuState {
   verificationComplete: boolean;
   phase0: Phase0State;
   contextCollector: ContextCollector | null;
+  projectRules: ProjectRules | null;  // Silent Exploration: loaded on session start
   
   // File existence tracking (checked silently, no auto-read)
   setuFilesExist: {
@@ -123,6 +125,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
       startedAt: Date.now()
     },
     contextCollector,
+    projectRules: null,  // Loaded on session start via Silent Exploration
     
     // File existence flags - checked silently, no errors on first run
     setuFilesExist: {
@@ -199,6 +202,14 @@ export const SetuPlugin: Plugin = async (ctx) => {
   
   const getContextCollector = (): ContextCollector | null => state.contextCollector;
   
+  const getProjectRules = (): ProjectRules | null => state.projectRules;
+  const setProjectRules = (rules: ProjectRules | null) => {
+    state.projectRules = rules;
+    if (rules) {
+      debugLog('Silent Exploration: Project rules loaded');
+    }
+  };
+  
   const getVerificationState = () => ({
     complete: state.verificationComplete,
     stepsRun: state.verificationSteps
@@ -249,12 +260,14 @@ export const SetuPlugin: Plugin = async (ctx) => {
     // Inject Setu persona into system prompt
     // Only injects when in Setu agent - silent in Build/Plan
     // Now also injects loaded context content (summary, constraints)
+    // AND Silent Exploration project rules (AGENTS.md, CLAUDE.md, active task)
     'experimental.chat.system.transform': createSystemTransformHook(
       getProfileState,
       getVerificationState,
       () => state.setuFilesExist, // Pass file existence for lazy loading
       getCurrentAgent,
-      getContextCollector // Pass context collector for content injection
+      getContextCollector, // Pass context collector for content injection
+      getProjectRules      // Pass project rules for Silent Exploration injection
     ),
     
     // Detect profile keywords in user messages and track current agent
@@ -284,6 +297,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
     
     // Handle session lifecycle events
     // Loads existing context on session start for continuity
+    // Performs Silent Exploration: loads project rules automatically
     event: createEventHook(
       resetVerificationState,
       () => attemptTracker.clearAll(),
@@ -291,7 +305,9 @@ export const SetuPlugin: Plugin = async (ctx) => {
       confirmContext,
       resetPhase0,
       getContextCollector,
-      refreshSetuFilesExist  // Silent file existence check
+      refreshSetuFilesExist,  // Silent file existence check
+      setProjectRules,         // Silent Exploration: store loaded rules
+      getProjectDir            // Project directory accessor (avoids process.cwd())
     ),
     
     // Custom tools

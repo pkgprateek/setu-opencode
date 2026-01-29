@@ -205,6 +205,10 @@ read("package.json")  // Message 3
 - **Always ask before pushing**: Do not push without explicit user approval
 - **Commit style**: Conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`)
 
+### Git Commit Messages
+- **Style**: Terse, veteran-level. Focus on WHY (user/business value), not HOW (diff shows that). Format: `type(scope): summary\n\nContext in 1-2 sentences.\nKey detail if non-obvious.`
+- **Anti-pattern**: Listing changed files, defensive "no breaking changes", or repeating yourself. The diff is the source of truth.
+
 ## Testing Strategy
 
 ### Test Environment
