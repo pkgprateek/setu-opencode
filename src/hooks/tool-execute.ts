@@ -60,6 +60,8 @@ export function getSetuEnforcementLevel(setuProfile: SetuProfile): EnforcementLe
       return 'none';    // Quick: no blocking
     case 'light':
       return 'light';   // Expert/Collab: warn but don't block
+    default:
+      return 'full';    // Safe default: full enforcement
   }
 }
 
@@ -168,6 +170,12 @@ export function createToolExecuteBeforeHook(
  * @param getCurrentAgent - Optional accessor for the current agent identifier; if not 'setu', hook does nothing.
  * @param getContextCollector - Optional function that returns a `ContextCollector` used to record file reads and search actions; if omitted or it returns `null`, context tracking is disabled.
  */
+/**
+ * Count non-empty lines in output string
+ */
+const countResultLines = (output: string): number =>
+  output.split('\n').filter(l => l.trim()).length;
+
 export function createToolExecuteAfterHook(
   markVerificationStep: (step: VerificationStep) => void,
   getCurrentAgent?: () => string,
@@ -187,10 +195,6 @@ export function createToolExecuteAfterHook(
     }
     
     const collector = getContextCollector ? getContextCollector() : null;
-    
-    // Helper to count result lines
-    const countResultLines = (output: string): number => 
-      output.split('\n').filter(l => l.trim()).length;
     
     // Track file reads for context collection
     if (input.tool === 'read' && collector) {

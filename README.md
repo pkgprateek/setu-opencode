@@ -48,7 +48,7 @@ AI coding agents are fast. But speed without discipline creates problems:
 ┌─────────────────────────────────────────────────────────────┐
 │  PHASE 0: Context Gate                                      │
 │  → Agent can READ files (look but don't touch)              │
-│  → Agent CANNOT write, execute side-effect commands, or modify│
+│  → Agent CANNOT write files, execute side-effect commands, or modify code│
 │  → Explores codebase, forms understanding                   │
 │  → Confirms context with setu_context tool                  │
 └─────────────────────────────────────────────────────────────┘
@@ -86,7 +86,7 @@ The system prompt shows the current style so you always know what level of rigor
 
 **Why this matters:** "Done" should mean "verified working," not "I think it's done."
 
-**What Setu does:** In Default mode, before claiming completion:
+**What Setu does:** In **Ultrathink** style (default), before claiming completion:
 
 1. **Build** — Runs build, checks exit code, captures only errors
 2. **Tests** — Runs test suite, captures only failures
