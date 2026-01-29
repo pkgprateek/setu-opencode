@@ -10,7 +10,7 @@
  * When in Build/Plan: Does nothing (Setu is off)
  */
 
-import { getStateInjection, type FileAvailability } from '../prompts/persona';
+import { getStateInjection, type FileAvailability, getModePrefix } from '../prompts/persona';
 import type { ProfileState } from '../prompts/profiles';
 import { type ContextCollector, contextToSummary, formatContextForInjection } from '../context';
 
@@ -90,7 +90,7 @@ export function createSystemTransformHook(
     
     // RESPONSE FORMAT: Enforce mode prefix at start of every response
     output.system.push(`[RESPONSE FORMAT]
-You MUST start every response with exactly: [Mode: ${profileState.current.charAt(0).toUpperCase() + profileState.current.slice(1)}]
+You MUST start every response with exactly: ${getModePrefix(profileState.current)}
 This is non-negotiable. The mode prefix must be the first thing in your response.`);
   };
 }

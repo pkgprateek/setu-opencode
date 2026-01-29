@@ -65,7 +65,7 @@
 - [x] Removed `setu_mode` tool (agent cannot bypass Phase 0)
 - [x] Graceful handling of missing `.setu/` files
 - [x] Clear Phase 0 exit path (one-line block message)
-- [x] Renamed "mode" → "profile" terminology
+- [x] Renamed "mode" → "Style" terminology
 
 ### Known Limitations
 
@@ -426,21 +426,21 @@ IMPORTANT: Resume this task. Do NOT start unrelated work.`);
 > **Why:** Engineers want to see task reasoning, not meta-reasoning about Setu's instructions.
 
 - [ ] **Verbosity Levels**
-    - **Config:** `opencode.json` → `setu.verbosity: "minimal" | "standard" | "verbose"`
-    - **Minimal:** Actions only, no reasoning shown
-    - **Standard:** Actions + key task reasoning (default)
-    - **Verbose:** Everything including meta-reasoning (for debugging Setu itself)
-    - **Implementation:** Inject verbosity level into agent persona dynamically
+  - **Config:** `opencode.json` → `setu.verbosity: "minimal" | "standard" | "verbose"`
+  - **Minimal:** Actions only, no reasoning shown
+  - **Standard:** Actions + key task reasoning (default)
+  - **Verbose:** Everything including meta-reasoning (for debugging Setu itself)
+  - **Implementation:** Inject verbosity level into agent persona dynamically
 
 ### Parallel Subagents
 
 > **Why:** Offload work to keep main context clean, run tasks in parallel.
 
 - [ ] **Subagent Configuration**
-    - **Config:** `opencode.json` → Define subagents with dedicated models
-    - **Default Model:** `google/antigravity-gemini-3-flash` for all subagents
-    - **Example subagents:** setu-explorer (read-only), setu-doc-writer
-    - **Usage:** Setu spawns subagents via Task tool in parallel
+  - **Config:** `opencode.json` → Define subagents with dedicated models
+  - **Default Model:** `google/antigravity-gemini-3-flash` for all subagents
+  - **Example subagents:** setu-explorer (read-only), setu-doc-writer
+  - **Usage:** Setu spawns subagents via Task tool in parallel
 
 Example configuration:
 ```json
@@ -461,20 +461,20 @@ Example configuration:
 > **Why:** OpenCode's `opencode.json` has strict schema validation that rejects unknown keys. Other plugins (e.g., `antigravity.json`, `sisyphus.json`) use separate config files with custom schemas.
 
 - [ ] **Create `setu.json` Config File**
-    - **Location:** Project root, alongside `opencode.json`
-    - **Schema:** Publish `setu.schema.json` for validation
-    - **Content:**
-      ```json
-      {
-        "$schema": "https://raw.githubusercontent.com/pkgprateek/setu-opencode/main/assets/setu.schema.json",
-        "debug": true,
-        "verbosity": "standard",
-        "subagent_model": "google/antigravity-gemini-3-flash"
-      }
-      ```
-    - **Loading:** Plugin reads `setu.json` at init, merges with defaults
-    - **Priority:** `setu.json` > env vars > defaults
-    - **Implementation:** `src/config/setu-config.ts`
+  - **Location:** Project root, alongside `opencode.json`
+  - **Schema:** Publish `setu.schema.json` for validation
+  - **Content:**
+    ```json
+    {
+      "$schema": "https://raw.githubusercontent.com/pkgprateek/setu-opencode/main/assets/setu.schema.json",
+      "debug": true,
+      "verbosity": "standard",
+      "subagent_model": "google/antigravity-gemini-3-flash"
+    }
+    ```
+  - **Loading:** Plugin reads `setu.json` at init, merges with defaults
+  - **Priority:** `setu.json` > env vars > defaults
+  - **Implementation:** `src/config/setu-config.ts`
 
 - [ ] **Publish JSON Schema**
     - Create `assets/setu.schema.json` with all config options

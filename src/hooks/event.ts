@@ -17,6 +17,7 @@ import { debugLog } from '../debug';
  * @param resetVerificationState - Resets verification-related state when a new session starts
  * @param resetAttemptTracker - Resets attempt tracking when a new session starts
  * @param setFirstSessionDone - Marks that the first session has completed
+ * @param confirmContext - Callback to mark context as confirmed
  * @param resetPhase0 - Optional callback to reset Phase 0 state for the given `sessionId`
  * @param getContextCollector - Optional accessor that returns a `ContextCollector` (or `null`) used to load or update session context from disk
  * @param checkFilesExist - Optional callback to silently check file existence without errors
@@ -26,6 +27,7 @@ export function createEventHook(
   resetVerificationState: () => void,
   resetAttemptTracker: () => void,
   setFirstSessionDone: () => void,
+  confirmContext: () => void,
   resetPhase0?: (sessionId: string) => void,
   getContextCollector?: () => ContextCollector | null,
   checkFilesExist?: () => { active: boolean; context: boolean; agentsMd: boolean; claudeMd: boolean }
@@ -63,6 +65,7 @@ export function createEventHook(
               }
               // Mark as confirmed so Phase 0 doesn't block unnecessarily
               // User can still update context if needed
+              confirmContext();
             }
           }
         } else if (!filesExist?.context) {
@@ -79,7 +82,7 @@ export function createEventHook(
                   collector.updateProjectInfo(projectInfo);
                   debugLog(`Detected project: ${projectInfo.type || 'unknown'}`);
                 }
-              } catch (error) {
+              } catch {
                 // Non-fatal - project detection is optional
                 debugLog('Could not detect project info');
               }

@@ -38,9 +38,9 @@ export function createChatMessageHook(
   setProfileState: (state: ProfileState) => void,
   setAgentState?: (agent: string) => void
 ) {
-  // Track temporary mode for restoration after one task
-  let temporaryModeActive = false;
-  let modeBeforeTemporary: ProfileState['current'] | null = null;
+  // Track temporary style for restoration after one task
+  let temporaryStyleActive = false;
+  let styleBeforeTemporary: ProfileState['current'] | null = null;
 
   return async (
     input: { sessionID: string; agent?: string; messageID?: string },
@@ -60,46 +60,46 @@ export function createChatMessageHook(
         
         if (detected) {
           if (detected.isPersistent) {
-            // Persistent mode change
+            // Persistent style change
             setProfileState({
               current: detected.profile,
               isPersistent: true
             });
-            temporaryModeActive = false;
-            modeBeforeTemporary = null;
-            debugLog(`Mode switched to ${detected.profile} (persistent)`);
+            temporaryStyleActive = false;
+            styleBeforeTemporary = null;
+            debugLog(`Style switched to ${detected.profile} (persistent)`);
           } else {
-            // Temporary mode - save current and will restore after
-            if (!temporaryModeActive) {
-              modeBeforeTemporary = currentState.current;
+            // Temporary style - save current and will restore after
+            if (!temporaryStyleActive) {
+              styleBeforeTemporary = currentState.current;
             }
             setProfileState({
               current: detected.profile,
               isPersistent: false
             });
-            temporaryModeActive = true;
-            debugLog(`Temporary profile: ${detected.profile}`);
+            temporaryStyleActive = true;
+            debugLog(`Temporary style: ${detected.profile}`);
           }
-          break; // Only process first mode keyword found
+          break; // Only process first style keyword found
         }
       }
     }
     
-    // Restore from temporary mode after processing
-    // Note: This happens on the NEXT message after a temporary mode was used
-    if (temporaryModeActive && modeBeforeTemporary && !output.parts.some(p => {
+    // Restore from temporary style after processing
+    // Note: This happens on the NEXT message after a temporary style was used
+    if (temporaryStyleActive && styleBeforeTemporary && !output.parts.some(p => {
       if (p.type === 'text' && typeof p.content === 'string') {
         return detectProfile(p.content) !== null;
       }
       return false;
     })) {
       setProfileState({
-        current: modeBeforeTemporary,
+        current: styleBeforeTemporary,
         isPersistent: true
       });
-      debugLog(`Restored mode to ${modeBeforeTemporary}`);
-      temporaryModeActive = false;
-      modeBeforeTemporary = null;
+      debugLog(`Restored style to ${styleBeforeTemporary}`);
+      temporaryStyleActive = false;
+      styleBeforeTemporary = null;
     }
   };
 }

@@ -66,9 +66,13 @@ export function saveContext(projectDir: string, context: SetuContext): void {
   // Update timestamp
   context.updatedAt = new Date().toISOString();
   
-  // Write compact JSON for efficiency
+  // Write JSON - compact by default, pretty in debug mode
   const jsonPath = join(setuDir, CONTEXT_JSON);
-  writeFileSync(jsonPath, JSON.stringify(context), 'utf-8');
+  const isDebug = process.env.SETU_DEBUG === 'true';
+  const jsonContent = isDebug 
+    ? JSON.stringify(context, null, 2) 
+    : JSON.stringify(context);
+  writeFileSync(jsonPath, jsonContent, 'utf-8');
   
   debugLog('Context saved to .setu/context.json');
 }

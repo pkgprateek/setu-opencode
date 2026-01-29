@@ -39,7 +39,7 @@ AI coding agents are fast. But speed without discipline creates problems:
 - Without Setu: Agent assumes JWT auth, builds it, you wanted OAuth
 - With Setu: Agent reads first, asks smart questions, builds correctly
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                     Your Prompt                             │
 └─────────────────────────────────────────────────────────────┘
@@ -75,7 +75,7 @@ AI coding agents are fast. But speed without discipline creates problems:
 | **Collab** | Architecture decisions | Discuss before implementing |
 
 **Switch styles** by mentioning them in your message:
-```
+```text
 style: ultrathink implement the auth system
 style: quick fix the typo
 ```

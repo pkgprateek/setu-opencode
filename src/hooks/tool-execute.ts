@@ -159,13 +159,13 @@ export function createToolExecuteBeforeHook(
  * When a `ContextCollector` is available it records file reads and grep/glob searches (pattern and result count).
  *
  * @param markVerificationStep - Callback invoked with a verification step ('build' | 'test' | 'lint') when the hook detects the corresponding command.
- * @param getContextCollector - Optional function that returns a `ContextCollector` used to record file reads and search actions; if omitted or it returns `null`, context tracking is disabled.
  * @param getCurrentAgent - Optional accessor for the current agent identifier; if not 'setu', hook does nothing.
+ * @param getContextCollector - Optional function that returns a `ContextCollector` used to record file reads and search actions; if omitted or it returns `null`, context tracking is disabled.
  */
 export function createToolExecuteAfterHook(
   markVerificationStep: (step: VerificationStep) => void,
-  getContextCollector?: () => ContextCollector | null,
-  getCurrentAgent?: () => string
+  getCurrentAgent?: () => string,
+  getContextCollector?: () => ContextCollector | null
 ) {
   return async (
     input: { tool: string; sessionID: string; callID: string; args?: Record<string, unknown> },

@@ -70,8 +70,8 @@ Checks build, tests, lint based on current mode.
     },
     
     async execute(args, _context): Promise<string> {
-      const mode = getProfileState().current;
-      const verificationLevel = getProfileVerificationLevel(mode);
+      const style = getProfileState().current;
+      const verificationLevel = getProfileVerificationLevel(style);
       
       let stepsToRun: VerificationStep[];
       
@@ -103,7 +103,7 @@ Checks build, tests, lint based on current mode.
           .map(s => `### ${s.name}\n\`\`\`bash\n${s.command}\n\`\`\`\n${s.description}`)
           .join('\n\n');
         
-        return `## Verification Protocol [Mode: ${mode}]
+        return `## Verification Protocol [Style: ${style}]
 
 ${stepsList}
 
@@ -116,7 +116,7 @@ ${stepsList}
           guidance = 'Discuss with user what verification is needed.';
         }
         
-        return `## Verification [Mode: ${mode}]
+        return `## Verification [Style: ${style}]
 
 Verification level: ${verificationLevel}
 ${guidance}`;

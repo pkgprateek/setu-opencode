@@ -13,6 +13,8 @@
  */
 
 import type { Plugin } from '@opencode-ai/plugin';
+import { existsSync } from 'fs';
+import { join } from 'path';
 import { type ProfileState } from './prompts/profiles';
 import {
   createSystemTransformHook,
@@ -152,8 +154,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
     }
     
     // Check file existence and update cache
-    const fs = require('fs');
-    const exists = fs.existsSync(filePath);
+    const exists = existsSync(filePath);
     state.fileCache.set(filePath, { exists, checkedAt: now });
     
     return exists;
@@ -161,13 +162,11 @@ export const SetuPlugin: Plugin = async (ctx) => {
   
   // File existence checker for all Setu files (uses cache)
   const checkSetuFilesExist = () => {
-    const path = require('path');
-    
     state.setuFilesExist = {
-      active: checkFileExists(path.join(projectDir, '.setu', 'active.json')),
-      context: checkFileExists(path.join(projectDir, '.setu', 'context.json')),
-      agentsMd: checkFileExists(path.join(projectDir, 'AGENTS.md')),
-      claudeMd: checkFileExists(path.join(projectDir, 'CLAUDE.md'))
+      active: checkFileExists(join(projectDir, '.setu', 'active.json')),
+      context: checkFileExists(join(projectDir, '.setu', 'context.json')),
+      agentsMd: checkFileExists(join(projectDir, 'AGENTS.md')),
+      claudeMd: checkFileExists(join(projectDir, 'CLAUDE.md'))
     };
     
     return state.setuFilesExist;
@@ -276,8 +275,8 @@ export const SetuPlugin: Plugin = async (ctx) => {
     // Only tracks when in Setu agent - silent in Build/Plan
     'tool.execute.after': createToolExecuteAfterHook(
       markVerificationStep,
-      getContextCollector,
-      getCurrentAgent
+      getCurrentAgent,
+      getContextCollector
     ),
     
     // Handle session lifecycle events
@@ -286,6 +285,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
       resetVerificationState,
       () => attemptTracker.clearAll(),
       setFirstSessionDone,
+      confirmContext,
       resetPhase0,
       getContextCollector,
       checkSetuFilesExist  // Silent file existence check

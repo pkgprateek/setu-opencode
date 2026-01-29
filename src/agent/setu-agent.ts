@@ -145,8 +145,8 @@ export async function createSetuAgent(
       }
       // Older version - update it
       debugLog('Updating agent config to v2.3.0');
-    } catch {
-      debugLog('Could not read existing agent config');
+    } catch (err) {
+      debugLog('Could not read existing agent config', err);
       return false;
     }
   }
