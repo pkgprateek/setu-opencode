@@ -51,7 +51,7 @@ const VERIFICATION_STEPS: VerificationStep[] = [
 export function createSetuVerifyTool(
   getProfileState: () => { current: SetuProfile },
   markVerificationComplete: () => void
-) {
+): ReturnType<typeof tool> {
   return tool({
     description: `Run Setu's verification protocol before completing a task.
 Checks build, tests, lint based on current mode.

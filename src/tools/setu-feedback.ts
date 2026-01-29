@@ -17,7 +17,7 @@ export interface SetuFeedbackResult {
 /**
  * Creates the setu_feedback tool definition
  */
-export function createSetuFeedbackTool(getProjectDir: () => string) {
+export function createSetuFeedbackTool(getProjectDir: () => string): ReturnType<typeof tool> {
   return tool({
     description: `Log feedback about Setu's behavior for transparency and improvement.
 

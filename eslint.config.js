@@ -18,7 +18,13 @@ export default [
     rules: {
       ...tsPlugin.configs['recommended'].rules,
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/explicit-function-return-type': [
+        'error',
+        { 
+          allowExpressions: true, 
+          allowTypedFunctionExpressions: true 
+        }
+      ],
       '@typescript-eslint/no-explicit-any': 'warn'
     }
   }

@@ -63,7 +63,13 @@ export function getSetuEnforcementLevel(setuProfile: SetuProfile): EnforcementLe
   }
 }
 
-// Deprecated - kept for backwards compatibility
+/**
+ * Determines enforcement level based on the current agent.
+ * 
+ * @deprecated Use getSetuEnforcementLevel with a SetuProfile instead.
+ * This function returns hardcoded 'full' for 'setu' agent and 'none' otherwise.
+ * Kept for backwards compatibility only.
+ */
 export function getEnforcementLevel(currentAgent: string): EnforcementLevel {
   if (currentAgent.toLowerCase() === 'setu') {
     return 'full';
@@ -179,6 +185,10 @@ export function createToolExecuteAfterHook(
     
     const collector = getContextCollector ? getContextCollector() : null;
     
+    // Helper to count result lines
+    const countResultLines = (output: string): number => 
+      output.split('\n').filter(l => l.trim()).length;
+    
     // Track file reads for context collection
     if (input.tool === 'read' && collector) {
       const filePath = input.args?.filePath as string;
@@ -192,9 +202,7 @@ export function createToolExecuteAfterHook(
     if (input.tool === 'grep' && collector) {
       const pattern = input.args?.pattern as string;
       if (pattern) {
-        // Try to count results from output
-        const lines = output.output.split('\n').filter(l => l.trim());
-        collector.recordSearch(pattern, 'grep', lines.length);
+        collector.recordSearch(pattern, 'grep', countResultLines(output.output));
         debugLog(`Context: Recorded grep search: ${pattern}`);
       }
     }
@@ -203,9 +211,7 @@ export function createToolExecuteAfterHook(
     if (input.tool === 'glob' && collector) {
       const pattern = input.args?.pattern as string;
       if (pattern) {
-        // Try to count results from output
-        const lines = output.output.split('\n').filter(l => l.trim());
-        collector.recordSearch(pattern, 'glob', lines.length);
+        collector.recordSearch(pattern, 'glob', countResultLines(output.output));
         debugLog(`Context: Recorded glob search: ${pattern}`);
       }
     }
@@ -275,7 +281,14 @@ export interface AttemptState {
   approaches: string[];
 }
 
-export function createAttemptTracker() {
+export function createAttemptTracker(): {
+  recordAttempt: (taskId: string, approach: string) => number;
+  getAttempts: (taskId: string) => AttemptState | undefined;
+  shouldAskForGuidance: (taskId: string) => boolean;
+  getGuidanceMessage: (taskId: string) => string | null;
+  reset: (taskId: string) => void;
+  clearAll: () => void;
+} {
   const attempts = new Map<string, AttemptState>();
   
   return {

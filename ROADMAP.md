@@ -102,7 +102,7 @@
 To avoid confusion with OpenCode's Plan/Build modes:
 
 | Term | Meaning | Examples |
-|------|---------|----------|
+| ------ | --------- | ---------- |
 | **Mode** (OpenCode) | IDE-level agent selection via Tab | Plan, Build, Setu |
 | **Style** (Setu) | Operational preset within Setu | ultrathink, quick, expert, collab |
 
@@ -170,6 +170,15 @@ Before publishing:
       2. Intercept `git commit` and `git push` in `tool.execute.before` to enforce
     - **Implementation:** `src/prompts/persona.ts`, `src/hooks/tool-execute.ts`
     - **Reference:** setu.md lines 345-358
+
+- [ ] **Dependency Change Approval**
+    - **Why:** Unreviewed dependency changes can introduce security risks, bloat, or breaking changes.
+    - **What:** Always document approval before adding/removing dependencies to package.json.
+    - **How:**
+      1. Before modifying package.json dependencies or devDependencies, ask user for approval
+      2. Document approval in PR description with approver and timestamp
+      3. Example: "devDependencies approved by @user on 2026-01-29 14:30 UTC"
+    - **Implementation:** `src/prompts/persona.ts` (guidance), `src/hooks/tool-execute.ts` (optional enforcement)
 
 - [ ] **Branch Safety Warnings**
     - **Why:** Accidental commits to main on complex tasks cause problems.

@@ -37,7 +37,7 @@ export function createSetuContextTool(
   getPhase0State: () => Phase0State,
   confirmContext: () => void,
   getContextCollector?: () => ContextCollector | null
-) {
+): ReturnType<typeof tool> {
   return tool({
     description: `Confirm that context has been gathered and understood. 
 This unlocks side-effect tools (write, edit, bash commands) that are blocked during Phase 0.

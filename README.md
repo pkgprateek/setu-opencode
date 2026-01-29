@@ -68,7 +68,7 @@ AI coding agents are fast. But speed without discipline creates problems:
 **What Setu does:** Four styles that match verification level to task risk.
 
 | Style | When to Use | What Happens |
-|-------|-------------|--------------|
+| ------- | ------------- | -------------- |
 | **Ultrathink** | Features, refactoring | Deep analysis, full verification |
 | **Quick** | Typos, comments | Skip ceremony, just do it |
 | **Expert** | You know what you want | Propose, don't block |
@@ -180,7 +180,7 @@ Setu's persona is lean. Skills load on-demand, not upfront.
 ## Tools Provided
 
 | Tool | Purpose |
-|------|---------|
+| ------ | --------- |
 | `setu_context` | Confirm context understanding, unlocks Phase 0 |
 | `setu_verify` | Run verification protocol (build/test/lint) |
 | `setu_feedback` | Record feedback on Setu behavior |
@@ -190,7 +190,7 @@ Setu's persona is lean. Skills load on-demand, not upfront.
 ## Skills Included
 
 | Skill | Purpose |
-|-------|---------|
+| ------- | --------- |
 | `setu-bootstrap` | Project setup that follows the discipline protocol |
 | `setu-verification` | Style-specific verification steps |
 | `setu-rules-creation` | Create effective AGENTS.md files |

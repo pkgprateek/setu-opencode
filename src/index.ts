@@ -37,6 +37,7 @@ import {
   type ContextCollector 
 } from './context';
 import { debugLog, alwaysLog, errorLog } from './debug';
+import { type FileAvailability } from './prompts/persona';
 
 // Plugin state
 interface SetuState {
@@ -141,6 +142,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
   // State accessors
   const getProfileState = () => state.profile;
   const setProfileState = (newState: ProfileState) => { state.profile = newState; };
+  const getSetuProfile = () => state.profile.current;
   
   // Cached file existence checker (silent, no errors)
   // Cache lasts 5 seconds to avoid repeated fs.existsSync calls
@@ -161,7 +163,8 @@ export const SetuPlugin: Plugin = async (ctx) => {
   };
   
   // File existence checker for all Setu files (uses cache)
-  const checkSetuFilesExist = () => {
+  // Updates and returns file existence status for all Setu files (uses cache)
+  const refreshSetuFilesExist = (): FileAvailability => {
     state.setuFilesExist = {
       active: checkFileExists(join(projectDir, '.setu', 'active.json')),
       context: checkFileExists(join(projectDir, '.setu', 'context.json')),
@@ -268,7 +271,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
       getPhase0State, 
       getCurrentAgent,
       getContextCollector,
-      () => state.profile.current
+      getSetuProfile
     ),
     
     // Track verification steps and context (file reads, searches)
@@ -288,7 +291,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
       confirmContext,
       resetPhase0,
       getContextCollector,
-      checkSetuFilesExist  // Silent file existence check
+      refreshSetuFilesExist  // Silent file existence check
     ),
     
     // Custom tools
