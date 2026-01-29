@@ -8,6 +8,7 @@
 
 import { existsSync, mkdirSync, writeFileSync, appendFileSync } from 'fs';
 import { join } from 'path';
+import { debugLog } from '../debug';
 
 const SETU_DIR = '.setu';
 const FEEDBACK_FILE = 'feedback.md';
@@ -78,7 +79,7 @@ export function initializeFeedbackFile(projectDir: string): string {
   
   if (!existsSync(feedbackPath)) {
     writeFileSync(feedbackPath, FEEDBACK_TEMPLATE, 'utf-8');
-    console.log('[Setu] Created .setu/feedback.md for transparency');
+    debugLog('Created .setu/feedback.md for transparency');
   }
   
   return feedbackPath;

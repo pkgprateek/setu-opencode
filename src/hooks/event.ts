@@ -4,17 +4,12 @@
  * Uses: event
  * 
  * Resets state on new sessions, tracks session lifecycle.
- * Loads existing context from .setu/ on session start for continuity.
- * 
- * TODO (v1.0 - Phase 0 Silent Reconnaissance):
- * - Read AGENTS.md and CLAUDE.md on session start
- * - Inject their content into the session context
- * - Check .setu/active.json for in-progress tasks
- * - This ensures Setu "knows" project rules before speaking
- * - See ROADMAP.md "Phase 0 Silent Reconnaissance" for details
+ * Checks file existence silently to avoid errors on first run.
+ * Loads existing context on session start for continuity.
  */
 
 import { type ContextCollector, detectProjectInfo } from '../context';
+import { debugLog } from '../debug';
 
 /**
  * Create an event handler for session lifecycle events.
@@ -22,21 +17,25 @@ import { type ContextCollector, detectProjectInfo } from '../context';
  * @param resetVerificationState - Resets verification-related state when a new session starts
  * @param resetAttemptTracker - Resets attempt tracking when a new session starts
  * @param setFirstSessionDone - Marks that the first session has completed
+ * @param confirmContext - Callback to mark context as confirmed
  * @param resetPhase0 - Optional callback to reset Phase 0 state for the given `sessionId`
  * @param getContextCollector - Optional accessor that returns a `ContextCollector` (or `null`) used to load or update session context from disk
+ * @param checkFilesExist - Optional callback to silently check file existence without errors
  * @returns The event handler function that processes session events and updates internal state and context
  */
 export function createEventHook(
   resetVerificationState: () => void,
   resetAttemptTracker: () => void,
   setFirstSessionDone: () => void,
+  confirmContext: () => void,
   resetPhase0?: (sessionId: string) => void,
-  getContextCollector?: () => ContextCollector | null
+  getContextCollector?: () => ContextCollector | null,
+  checkFilesExist?: () => { active: boolean; context: boolean; agentsMd: boolean; claudeMd: boolean }
 ) {
   return async ({ event }: { event: { type: string; properties?: Record<string, unknown> } }): Promise<void> => {
     switch (event.type) {
       case 'session.created': {
-        console.log('[Setu] New session started');
+        debugLog('New session started');
         resetVerificationState();
         resetAttemptTracker();
         setFirstSessionDone();
@@ -46,31 +45,46 @@ export function createEventHook(
           resetPhase0(sessionId);
         }
         
-        // Load existing context for session continuity
-        if (getContextCollector) {
+        // Check file existence silently (no errors on first run)
+        const filesExist = checkFilesExist ? checkFilesExist() : null;
+        
+        // Load existing context on session start for continuity
+        // This ensures constraints (like "sandbox only") survive restarts
+        if (filesExist?.context && getContextCollector) {
           const collector = getContextCollector();
           if (collector) {
             const loaded = collector.loadFromDisk();
             if (loaded) {
-              const context = collector.getContext();
-              console.log(`[Setu] Loaded existing context (confirmed: ${context.confirmed})`);
-              
-              // If context was already confirmed, we might want to keep Phase 0 unlocked
-              // But for now, we reset Phase 0 to require re-confirmation each session
-              // This is safer - user might be working on something different
-            } else {
-              // No existing context - detect project info for new context
+              const ctx = collector.getContext();
+              debugLog('Loaded context from previous session');
+              if (ctx.summary) {
+                debugLog(`Context summary: ${ctx.summary.slice(0, 100)}...`);
+              }
+              if (ctx.currentTask) {
+                debugLog(`Previous task: ${ctx.currentTask.slice(0, 50)}...`);
+              }
+              // Mark as confirmed so Phase 0 doesn't block unnecessarily
+              // User can still update context if needed
+              confirmContext();
+            }
+          }
+        } else if (!filesExist?.context) {
+          debugLog('No existing context - fresh start');
+          
+          // Optional: Detect project info for new context (lightweight operation)
+          if (getContextCollector) {
+            const collector = getContextCollector();
+            if (collector) {
               try {
-                // Get project dir from properties or use cwd
                 const projectDir = (event.properties?.projectDir as string) || process.cwd();
                 const projectInfo = detectProjectInfo(projectDir);
                 if (Object.keys(projectInfo).length > 0) {
                   collector.updateProjectInfo(projectInfo);
-                  console.log(`[Setu] Detected project: ${projectInfo.type || 'unknown'}`);
+                  debugLog(`Detected project: ${projectInfo.type || 'unknown'}`);
                 }
-              } catch (error) {
+              } catch {
                 // Non-fatal - project detection is optional
-                console.log('[Setu] Could not detect project info');
+                debugLog('Could not detect project info');
               }
             }
           }
@@ -79,11 +93,11 @@ export function createEventHook(
       }
         
       case 'session.deleted':
-        console.log('[Setu] Session ended');
+        debugLog('Session ended');
         break;
         
       case 'session.compacted':
-        console.log('[Setu] Session compacted');
+        debugLog('Session compacted');
         break;
     }
   };

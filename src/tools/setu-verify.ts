@@ -3,7 +3,7 @@
  */
 
 import { tool } from '@opencode-ai/plugin';
-import { getModeVerificationLevel, type SetuMode } from '../prompts/modes';
+import { getProfileVerificationLevel, type SetuProfile } from '../prompts/profiles';
 
 interface VerificationStep {
   name: string;
@@ -49,9 +49,9 @@ const VERIFICATION_STEPS: VerificationStep[] = [
  * Creates the setu_verify tool definition
  */
 export function createSetuVerifyTool(
-  getModeState: () => { current: SetuMode },
+  getProfileState: () => { current: SetuProfile },
   markVerificationComplete: () => void
-) {
+): ReturnType<typeof tool> {
   return tool({
     description: `Run Setu's verification protocol before completing a task.
 Checks build, tests, lint based on current mode.
@@ -70,8 +70,8 @@ Checks build, tests, lint based on current mode.
     },
     
     async execute(args, _context): Promise<string> {
-      const mode = getModeState().current;
-      const verificationLevel = getModeVerificationLevel(mode);
+      const style = getProfileState().current;
+      const verificationLevel = getProfileVerificationLevel(style);
       
       let stepsToRun: VerificationStep[];
       
@@ -103,7 +103,7 @@ Checks build, tests, lint based on current mode.
           .map(s => `### ${s.name}\n\`\`\`bash\n${s.command}\n\`\`\`\n${s.description}`)
           .join('\n\n');
         
-        return `## Verification Protocol [Mode: ${mode}]
+        return `## Verification Protocol [Style: ${style}]
 
 ${stepsList}
 
@@ -116,7 +116,7 @@ ${stepsList}
           guidance = 'Discuss with user what verification is needed.';
         }
         
-        return `## Verification [Mode: ${mode}]
+        return `## Verification [Style: ${style}]
 
 Verification level: ${verificationLevel}
 ${guidance}`;

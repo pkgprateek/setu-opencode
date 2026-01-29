@@ -4,8 +4,7 @@
  * Uses: tool.execute.before, tool.execute.after
  * 
  * - tool.execute.before: Phase 0 blocking (pre-emptive enforcement)
- *   - Mode-aware: Full enforcement in Setu, light in Build, defer in Plan
- *   - Context injection: Injects context into subagent prompts (task tool)
+ *   Context injection for subagent prompts (task tool)
  * - tool.execute.after: Tracks verification steps, file reads, searches
  */
 
@@ -15,6 +14,8 @@ import {
   type Phase0State
 } from '../enforcement';
 import { type ContextCollector, formatContextForInjection, contextToSummary } from '../context';
+import { type SetuProfile, getProfileEnforcementLevel } from '../prompts/profiles';
+import { debugLog } from '../debug';
 
 /**
  * Verification step tracking
@@ -38,56 +39,79 @@ export interface ToolExecuteBeforeOutput {
 }
 
 /**
- * Enforcement level based on current agent
+ * Enforcement level based on Setu profile
  */
 export type EnforcementLevel = 'full' | 'light' | 'none';
 
 /**
- * Map an agent identifier to its Phase 0 enforcement level.
+ * Determines enforcement level based on Setu profile.
+ * Only used when in Setu agent mode.
  *
- * @param currentAgent - The agent name (case-insensitive)
- * @returns `'full'` for `'setu'`, `'none'` for `'plan'`, `'light'` for all other agents
+ * @param setuProfile - The Setu profile (ultrathink/quick/expert/collab)
+ * @returns The enforcement level for Phase 0
+ */
+export function getSetuEnforcementLevel(setuProfile: SetuProfile): EnforcementLevel {
+  const profileLevel = getProfileEnforcementLevel(setuProfile);
+  
+  switch (profileLevel) {
+    case 'strict':
+      return 'full';    // Ultrathink: full blocking
+    case 'none':
+      return 'none';    // Quick: no blocking
+    case 'light':
+      return 'light';   // Expert/Collab: warn but don't block
+    default:
+      return 'full';    // Safe default: full enforcement
+  }
+}
+
+/**
+ * Determines enforcement level based on the current agent.
+ * 
+ * @deprecated Use getSetuEnforcementLevel with a SetuProfile instead.
+ * This function returns hardcoded 'full' for 'setu' agent and 'none' otherwise.
+ * Kept for backwards compatibility only.
  */
 export function getEnforcementLevel(currentAgent: string): EnforcementLevel {
-  const agent = currentAgent.toLowerCase();
-  
-  if (agent === 'setu') {
+  if (currentAgent.toLowerCase() === 'setu') {
     return 'full';
   }
-  
-  if (agent === 'plan') {
-    // Plan mode is already read-only by OpenCode design
-    return 'none';
-  }
-  
-  // Build and other agents get light enforcement
-  return 'light';
+  return 'none';
 }
 
 /**
  * Create a before-execution hook that enforces Phase 0 rules for tool execution.
  *
- * The returned hook injects confirmed context into `task` (subagent) prompts when available,
- * honors agent-specific enforcement levels (setu => full, plan => none, build/other => light),
- * and blocks or warns about disallowed tools based on Phase 0 state.
+ * Setu plugin operates exclusively within Setu agent mode.
+ * When not in Setu agent, this hook remains silent.
+ * When in Setu agent, enforces Phase 0 based on the current profile.
  *
  * @param getPhase0State - Accessor that returns the current Phase 0 state
  * @param getCurrentAgent - Optional accessor for the current agent identifier; defaults to "setu" when omitted
  * @param getContextCollector - Optional accessor for a ContextCollector used to obtain and format confirmed context for injection
+ * @param getSetuProfile - Optional accessor for the current Setu profile (used for profile-level enforcement when in Setu mode)
  * @returns A hook function invoked before tool execution that enforces Phase 0 rules and may throw an Error when a tool is blocked under full enforcement
  */
 export function createToolExecuteBeforeHook(
   getPhase0State: () => Phase0State,
   getCurrentAgent?: () => string,
-  getContextCollector?: () => ContextCollector | null
-) {
+  getContextCollector?: () => ContextCollector | null,
+  getSetuProfile?: () => SetuProfile
+): (input: ToolExecuteBeforeInput, output: ToolExecuteBeforeOutput) => Promise<void> {
   return async (
     input: ToolExecuteBeforeInput,
     output: ToolExecuteBeforeOutput
   ): Promise<void> => {
-    const state = getPhase0State();
     const currentAgent = getCurrentAgent ? getCurrentAgent() : 'setu';
-    const enforcementLevel = getEnforcementLevel(currentAgent);
+    
+    // Only operate when in Setu agent mode
+    if (currentAgent.toLowerCase() !== 'setu') {
+      return;
+    }
+    
+    const state = getPhase0State();
+    const setuProfile = getSetuProfile ? getSetuProfile() : 'ultrathink';
+    const enforcementLevel = getSetuEnforcementLevel(setuProfile);
     
     // Context injection for task tool (subagent prompts)
     if (input.tool === 'task' && getContextCollector) {
@@ -97,42 +121,38 @@ export function createToolExecuteBeforeHook(
         const summary = contextToSummary(context);
         const contextBlock = formatContextForInjection(summary);
         
-        // Inject context at the beginning of the prompt
         const originalPrompt = output.args.prompt as string || '';
         output.args.prompt = `${contextBlock}\n\n[TASK]\n${originalPrompt}`;
         
-        console.log('[Setu] Injected context into subagent prompt');
+        debugLog('Injected context into subagent prompt');
       }
     }
     
-    // No enforcement in Plan mode (OpenCode handles it)
+    // Quick profile bypasses enforcement
     if (enforcementLevel === 'none') {
       return;
     }
     
-    // If context is confirmed, allow everything
+    // Context confirmed - allow all tools
     if (state.contextConfirmed) {
       return;
     }
     
-    // Check if this tool should be blocked
+    // Check Phase 0 blocking rules
     const { blocked, reason, details } = shouldBlockInPhase0(input.tool, output.args);
     
     if (blocked && reason) {
       if (enforcementLevel === 'full') {
-        // Full enforcement in Setu mode - throw to block
-        console.log(`[Setu] Phase 0 BLOCKED: ${input.tool}`);
+        debugLog(`Phase 0 BLOCKED: ${input.tool}`);
         throw new Error(createPhase0BlockMessage(reason, details));
       } else {
-        // Light enforcement - log warning but don't block
-        console.log(`[Setu] Phase 0 WARNING (not in Setu mode): ${input.tool} - ${reason}`);
+        debugLog(`Phase 0 WARNING: ${input.tool} - ${reason}`);
         return;
       }
     }
     
-    // Allowed - log for debugging
     if (enforcementLevel === 'full') {
-      console.log(`[Setu] Phase 0 ALLOWED: ${input.tool}`);
+      debugLog(`Phase 0 ALLOWED: ${input.tool}`);
     }
   };
 }
@@ -140,20 +160,40 @@ export function createToolExecuteBeforeHook(
 /**
  * Creates a post-tool-execution hook that records verification steps and context events.
  *
+ * Setu plugin operates exclusively within Setu agent mode.
+ * When not in Setu agent, this hook remains silent.
+ *
  * Calls `markVerificationStep` when bash command output or titles indicate build, test, or lint activity.
  * When a `ContextCollector` is available it records file reads and grep/glob searches (pattern and result count).
  *
  * @param markVerificationStep - Callback invoked with a verification step ('build' | 'test' | 'lint') when the hook detects the corresponding command.
+ * @param getCurrentAgent - Optional accessor for the current agent identifier; if not 'setu', hook does nothing.
  * @param getContextCollector - Optional function that returns a `ContextCollector` used to record file reads and search actions; if omitted or it returns `null`, context tracking is disabled.
  */
+/**
+ * Count non-empty lines in output string
+ */
+const countResultLines = (output: string): number =>
+  output.split('\n').filter(l => l.trim()).length;
+
 export function createToolExecuteAfterHook(
   markVerificationStep: (step: VerificationStep) => void,
+  getCurrentAgent?: () => string,
   getContextCollector?: () => ContextCollector | null
-) {
+): (
+  input: { tool: string; sessionID: string; callID: string; args?: Record<string, unknown> },
+  output: { title: string; output: string; metadata: unknown }
+) => Promise<void> {
   return async (
     input: { tool: string; sessionID: string; callID: string; args?: Record<string, unknown> },
     output: { title: string; output: string; metadata: unknown }
   ): Promise<void> => {
+    // Only operate when in Setu agent mode
+    const currentAgent = getCurrentAgent ? getCurrentAgent() : 'setu';
+    if (currentAgent.toLowerCase() !== 'setu') {
+      return;
+    }
+    
     const collector = getContextCollector ? getContextCollector() : null;
     
     // Track file reads for context collection
@@ -161,7 +201,7 @@ export function createToolExecuteAfterHook(
       const filePath = input.args?.filePath as string;
       if (filePath) {
         collector.recordFileRead(filePath);
-        console.log(`[Setu] Context: Recorded file read: ${filePath}`);
+        debugLog(`Context: Recorded file read: ${filePath}`);
       }
     }
     
@@ -169,10 +209,8 @@ export function createToolExecuteAfterHook(
     if (input.tool === 'grep' && collector) {
       const pattern = input.args?.pattern as string;
       if (pattern) {
-        // Try to count results from output
-        const lines = output.output.split('\n').filter(l => l.trim());
-        collector.recordSearch(pattern, 'grep', lines.length);
-        console.log(`[Setu] Context: Recorded grep search: ${pattern}`);
+        collector.recordSearch(pattern, 'grep', countResultLines(output.output));
+        debugLog(`Context: Recorded grep search: ${pattern}`);
       }
     }
     
@@ -180,10 +218,8 @@ export function createToolExecuteAfterHook(
     if (input.tool === 'glob' && collector) {
       const pattern = input.args?.pattern as string;
       if (pattern) {
-        // Try to count results from output
-        const lines = output.output.split('\n').filter(l => l.trim());
-        collector.recordSearch(pattern, 'glob', lines.length);
-        console.log(`[Setu] Context: Recorded glob search: ${pattern}`);
+        collector.recordSearch(pattern, 'glob', countResultLines(output.output));
+        debugLog(`Context: Recorded glob search: ${pattern}`);
       }
     }
     
@@ -204,7 +240,7 @@ export function createToolExecuteAfterHook(
       commandOutput.includes('go build')
     ) {
       markVerificationStep('build');
-      console.log('[Setu] Verification step tracked: build');
+      debugLog('Verification step tracked: build');
     }
     
     // Detect test commands
@@ -221,7 +257,7 @@ export function createToolExecuteAfterHook(
       commandOutput.includes('go test')
     ) {
       markVerificationStep('test');
-      console.log('[Setu] Verification step tracked: test');
+      debugLog('Verification step tracked: test');
     }
     
     // Detect lint commands
@@ -235,7 +271,7 @@ export function createToolExecuteAfterHook(
       commandOutput.includes('golangci-lint')
     ) {
       markVerificationStep('lint');
-      console.log('[Setu] Verification step tracked: lint');
+      debugLog('Verification step tracked: lint');
     }
   };
 }
@@ -252,7 +288,14 @@ export interface AttemptState {
   approaches: string[];
 }
 
-export function createAttemptTracker() {
+export function createAttemptTracker(): {
+  recordAttempt: (taskId: string, approach: string) => number;
+  getAttempts: (taskId: string) => AttemptState | undefined;
+  shouldAskForGuidance: (taskId: string) => boolean;
+  getGuidanceMessage: (taskId: string) => string | null;
+  reset: (taskId: string) => void;
+  clearAll: () => void;
+} {
   const attempts = new Map<string, AttemptState>();
   
   return {

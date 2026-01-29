@@ -14,7 +14,7 @@
 
 ---
 
-## Current State (v0.1 - Alpha)
+## Current State (v1.0 - Release Candidate)
 
 ### Implemented
 
@@ -32,7 +32,6 @@
 - [x] `event` hook — Session lifecycle, context loading on start
 
 **Tools:**
-- [x] `setu_mode` tool — Switch operational profiles
 - [x] `setu_verify` tool — Run verification protocol
 - [x] `setu_context` tool — Confirm context, persist to `.setu/`
 - [x] `setu_feedback` tool — Record user feedback
@@ -41,6 +40,8 @@
 - [x] Agent registration (`.opencode/agents/setu.md` created on init)
 - [x] Default on startup (`default_agent: "setu"` in config)
 - [x] Mode-aware enforcement (Setu/Build/Plan awareness)
+- [x] Agent file contains ONLY soul (identity, covenant, philosophy)
+- [x] Plugin hooks enforce behavior (Phase 0, verification)
 
 **Context Persistence (Movement 2):**
 - [x] `.setu/` directory structure
@@ -49,7 +50,8 @@
 - [x] `feedback.md` — User feedback mechanism
 - [x] Context collector (tracks reads/searches during Phase 0)
 - [x] Context injection to subagent prompts
-- [x] Context loading on session start
+- [x] Lazy context loading (performance optimization)
+- [x] File existence caching (5-second cache)
 
 **Anthropic Alignment:**
 - [x] Enhanced "why" reasoning in Phase 0 block messages
@@ -58,6 +60,16 @@
 
 **Skills:**
 - [x] 7 bundled skills (bootstrap, verification, rules-creation, code-quality, refine-code, commit-helper, pr-review)
+
+**Safety Fixes:**
+- [x] Removed `setu_mode` tool (agent cannot bypass Phase 0)
+- [x] Graceful handling of missing `.setu/` files
+- [x] Clear Phase 0 exit path (one-line block message)
+- [x] Renamed "mode" → "Style" terminology
+
+### Known Limitations
+
+- **First-run restart required:** Setu appears in Tab cycle only after restarting OpenCode. This is because OpenCode scans agent files before plugins initialize. (Fix planned for v1.2)
 
 ### Not Yet Implemented
 
@@ -90,9 +102,9 @@
 To avoid confusion with OpenCode's Plan/Build modes:
 
 | Term | Meaning | Examples |
-|------|---------|----------|
+| ------ | --------- | ---------- |
 | **Mode** (OpenCode) | IDE-level agent selection via Tab | Plan, Build, Setu |
-| **Operational Profile** (Setu) | Verification/behavior level within Setu | ultrathink, quick, expert, collab |
+| **Style** (Setu) | Operational preset within Setu | ultrathink, quick, expert, collab |
 
 ---
 
@@ -103,6 +115,10 @@ Before publishing:
 - [x] Context persistence (`.setu/context.md`, `.setu/context.json`)
 - [x] Parallel execution guidance in persona
 - [x] Mode-aware enforcement (don't conflict with Plan mode)
+- [x] Agent file contains ONLY soul (identity, covenant, philosophy)
+- [x] Plugin hooks enforce behavior (no behavioral instructions in agent file)
+- [x] Removed `setu_mode` tool (agent cannot bypass Phase 0)
+- [x] Performance optimizations (lazy loading, file cache)
 - [ ] Build and test plugin end-to-end
 - [ ] Publish to npm as `setu-opencode`
 - [ ] Test all 4 operational profiles
@@ -154,6 +170,15 @@ Before publishing:
       2. Intercept `git commit` and `git push` in `tool.execute.before` to enforce
     - **Implementation:** `src/prompts/persona.ts`, `src/hooks/tool-execute.ts`
     - **Reference:** setu.md lines 345-358
+
+- [ ] **Dependency Change Approval**
+    - **Why:** Unreviewed dependency changes can introduce security risks, bloat, or breaking changes.
+    - **What:** Always document approval before adding/removing dependencies to package.json.
+    - **How:**
+      1. Before modifying package.json dependencies or devDependencies, ask user for approval
+      2. Document approval in PR description with approver and timestamp
+      3. Example: "devDependencies approved by @user on 2026-01-29 14:30 UTC"
+    - **Implementation:** `src/prompts/persona.ts` (guidance), `src/hooks/tool-execute.ts` (optional enforcement)
 
 - [ ] **Branch Safety Warnings**
     - **Why:** Accidental commits to main on complex tasks cause problems.
@@ -403,7 +428,66 @@ IMPORTANT: Resume this task. Do NOT start unrelated work.`);
 
 ---
 
-## v1.1: Polish & Recovery
+## v1.1: Polish & Configuration
+
+### Verbosity Toggle
+
+> **Why:** Engineers want to see task reasoning, not meta-reasoning about Setu's instructions.
+
+- [ ] **Verbosity Levels**
+  - **Config:** `opencode.json` → `setu.verbosity: "minimal" | "standard" | "verbose"`
+  - **Minimal:** Actions only, no reasoning shown
+  - **Standard:** Actions + key task reasoning (default)
+  - **Verbose:** Everything including meta-reasoning (for debugging Setu itself)
+  - **Implementation:** Inject verbosity level into agent persona dynamically
+
+### Parallel Subagents
+
+> **Why:** Offload work to keep main context clean, run tasks in parallel.
+
+- [ ] **Subagent Configuration**
+  - **Config:** `opencode.json` → Define subagents with dedicated models
+  - **Default Model:** `google/antigravity-gemini-3-flash` for all subagents
+  - **Example subagents:** setu-explorer (read-only), setu-doc-writer
+  - **Usage:** Setu spawns subagents via Task tool in parallel
+
+Example configuration:
+```json
+{
+  "agent": {
+    "setu-explorer": {
+      "description": "Context exploration and file discovery",
+      "mode": "subagent",
+      "model": "google/antigravity-gemini-3-flash",
+      "tools": { "write": false, "edit": false }
+    }
+  }
+}
+```
+
+### Setu Configuration File (`setu.json`)
+
+> **Why:** OpenCode's `opencode.json` has strict schema validation that rejects unknown keys. Other plugins (e.g., `antigravity.json`, `sisyphus.json`) use separate config files with custom schemas.
+
+- [ ] **Create `setu.json` Config File**
+  - **Location:** Project root, alongside `opencode.json`
+  - **Schema:** Publish `setu.schema.json` for validation
+  - **Content:**
+    ```json
+    {
+      "$schema": "https://raw.githubusercontent.com/pkgprateek/setu-opencode/main/assets/setu.schema.json",
+      "debug": true,
+      "verbosity": "standard",
+      "subagent_model": "google/antigravity-gemini-3-flash"
+    }
+    ```
+  - **Loading:** Plugin reads `setu.json` at init, merges with defaults
+  - **Priority:** `setu.json` > env vars > defaults
+  - **Implementation:** `src/config/setu-config.ts`
+
+- [ ] **Publish JSON Schema**
+    - Create `assets/setu.schema.json` with all config options
+    - Host on GitHub raw URL for IDE autocompletion
 
 ### Session Resilience
 
@@ -502,6 +586,18 @@ IMPORTANT: Resume this task. Do NOT start unrelated work.`);
 
 ## v1.2: Extended Context
 
+### First-Run Agent Registration
+
+> **Why:** Currently Setu requires a restart on first run because OpenCode scans agent files before plugins initialize.
+
+- [ ] **Solve first-run issue**
+    - **Problem:** OpenCode scans `.opencode/agents/` during `Config.get()` BEFORE `Plugin.init()` runs. Our plugin creates `setu.md` during init, but it's already too late.
+    - **Options:**
+      1. CLI init command: `npx setu-opencode init` (user runs before first use)
+      2. Postinstall script: npm postinstall creates the agent file
+      3. OpenCode API: Request a plugin hook for programmatic agent registration
+    - **Implementation:** TBD based on feasibility analysis
+
 ### Context Auto-Injection
 
 - [ ] **Auto-Inject AGENTS.md**
@@ -529,9 +625,9 @@ IMPORTANT: Resume this task. Do NOT start unrelated work.`);
 
 > **Why:** "Vibe coding" and disposable scripts shouldn't be blocked by strict verification. Sometimes users want to write one-off scripts without friction.
 
-- [ ] **Add `scratchpad` profile to `setu_mode`**
+- [ ] **Add `scratchpad` style**
     - **Why:** Report 2 identifies "Disposable Software" as a valid use case. Setu's strictness is counterproductive for throwaway scripts.
-    - **What:** 5th operational profile that bypasses Setu's enforcement.
+    - **What:** 5th operational style that bypasses Setu's enforcement.
     - **How:**
       - `phase0: "bypass"` — No blocking, allow all tools immediately
       - `verification: "none"` — No build/test enforcement
@@ -541,8 +637,8 @@ IMPORTANT: Resume this task. Do NOT start unrelated work.`);
       - Disables verification prompts
       - Allows rapid iteration without ceremony
       - Still tracks files read and patterns found (in case script graduates to "real" software)
-    - **Trigger:** User says "scratchpad", "vibe", "quick and dirty", "throwaway"
-    - **Implementation:** `src/tools/setu-mode.ts`, `src/prompts/modes.ts`
+    - **Trigger:** User says "style: scratchpad", "vibe", "quick and dirty", "throwaway"
+    - **Implementation:** `src/prompts/profiles.ts` (add scratchpad style)
 
 ### Context Hygiene (The Ralph Loop)
 
@@ -582,6 +678,23 @@ IMPORTANT: Resume this task. Do NOT start unrelated work.`);
 ---
 
 ## v1.3: Disciplined Delegation
+
+### Fine-Grained Model Routing
+
+> **Why:** Different tasks need different models. Research tasks can use cheaper models, implementation needs powerful ones.
+
+- [ ] **Per-Subagent Model Configuration**
+    - **What:** Each subagent type can have a dedicated model
+    - **Example:**
+      - `setu-explorer` → cheap/fast model (Gemini Flash)
+      - `setu-implementer` → powerful model (Claude Sonnet)
+    - **Config:** Via `opencode.json` agent definitions
+
+- [ ] **Orchestration Layer**
+    - **Why:** Central routing is more reliable than prompt-based model selection
+    - **What:** Setu main agent delegates to orchestrator that routes to appropriate subagent/model
+    - **Benefit:** Consistent model selection without relying on agent self-awareness
+    - **Implementation:** `src/orchestration/router.ts`
 
 ### Batch Mode (Auto-Ralph at Scale)
 

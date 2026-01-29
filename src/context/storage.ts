@@ -2,9 +2,10 @@
  * Context storage for Setu
  * 
  * Manages the .setu/ directory:
- * - .setu/context.md (human-readable)
- * - .setu/context.json (machine-parseable)
+ * - .setu/context.json (machine-parseable, compact format)
  * - .setu/verification.log (audit trail)
+ * 
+ * Note: We no longer generate .setu/context.md - AGENTS.md serves as the human-readable version.
  * 
  * Re-exports ensureSetuDir from feedback.ts for consistency.
  */
@@ -19,12 +20,12 @@ import {
   createEmptyContext
 } from './types';
 import { ensureSetuDir } from './feedback';
+import { debugLog, errorLog } from '../debug';
 
 // Re-export for convenience
 export { ensureSetuDir };
 
 const CONTEXT_JSON = 'context.json';
-const CONTEXT_MD = 'context.md';
 const VERIFICATION_LOG = 'verification.log';
 
 /**
@@ -44,13 +45,17 @@ export function loadContext(projectDir: string): SetuContext | null {
     const content = readFileSync(contextPath, 'utf-8');
     return JSON.parse(content) as SetuContext;
   } catch (error) {
-    console.error('[Setu] Failed to load context:', error);
+    errorLog('Failed to load context:', error);
     return null;
   }
 }
 
 /**
- * Saves context to .setu/context.json and .setu/context.md
+ * Save a SetuContext to `.setu/context.json`.
+ * 
+ * Optimized context storage:
+ * - Uses compact JSON (no pretty-printing) to save space
+ * - Skips `.setu/context.md` (AGENTS.md serves as human-readable version)
  * 
  * @param projectDir - Project root directory
  * @param context - The context to save
@@ -61,97 +66,15 @@ export function saveContext(projectDir: string, context: SetuContext): void {
   // Update timestamp
   context.updatedAt = new Date().toISOString();
   
-  // Write JSON (machine-parseable)
+  // Write JSON - compact by default, pretty in debug mode
   const jsonPath = join(setuDir, CONTEXT_JSON);
-  writeFileSync(jsonPath, JSON.stringify(context, null, 2), 'utf-8');
+  const isDebug = process.env.SETU_DEBUG === 'true';
+  const jsonContent = isDebug 
+    ? JSON.stringify(context, null, 2) 
+    : JSON.stringify(context);
+  writeFileSync(jsonPath, jsonContent, 'utf-8');
   
-  // Write Markdown (human-readable)
-  const mdPath = join(setuDir, CONTEXT_MD);
-  writeFileSync(mdPath, generateContextMarkdown(context), 'utf-8');
-  
-  console.log('[Setu] Context saved to .setu/');
-}
-
-/**
- * Create a human-readable Markdown representation of a SetuContext.
- *
- * The output includes header metadata (last updated, confirmation), and optional
- * sections for Summary, Current Task, Plan, Project details, Files Read, Searches
- * Performed, and Patterns Observed when those fields are present.
- *
- * @param context - The SetuContext to render as Markdown
- * @returns A single Markdown-formatted string representing the provided context
- */
-function generateContextMarkdown(context: SetuContext): string {
-  const lines: string[] = [
-    '# Setu Context',
-    '',
-    `> Last updated: ${context.updatedAt}`,
-    `> Confirmed: ${context.confirmed ? `Yes (${context.confirmedAt})` : 'No'}`,
-    ''
-  ];
-  
-  // Summary
-  if (context.summary) {
-    lines.push('## Summary', '', context.summary, '');
-  }
-  
-  // Current task
-  if (context.currentTask) {
-    lines.push('## Current Task', '', context.currentTask, '');
-  }
-  
-  // Plan
-  if (context.plan) {
-    lines.push('## Plan', '', context.plan, '');
-  }
-  
-  // Project info
-  lines.push('## Project', '');
-  if (context.project.type) lines.push(`- **Type:** ${context.project.type}`);
-  if (context.project.runtime) lines.push(`- **Runtime:** ${context.project.runtime}`);
-  if (context.project.buildTool) lines.push(`- **Build Tool:** ${context.project.buildTool}`);
-  if (context.project.testFramework) lines.push(`- **Test Framework:** ${context.project.testFramework}`);
-  if (context.project.frameworks?.length) {
-    lines.push(`- **Frameworks:** ${context.project.frameworks.join(', ')}`);
-  }
-  lines.push('');
-  
-  // Files read
-  if (context.filesRead.length > 0) {
-    lines.push('## Files Read', '');
-    for (const file of context.filesRead) {
-      const summaryPart = file.summary ? ` - ${file.summary}` : '';
-      lines.push(`- \`${file.path}\`${summaryPart}`);
-    }
-    lines.push('');
-  }
-  
-  // Searches performed
-  if (context.searchesPerformed.length > 0) {
-    lines.push('## Searches Performed', '');
-    for (const search of context.searchesPerformed) {
-      lines.push(`- ${search.tool}: \`${search.pattern}\` (${search.resultCount} results)`);
-    }
-    lines.push('');
-  }
-  
-  // Patterns observed
-  if (context.patterns.length > 0) {
-    lines.push('## Patterns Observed', '');
-    for (const pattern of context.patterns) {
-      lines.push(`### ${pattern.name}`, '', pattern.description);
-      if (pattern.examples?.length) {
-        lines.push('', 'Examples:');
-        for (const example of pattern.examples) {
-          lines.push(`- \`${example}\``);
-        }
-      }
-      lines.push('');
-    }
-  }
-  
-  return lines.join('\n');
+  debugLog('Context saved to .setu/context.json');
 }
 
 /**
@@ -264,7 +187,7 @@ export function createContextCollector(projectDir: string): ContextCollector {
       const loaded = loadContext(projectDir);
       if (loaded) {
         context = loaded;
-        console.log('[Setu] Loaded existing context from .setu/context.json');
+        debugLog('Loaded existing context from .setu/context.json');
         return true;
       }
       return false;
