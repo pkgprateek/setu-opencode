@@ -6,13 +6,20 @@
  * IMPORTANT: This hook injects dynamic state AND loaded context.
  * The full persona is already in the agent file (.opencode/agents/setu.md).
  * 
- * When in Setu mode: Injects profile + file availability + context content
+ * When in Setu mode: Injects profile + file availability + project rules + context content
  * When in Build/Plan: Does nothing (Setu is off)
  */
 
 import { getStateInjection, type FileAvailability, getModePrefix } from '../prompts/persona';
 import type { ProfileState } from '../prompts/profiles';
-import { type ContextCollector, contextToSummary, formatContextForInjection } from '../context';
+import { 
+  type ContextCollector, 
+  contextToSummary, 
+  formatContextForInjection,
+  type ProjectRules,
+  formatRulesForInjection,
+  hasProjectRules
+} from '../context';
 
 /**
  * Creates the system transform hook
@@ -20,6 +27,7 @@ import { type ContextCollector, contextToSummary, formatContextForInjection } fr
  * Injects:
  * - [Mode: Ultrathink] (or current profile)
  * - [Context: AGENTS.md, .setu/context.json]
+ * - Silent Exploration: Project rules (AGENTS.md, CLAUDE.md, active task)
  * - Loaded context content (summary, constraints, patterns)
  * - Response format requirements
  * 
@@ -32,7 +40,8 @@ export function createSystemTransformHook(
   getVerificationState: () => { complete: boolean; stepsRun: Set<string> },
   getSetuFilesExist?: () => FileAvailability,
   getCurrentAgent?: () => string,
-  getContextCollector?: () => ContextCollector | null
+  getContextCollector?: () => ContextCollector | null,
+  getProjectRules?: () => ProjectRules | null
 ) {
   return async (
     _input: { sessionID: string },
@@ -55,6 +64,16 @@ export function createSystemTransformHook(
     // Inject minimal state - profile and file availability
     const stateInjection = getStateInjection(profileState.current, filesExist, isDefault);
     output.system.push(stateInjection);
+    
+    // SILENT EXPLORATION: Inject project rules (AGENTS.md, CLAUDE.md, active task)
+    // This happens BEFORE context injection because rules are foundational
+    if (getProjectRules) {
+      const projectRules = getProjectRules();
+      if (projectRules && hasProjectRules(projectRules)) {
+        const rulesInjection = formatRulesForInjection(projectRules);
+        output.system.push(rulesInjection);
+      }
+    }
     
     // CRITICAL: Inject loaded context content (summary, constraints, patterns)
     // This ensures constraints like "sandbox only" survive restarts

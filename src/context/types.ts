@@ -2,7 +2,7 @@
  * Context types for Setu
  * 
  * Defines the structure of context that is:
- * - Collected during Phase 0 (reconnaissance)
+ * - Collected during Phase 0 (exploration)
  * - Persisted to .setu/context.json
  * - Injected into subagent prompts
  * - Loaded on session start for continuity

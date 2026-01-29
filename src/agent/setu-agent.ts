@@ -38,6 +38,7 @@ permission:
     "*": ask
   bash:
     "*": ask
+    "glob *: allow
     "ls *": allow
     "cat *": allow
     "head *": allow

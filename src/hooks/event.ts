@@ -6,9 +6,10 @@
  * Resets state on new sessions, tracks session lifecycle.
  * Checks file existence silently to avoid errors on first run.
  * Loads existing context on session start for continuity.
+ * Performs Silent Exploration: loads project rules automatically.
  */
 
-import { type ContextCollector, detectProjectInfo } from '../context';
+import { type ContextCollector, detectProjectInfo, type ProjectRules, loadProjectRules } from '../context';
 import { debugLog } from '../debug';
 
 /**
@@ -21,6 +22,7 @@ import { debugLog } from '../debug';
  * @param resetPhase0 - Optional callback to reset Phase 0 state for the given `sessionId`
  * @param getContextCollector - Optional accessor that returns a `ContextCollector` (or `null`) used to load or update session context from disk
  * @param checkFilesExist - Optional callback to silently check file existence without errors
+ * @param setProjectRules - Optional callback to store loaded project rules (Silent Exploration)
  * @returns The event handler function that processes session events and updates internal state and context
  */
 export function createEventHook(
@@ -30,7 +32,8 @@ export function createEventHook(
   confirmContext: () => void,
   resetPhase0?: (sessionId: string) => void,
   getContextCollector?: () => ContextCollector | null,
-  checkFilesExist?: () => { active: boolean; context: boolean; agentsMd: boolean; claudeMd: boolean }
+  checkFilesExist?: () => { active: boolean; context: boolean; agentsMd: boolean; claudeMd: boolean },
+  setProjectRules?: (rules: ProjectRules | null) => void
 ) {
   return async ({ event }: { event: { type: string; properties?: Record<string, unknown> } }): Promise<void> => {
     switch (event.type) {
@@ -47,6 +50,21 @@ export function createEventHook(
         
         // Check file existence silently (no errors on first run)
         const filesExist = checkFilesExist ? checkFilesExist() : null;
+        
+        // SILENT EXPLORATION: Load project rules automatically on session start
+        // This injects AGENTS.md, CLAUDE.md, .setu/active.json content into system prompt
+        // so Setu starts "informed" rather than asking questions docs already answer
+        if (setProjectRules) {
+          try {
+            const projectDir = (event.properties?.projectDir as string) || process.cwd();
+            const rules = loadProjectRules(projectDir);
+            setProjectRules(rules);
+            debugLog('Silent Exploration: Project rules loaded successfully');
+          } catch (error) {
+            debugLog('Silent Exploration: Failed to load project rules:', error);
+            setProjectRules(null);
+          }
+        }
         
         // Load existing context on session start for continuity
         // This ensures constraints (like "sandbox only") survive restarts

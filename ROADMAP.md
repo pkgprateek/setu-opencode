@@ -134,17 +134,18 @@ Before publishing:
 
 > **Why:** Asking questions that `AGENTS.md` or `.setu/` already answers wastes tokens and frustrates users. Setu should "know" project context before speaking.
 
-- [ ] **Automatic Context Injection on Session Start**
+- [x] **Automatic Context Injection on Session Start**
     - **Why:** setu.md mandates parallel reads of context files before any user interaction. This ensures Setu starts informed, not ignorant. Hooks are reliable — the model cannot skip or forget.
     - **What:** On `session.created`, automatically read and inject project context.
     - **How:**
       1. In `src/hooks/event.ts`, on session start:
-         - Parallel read: `.setu/active.json`, `.setu/context.json`, `AGENTS.md`, `CLAUDE.md`
+         - Read files synchronously: `.setu/active.json`, `.setu/context.json`, `AGENTS.md`, `CLAUDE.md`
          - If `.setu/active.json` has `status: "in_progress"`, prepare resume prompt
-         - Inject summary into session context via system-transform
-      2. In `src/prompts/persona.ts`, add: "You have already read project context from `.setu/` and `AGENTS.md`."
+         - Store in ProjectRules state
+      2. In `src/hooks/system-transform.ts`, inject project rules into system prompt
+      3. In `src/context/project-rules.ts`, format rules for injection
     - **Trigger:** `session.created` event
-    - **Implementation:** `src/hooks/event.ts`, `src/prompts/persona.ts`
+    - **Implementation:** `src/hooks/event.ts`, `src/hooks/system-transform.ts`, `src/context/project-rules.ts`
     - **Reference:** setu.md lines 42-57
 
 ### Git Discipline (Required for v1.0)
@@ -159,7 +160,7 @@ Before publishing:
       2. If not, ask: "This project isn't a git repository. Would you like me to initialize one?"
       3. Store decision in `.setu/context.json` under `git.initialized: boolean`
       4. If user declines, skip all git discipline for this project permanently
-    - **Trigger:** Session start (part of Silent Reconnaissance)
+    - **Trigger:** Session start (part of Silent Exploration)
     - **Implementation:** `src/hooks/event.ts`, `src/context/storage.ts`
 
 - [ ] **Commit Approval Protocol**

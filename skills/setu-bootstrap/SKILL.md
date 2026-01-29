@@ -22,7 +22,7 @@ When starting work on a new project:
 
 ## Phase 1: Discovery
 
-Perform reconnaissance to understand the project:
+Perform exploration to understand the project:
 
 **Detection logic:**
 1. Search upward from current directory to find:
