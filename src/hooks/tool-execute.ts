@@ -95,7 +95,7 @@ export function createToolExecuteBeforeHook(
   getCurrentAgent?: () => string,
   getContextCollector?: () => ContextCollector | null,
   getSetuProfile?: () => SetuProfile
-) {
+): (input: ToolExecuteBeforeInput, output: ToolExecuteBeforeOutput) => Promise<void> {
   return async (
     input: ToolExecuteBeforeInput,
     output: ToolExecuteBeforeOutput
@@ -172,7 +172,10 @@ export function createToolExecuteAfterHook(
   markVerificationStep: (step: VerificationStep) => void,
   getCurrentAgent?: () => string,
   getContextCollector?: () => ContextCollector | null
-) {
+): (
+  input: { tool: string; sessionID: string; callID: string; args?: Record<string, unknown> },
+  output: { title: string; output: string; metadata: unknown }
+) => Promise<void> {
   return async (
     input: { tool: string; sessionID: string; callID: string; args?: Record<string, unknown> },
     output: { title: string; output: string; metadata: unknown }

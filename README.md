@@ -33,7 +33,7 @@ AI coding agents are fast. But speed without discipline creates problems:
 
 **Why this matters:** The #1 cause of wasted work is wrong assumptions. If the agent doesn't understand your context, everything it builds is wrong.
 
-**What Setu does:** Before allowing any side-effect tools, Setu **blocks** execution until context is confirmed. The agent can read files and explore the codebase ("look but don't touch"), but cannot write, edit, or execute commands until it confirms understanding.
+**What Setu does:** Before allowing any side-effect tools, Setu **blocks** execution until context is confirmed. The agent can read files and explore the codebase ("look but don't touch"), but cannot write, edit, or execute side-effect commands until it confirms understanding.
 
 **The difference:**
 - Without Setu: Agent assumes JWT auth, builds it, you wanted OAuth
@@ -48,7 +48,7 @@ AI coding agents are fast. But speed without discipline creates problems:
 ┌─────────────────────────────────────────────────────────────┐
 │  PHASE 0: Context Gate                                      │
 │  → Agent can READ files (look but don't touch)              │
-│  → Agent CANNOT write, execute, or modify                   │
+│  → Agent CANNOT write, execute side-effect commands, or modify│
 │  → Explores codebase, forms understanding                   │
 │  → Confirms context with setu_context tool                  │
 └─────────────────────────────────────────────────────────────┘
