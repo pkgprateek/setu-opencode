@@ -8,16 +8,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Active Task Persistence:** Track current task, mode, and constraints in `.setu/active.json`
+  - Survives session restarts and OpenCode restarts
+  - Atomic write pattern prevents corruption
+  - Predefined constraint types: `READ_ONLY`, `NO_PUSH`, `NO_DELETE`, `SANDBOX`
+  
+- **Compaction Recovery Protocol:** Hook into `experimental.session.compacting` to inject active task into compaction summary
+  - Prevents "going rogue" after context compression
+  - Injects task description, mode, and constraints
+  - Ensures agent remembers what it was doing
+  
+- **Constraint Enforcement:** Before side-effect tools, check active task constraints
+  - `READ_ONLY`: Blocks write/edit tools
+  - `NO_PUSH`: Blocks git push commands
+  - `NO_DELETE`: Blocks rm, git reset --hard
+  - `SANDBOX`: Blocks operations outside project directory
+
+- **Token Status Tracking:** Read context usage from OpenCode's session history
+  - Calculate percentage of context window used
+  - Thresholds: 70% warning, 85% critical, 95% emergency
+  - Foundation for proactive context hygiene (v1.1)
+
 - **Silent Exploration:** Setu now automatically reads project rules (AGENTS.md, CLAUDE.md) and context files (.setu/active.json, .setu/context.json) on session start
 - Project rules are injected into system prompt so Setu starts informed rather than asking questions that documentation already answers
 - Active task resume: If a task was in progress when session ended, Setu automatically resumes it instead of starting fresh
 - File size limits: Large files are truncated to 50KB (~12,500 tokens) to prevent token bloat
-- New module: `src/context/project-rules.ts` handles loading and formatting of project context
+- New modules: `src/context/active.ts`, `src/context/token.ts`, `src/hooks/compaction.ts`
 
 ### Changed
 - Event hook now performs Silent Exploration on `session.created` event
 - System transform hook injects project rules before context (rules are foundational)
 - Project rules injection happens only when in Setu agent mode (silent in Build/Plan)
+- Tool execute before hook now enforces active task constraints
 
 ## [1.0.0-rc.3] - 2025-01-28
 

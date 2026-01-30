@@ -23,6 +23,7 @@ import {
   createToolExecuteAfterHook,
   createAttemptTracker,
   createEventHook,
+  createCompactionHook,
   type VerificationStep
 } from './hooks';
 import { type Phase0State } from './enforcement';
@@ -279,12 +280,13 @@ export const SetuPlugin: Plugin = async (ctx) => {
     
     // Phase 0: Block side-effect tools until context is confirmed
     // Consolidated enforcement (agent + profile level)
-    // Priority: OpenCode Agent > Setu Profile
+    // Also enforces active task constraints (READ_ONLY, NO_PUSH, etc.)
     'tool.execute.before': createToolExecuteBeforeHook(
       getPhase0State, 
       getCurrentAgent,
       getContextCollector,
-      getSetuProfile
+      getSetuProfile,
+      getProjectDir  // For constraint enforcement
     ),
     
     // Track verification steps and context (file reads, searches)
@@ -309,6 +311,10 @@ export const SetuPlugin: Plugin = async (ctx) => {
       setProjectRules,         // Silent Exploration: store loaded rules
       getProjectDir            // Project directory accessor (avoids process.cwd())
     ),
+    
+    // Compaction safety: inject active task into compaction summary
+    // Prevents "going rogue" after context compression
+    'experimental.session.compacting': createCompactionHook(getProjectDir),
     
     // Custom tools
     tool: {

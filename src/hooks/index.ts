@@ -15,3 +15,8 @@ export {
   type ToolExecuteBeforeOutput
 } from './tool-execute';
 export { createEventHook } from './event';
+export { 
+  createCompactionHook,
+  type CompactionInput,
+  type CompactionOutput
+} from './compaction';
