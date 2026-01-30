@@ -50,11 +50,14 @@ export type TaskStatus = 'in_progress' | 'completed' | 'blocked';
  * - Context compaction
  * - OpenCode restarts
  */
+
+export type SetuMode = 'ultrathink' | 'quick' | 'expert' | 'collab';
+
 export interface ActiveTask {
   /** Description of the current task */
   task: string;
   /** Operational mode (ultrathink, quick, expert, collab) */
-  mode: string;
+  mode: SetuMode;
   /** Active constraints (e.g., READ_ONLY, NO_PUSH) */
   constraints: ConstraintType[];
   /** Optional reference URLs or file paths */

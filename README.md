@@ -119,8 +119,9 @@ The system prompt shows the current style so you always know what level of rigor
 3. **Constraint Enforcement** — Constraints like `READ_ONLY`, `NO_PUSH` block inappropriate tools
 
 **Supported Constraints:**
+
 | Constraint | Effect |
-|------------|--------|
+| ---------- | ------ |
 | `READ_ONLY` | Blocks write/edit tools |
 | `NO_PUSH` | Blocks git push |
 | `NO_DELETE` | Blocks rm, git reset --hard |

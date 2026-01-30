@@ -87,11 +87,18 @@ export async function getTokenStatus(
         input?: number;
         output?: number;
         reasoning?: number;
+        max_output_tokens?: number;
         cache?: { read?: number; write?: number };
       };
       providerID?: string;
       modelID?: string;
     };
+    
+    // Validate expected structure exists
+    if (typeof assistantInfo !== 'object' || assistantInfo === null) {
+      debugLog('Token status: Unexpected message info structure');
+      return null;
+    }
     
     if (!assistantInfo.tokens) {
       debugLog('Token status: No token data in last message');
@@ -101,8 +108,9 @@ export async function getTokenStatus(
     const t = assistantInfo.tokens;
     
     // 3. Calculate usage (mirror OpenCode's overflow calculation)
-    // Context window = input tokens + cached tokens read (output is NOT part of context window)
-    const used = (t.input ?? 0) + (t.cache?.read ?? 0);
+    // OpenCode checks: input_tokens + max_output_tokens > model_context_limit
+    // We include: input + cached reads + requested output budget
+    const used = (t.input ?? 0) + (t.cache?.read ?? 0) + (t.max_output_tokens ?? 0);
     
     // 4. Get model's context limit
     const providers = await client.provider.list();

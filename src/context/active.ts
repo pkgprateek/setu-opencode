@@ -15,17 +15,31 @@
 import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { ensureSetuDir } from './storage';
-import { type ActiveTask, type ConstraintType, type TaskStatus, CONSTRAINT_TYPES } from './types';
+import { type ActiveTask, type ConstraintType, type TaskStatus, type SetuMode, CONSTRAINT_TYPES } from './types';
 import { debugLog, errorLog } from '../debug';
 
 // Re-export types for convenience
-export type { ActiveTask, ConstraintType, TaskStatus };
+export type { ActiveTask, ConstraintType, TaskStatus, SetuMode };
 export { CONSTRAINT_TYPES };
 
 const ACTIVE_JSON = 'active.json';
 const MAX_TASK_LENGTH = 500;       // Prevent bloated task descriptions
 const MAX_REFERENCE_LENGTH = 200;  // Prevent long URLs
 const MAX_REFERENCES = 10;         // Reasonable limit
+
+const VALID_MODES: SetuMode[] = ['ultrathink', 'quick', 'expert', 'collab'];
+const DEFAULT_MODE: SetuMode = 'ultrathink';
+
+/**
+ * Validate and normalize mode to a valid SetuMode.
+ * Returns default mode if invalid.
+ */
+function validateMode(mode: unknown): SetuMode {
+  if (typeof mode === 'string' && VALID_MODES.includes(mode as SetuMode)) {
+    return mode as SetuMode;
+  }
+  return DEFAULT_MODE;
+}
 
 /**
  * Sanitize a string for safe storage.
@@ -91,7 +105,7 @@ export function loadActiveTask(projectDir: string): ActiveTask | null {
     // Build validated task
     const task: ActiveTask = {
       task: sanitize(parsed.task, MAX_TASK_LENGTH),
-      mode: sanitize(parsed.mode, 50),
+      mode: validateMode(parsed.mode),
       constraints: validConstraints,
       startedAt: parsed.startedAt,
       status: parsed.status,
@@ -136,7 +150,7 @@ export function saveActiveTask(projectDir: string, task: ActiveTask): void {
     // Sanitize before saving
     const sanitizedTask: ActiveTask = {
       task: sanitize(task.task, MAX_TASK_LENGTH),
-      mode: sanitize(task.mode, 50),
+      mode: task.mode,  // Already validated as SetuMode
       constraints: task.constraints.filter(isValidConstraint),
       startedAt: task.startedAt,
       status: task.status,
@@ -181,12 +195,12 @@ export function saveActiveTask(projectDir: string, task: ActiveTask): void {
  */
 export function createActiveTask(
   taskDescription: string,
-  mode: string = 'ultrathink',
+  mode: SetuMode = 'ultrathink',
   constraints: ConstraintType[] = []
 ): ActiveTask {
   return {
     task: sanitize(taskDescription, MAX_TASK_LENGTH),
-    mode: sanitize(mode, 50),
+    mode: mode,
     constraints: constraints.filter(isValidConstraint),
     startedAt: new Date().toISOString(),
     status: 'in_progress',
@@ -240,6 +254,9 @@ export function clearActiveTask(projectDir: string): void {
  * - Shell aliases or functions
  * - Wrapper scripts
  * - Subshells: $(git push)
+ * - Backtick substitution: `git push`
+ * - Here-documents and process substitution
+ * - Newline-separated commands in quoted strings
  * 
  * This should NOT be the sole mechanism for enforcing critical security constraints.
  * Combine with runtime sandboxing or permission controls for stronger guarantees.
@@ -387,16 +404,20 @@ export function shouldBlockDueToConstraint(
   }
   
   // SANDBOX: Block operations outside project
-  // Note: Full implementation would need projectDir context
+  // Note: This is a basic heuristic check. Full sandboxing would require
+  // runtime controls or a proper jail. See tokenizeCommand() limitations.
   if (constraints.includes(CONSTRAINT_TYPES.SANDBOX)) {
     if (tool === 'bash') {
       const command = String(args?.command || '');
       const tokens = tokenizeCommand(command);
       // Check for directory escape patterns
+      // Note: Single ../ is allowed (common for legitimate use within project)
+      // Only block obvious escape attempts like ../.. or absolute paths
       const hasEscapePattern = 
         hasCommandSequence(tokens, ['cd', '/']) ||
         hasCommandSequence(tokens, ['cd', '~']) ||
         tokens.some(t => t.includes('../..')) ||
+        tokens.some(t => t.startsWith('/') && !t.startsWith('/tmp')) ||
         (tokens.length > 0 && tokens[0].startsWith('/'));
       
       if (hasEscapePattern) {

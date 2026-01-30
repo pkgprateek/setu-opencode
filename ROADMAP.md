@@ -379,15 +379,6 @@ Three movements to production-ready.
     - **Block:** `write`, `edit`, `todowrite`, `bash` (other), `git` (write)
     - **Unlock:** Agent calls `setu_context` tool
 
-- [x] **Pre-Action Alignment Check**
-    - **Why:** Prevent executing actions that don't align with active task (especially after context loss/compaction)
-    - **What:** Before side-effect tools, verify action matches `.setu/active.json` task
-    - **How:** In `tool.execute.before`:
-      - If active.json exists and action seems unrelated to task, ask user
-      - If active.json has constraints (e.g., "READ_ONLY"), block side-effect tools
-      - If no active.json exists for a significant operation, prompt to create one
-    - **Implementation:** `src/hooks/tool-execute.ts`
-
 - [ ] **Subagent Tool Interception**
     - **Why:** Subagents in child sessions might bypass hooks
     - **What:** Both hook-based AND permission-based blocking
