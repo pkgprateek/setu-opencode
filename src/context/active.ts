@@ -436,12 +436,12 @@ export function shouldBlockDueToConstraint(
       // Check for directory escape patterns
       // Note: Single ../ is allowed (common for legitimate use within project)
       // Only block obvious escape attempts like ../.. or absolute paths
+      // Exception: /tmp is allowed for temporary file operations
       const hasEscapePattern = 
         hasCommandSequence(tokens, ['cd', '/']) ||
         hasCommandSequence(tokens, ['cd', '~']) ||
         tokens.some(t => t.includes('../..')) ||
-        tokens.some(t => t.startsWith('/') && !t.startsWith('/tmp')) ||
-        (tokens.length > 0 && tokens[0].startsWith('/'));
+        tokens.some(t => t.startsWith('/') && !t.startsWith('/tmp'));
       
       if (hasEscapePattern) {
         return {
