@@ -281,10 +281,23 @@ function tokenizeCommand(command: string): string[] {
   normalized = normalized.replace(/'([^']*)'/g, '$1');
   normalized = normalized.replace(/"([^"]*)"/g, '$1');
   
-  // Step 3: Normalize whitespace (collapse multiple spaces)
+  // Step 3: Pad shell operators with spaces (cmd1&&cmd2 → cmd1 && cmd2)
+  // Order matters: multi-char operators before single-char to avoid double-padding
+  // Multi-char operators first
+  normalized = normalized.replace(/>>/g, ' >> ');
+  normalized = normalized.replace(/\|\|/g, ' || ');
+  normalized = normalized.replace(/&&/g, ' && ');
+  // Single-char operators (after multi-char to avoid conflicts)
+  normalized = normalized.replace(/([^>]|^)>([^>]|$)/g, '$1 > $2');
+  normalized = normalized.replace(/([^<]|^)<([^<]|$)/g, '$1 < $2');
+  normalized = normalized.replace(/\|(?!\|)/g, ' | ');
+  normalized = normalized.replace(/;/g, ' ; ');
+  normalized = normalized.replace(/([^&])&([^&])/g, '$1 & $2');
+  
+  // Step 4: Normalize whitespace (collapse multiple spaces)
   normalized = normalized.replace(/\s+/g, ' ').trim();
   
-  // Step 4: Split into tokens
+  // Step 5: Split into tokens
   return normalized.split(' ').filter(t => t.length > 0);
 }
 

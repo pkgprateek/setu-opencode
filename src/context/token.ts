@@ -109,8 +109,9 @@ export async function getTokenStatus(
     
     // 3. Calculate usage (mirror OpenCode's overflow calculation)
     // OpenCode checks: input_tokens + max_output_tokens > model_context_limit
-    // We include: input + cached reads + requested output budget
-    const used = (t.input ?? 0) + (t.cache?.read ?? 0) + (t.max_output_tokens ?? 0);
+    // We include: input + cached reads + output budget (prefer max_output_tokens, fallback to output)
+    const outputTokens = t.max_output_tokens ?? t.output ?? 0;
+    const used = (t.input ?? 0) + (t.cache?.read ?? 0) + outputTokens;
     
     // 4. Get model's context limit
     const providers = await client.provider.list();
