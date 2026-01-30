@@ -144,7 +144,7 @@ export function saveActiveTask(projectDir: string, task: ActiveTask): void {
   ensureSetuDir(projectDir);
   
   const activePath = join(projectDir, '.setu', ACTIVE_JSON);
-  const tmpPath = activePath + '.tmp';
+  const tmpPath = `${activePath}.tmp`;
   
   try {
     // Sanitize before saving
@@ -328,14 +328,24 @@ function hasCommandSequence(tokens: string[], sequence: string[]): boolean {
 /**
  * Check if tokens contain a command (as first token or after chain operators).
  * 
- * Handles: cmd, && cmd, ; cmd, | cmd
+ * Handles:
+ * - First token: cmd
+ * - After &&: cmd1 && cmd
+ * - After ||: cmd1 || cmd
+ * - After ;: cmd1; cmd
+ * - After |: cmd1 | cmd
+ * - After &: cmd1 & cmd (background execution - cmd runs immediately)
+ * 
+ * The & operator starts a background process and immediately continues to
+ * the next command, making it effectively a chain operator for security purposes.
+ * Example: "sleep 1 & rm -rf /" would run rm immediately while sleep backgrounds.
  * 
  * @param tokens - Normalized command tokens
  * @param cmd - Command to look for (e.g., 'rm')
  * @returns true if command found in executable position
  */
 function hasCommand(tokens: string[], cmd: string): boolean {
-  const chainOperators = ['&&', ';', '|', '||'];
+  const chainOperators = ['&&', ';', '|', '||', '&'];
   
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
