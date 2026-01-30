@@ -73,11 +73,6 @@
 
 ### Not Yet Implemented
 
-**Active Task Persistence (Movement 3 — Critical for Safety):**
-- [ ] `.setu/active.json` — Track current task, mode, constraints
-- [ ] `session.compacting` hook — Inject active task into compaction summary
-- [ ] Pre-action alignment check — Verify action matches active task
-
 **Future Enhancements:**
 - [ ] `session.idle` hook — Verification enforcement (waiting for API)
 - [ ] Subagent tool interception — Defense in depth for child sessions
@@ -304,13 +299,13 @@ Three movements to production-ready.
       <original prompt>
       ```
 
-- [x] **Context Continuity Across Sessions**
+- [x] Context Continuity Across Sessions
     - **Why:** New session shouldn't start from scratch
     - **What:** Load existing context on session start
     - **How:** In `event` hook for `session.created`, load `.setu/context.json`
     - **Implementation:** `src/hooks/event.ts`
 
-- [ ] **Active Task Persistence**
+- [x] **Active Task Persistence**
     - **Why:** Context loss during compaction causes agents to "go rogue" — forgetting what user asked and executing unrelated or unwanted actions. This is a critical safety issue.
     - **What:** Track current task, mode, and constraints in `.setu/active.json`
     - **How:** 
@@ -324,32 +319,27 @@ Three movements to production-ready.
       {
         "task": "Upgrade ~/Nandaka/prompts/setu.md",
         "mode": "plan",
-        "constraints": ["READ-ONLY"],
+        "constraints": ["READ_ONLY"],
         "references": ["https://anthropic.com/news/claude-new-constitution"],
         "startedAt": "2025-01-24T...",
         "status": "in_progress"
       }
       ```
 
-- [ ] **Compaction Recovery Protocol**
+- [x] **Compaction Recovery Protocol**
     - **Why:** OpenCode's compaction summarizes conversation, potentially losing critical constraints and task details. This caused a session to "go rogue" during setu-opencode development.
     - **What:** Use `experimental.session.compacting` hook to inject active task into compaction summary
     - **How:** Plugin hook reads `.setu/active.json` and injects content into compaction prompt
     - **Implementation:** `src/hooks/compaction.ts`
-    - **Reference:** https://opencode.ai/docs/plugins#compaction-hooks
-    - **Code Pattern:**
-      ```typescript
-      "experimental.session.compacting": async (input, output) => {
-        const activeTask = loadActiveTask(projectDir);
-        if (activeTask) {
-          output.context.push(`## Active Task (CRITICAL)
-Task: ${activeTask.task}
-Mode: ${activeTask.mode}
-Constraints: ${activeTask.constraints.join(', ')}
-IMPORTANT: Resume this task. Do NOT start unrelated work.`);
-        }
-      }
-      ```
+    - **Reference:** [OpenCode Compaction Hooks](https://opencode.ai/docs/plugins#compaction-hooks)
+
+- [x] **Pre-Action Alignment Check**
+    - **Why:** Prevent executing actions that don't align with active task (especially after context loss/compaction)
+    - **What:** Before side-effect tools, verify action matches `.setu/active.json` task
+    - **How:** In `tool.execute.before`:
+      - If active.json exists and has constraints (e.g., "READ_ONLY"), block side-effect tools
+      - Supports: READ_ONLY, NO_PUSH, NO_DELETE, SANDBOX
+    - **Implementation:** `src/hooks/tool-execute.ts`
 
 ### Movement 3: Parallel Execution & Efficiency
 *Goal: Fast and efficient, not slow and wasteful.*
@@ -388,15 +378,6 @@ IMPORTANT: Resume this task. Do NOT start unrelated work.`);
     - **Allow bash:** `ls`, `cat`, `head`, `tail`, `grep`, `find`, `pwd`, `echo`, `which`, `env`, `git status`, `git log`, `git diff`, `git branch`, `git show`
     - **Block:** `write`, `edit`, `todowrite`, `bash` (other), `git` (write)
     - **Unlock:** Agent calls `setu_context` tool
-
-- [ ] **Pre-Action Alignment Check**
-    - **Why:** Prevent executing actions that don't align with active task (especially after context loss/compaction)
-    - **What:** Before side-effect tools, verify action matches `.setu/active.json` task
-    - **How:** In `tool.execute.before`:
-      - If active.json exists and action seems unrelated to task, ask user
-      - If active.json has constraints (e.g., "READ-ONLY"), block side-effect tools
-      - If no active.json exists for a significant operation, prompt to create one
-    - **Implementation:** `src/hooks/tool-execute.ts`
 
 - [ ] **Subagent Tool Interception**
     - **Why:** Subagents in child sessions might bypass hooks

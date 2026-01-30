@@ -8,6 +8,70 @@
  * - Loaded on session start for continuity
  */
 
+// ============================================================================
+// Constraint Types (Active Task Persistence)
+// ============================================================================
+
+/**
+ * Predefined constraint types for active tasks.
+ * 
+ * Using `as const` for:
+ * - Type-safe string literals
+ * - IntelliSense autocomplete
+ * - Compile-time validation
+ */
+export const CONSTRAINT_TYPES = {
+  /** Block write/edit tools - read-only exploration */
+  READ_ONLY: 'READ_ONLY',
+  /** Block git push commands */
+  NO_PUSH: 'NO_PUSH',
+  /** Block delete operations (rm, git reset --hard) */
+  NO_DELETE: 'NO_DELETE',
+  /** Block operations outside project directory */
+  SANDBOX: 'SANDBOX',
+} as const;
+
+/**
+ * Type derived from CONSTRAINT_TYPES values.
+ * Results in: 'READ_ONLY' | 'NO_PUSH' | 'NO_DELETE' | 'SANDBOX'
+ */
+export type ConstraintType = typeof CONSTRAINT_TYPES[keyof typeof CONSTRAINT_TYPES];
+
+/**
+ * Task status for active task tracking.
+ */
+export type TaskStatus = 'in_progress' | 'completed' | 'blocked';
+
+/**
+ * Active task persisted to .setu/active.json
+ * 
+ * Survives:
+ * - Session restarts
+ * - Context compaction
+ * - OpenCode restarts
+ */
+
+export type SetuMode = 'ultrathink' | 'quick' | 'expert' | 'collab';
+
+export interface ActiveTask {
+  /** Description of the current task */
+  task: string;
+  /** Operational mode (ultrathink, quick, expert, collab) */
+  mode: SetuMode;
+  /** Active constraints (e.g., READ_ONLY, NO_PUSH) */
+  constraints: ConstraintType[];
+  /** Optional reference URLs or file paths */
+  references?: string[];
+  /** ISO timestamp when task started */
+  startedAt: string;
+  /** Current status */
+  status: TaskStatus;
+}
+
+// ============================================================================
+// Context Types (Context Persistence)
+// ============================================================================
+
 /**
  * Project metadata detected during context gathering
  */

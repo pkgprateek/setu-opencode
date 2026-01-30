@@ -5,6 +5,7 @@
  * 
  * - tool.execute.before: Phase 0 blocking (pre-emptive enforcement)
  *   Context injection for subagent prompts (task tool)
+ *   Constraint enforcement (READ_ONLY, NO_PUSH, etc.)
  * - tool.execute.after: Tracks verification steps, file reads, searches
  */
 
@@ -14,6 +15,7 @@ import {
   type Phase0State
 } from '../enforcement';
 import { type ContextCollector, formatContextForInjection, contextToSummary } from '../context';
+import { loadActiveTask, shouldBlockDueToConstraint } from '../context/active';
 import { type SetuProfile, getProfileEnforcementLevel } from '../prompts/profiles';
 import { debugLog } from '../debug';
 
@@ -85,18 +87,21 @@ export function getEnforcementLevel(currentAgent: string): EnforcementLevel {
  * Setu plugin operates exclusively within Setu agent mode.
  * When not in Setu agent, this hook remains silent.
  * When in Setu agent, enforces Phase 0 based on the current profile.
+ * Also enforces active task constraints (READ_ONLY, NO_PUSH, etc.)
  *
  * @param getPhase0State - Accessor that returns the current Phase 0 state
  * @param getCurrentAgent - Optional accessor for the current agent identifier; defaults to "setu" when omitted
  * @param getContextCollector - Optional accessor for a ContextCollector used to obtain and format confirmed context for injection
  * @param getSetuProfile - Optional accessor for the current Setu profile (used for profile-level enforcement when in Setu mode)
+ * @param getProjectDir - Optional accessor for project directory (used for constraint loading)
  * @returns A hook function invoked before tool execution that enforces Phase 0 rules and may throw an Error when a tool is blocked under full enforcement
  */
 export function createToolExecuteBeforeHook(
   getPhase0State: () => Phase0State,
   getCurrentAgent?: () => string,
   getContextCollector?: () => ContextCollector | null,
-  getSetuProfile?: () => SetuProfile
+  getSetuProfile?: () => SetuProfile,
+  getProjectDir?: () => string
 ): (input: ToolExecuteBeforeInput, output: ToolExecuteBeforeOutput) => Promise<void> {
   return async (
     input: ToolExecuteBeforeInput,
@@ -128,12 +133,33 @@ export function createToolExecuteBeforeHook(
       }
     }
     
-    // Quick profile bypasses enforcement
+    // CONSTRAINT ENFORCEMENT
+    // Check active task constraints BEFORE Phase 0 check
+    // Constraints apply even after context is confirmed
+    if (getProjectDir) {
+      const projectDir = getProjectDir();
+      const activeTask = loadActiveTask(projectDir);
+      
+      if (activeTask && activeTask.status === 'in_progress' && activeTask.constraints.length > 0) {
+        const { blocked, reason, constraint } = shouldBlockDueToConstraint(
+          input.tool,
+          activeTask.constraints,
+          output.args
+        );
+        
+        if (blocked && reason) {
+          debugLog(`Constraint BLOCKED: ${input.tool} (${constraint})`);
+          throw new Error(`[Constraint: ${constraint}] ${reason}`);
+        }
+      }
+    }
+    
+    // Quick profile bypasses Phase 0 enforcement (but NOT constraint enforcement above)
     if (enforcementLevel === 'none') {
       return;
     }
     
-    // Context confirmed - allow all tools
+    // Context confirmed - allow all tools (Phase 0 complete)
     if (state.contextConfirmed) {
       return;
     }

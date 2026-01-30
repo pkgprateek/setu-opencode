@@ -11,13 +11,19 @@ export type {
   ProjectInfo,
   FileRead,
   SearchPerformed,
-  ObservedPattern
+  ObservedPattern,
+  // Active Task types
+  ConstraintType,
+  TaskStatus,
+  ActiveTask
 } from './types';
 
 export {
   createEmptyContext,
   contextToSummary,
-  formatContextForInjection
+  formatContextForInjection,
+  // Constraint types
+  CONSTRAINT_TYPES
 } from './types';
 
 // Storage
@@ -32,6 +38,26 @@ export {
   ensureSetuDir
 } from './storage';
 
+// Active Task (Movement 3)
+export {
+  loadActiveTask,
+  saveActiveTask,
+  createActiveTask,
+  updateTaskStatus,
+  clearActiveTask,
+  shouldBlockDueToConstraint
+} from './active';
+
+// Token Status (Movement 3)
+export type { TokenStatus, TokenSeverity } from './token';
+
+export {
+  getTokenStatus,
+  getTokenSeverity,
+  getTokenWarningMessage,
+  TOKEN_THRESHOLDS
+} from './token';
+
 // Feedback
 export type { FeedbackEntry } from './feedback';
 
@@ -43,7 +69,7 @@ export {
 } from './feedback';
 
 // Project rules (Silent Exploration)
-export type { ProjectRules, ActiveTask } from './project-rules';
+export type { ProjectRules } from './project-rules';
 
 export {
   loadProjectRules,

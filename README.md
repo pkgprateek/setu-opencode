@@ -109,6 +109,28 @@ The system prompt shows the current style so you always know what level of rigor
 - Without Setu: Agent retries broken import 15 times (it was a config issue)
 - With Setu: After 2 tries, agent asks "Could this be a config issue?"
 
+### Compaction Safety: Survive Memory Loss
+
+**Why this matters:** Long sessions get compressed by OpenCode (compaction). Without protection, the agent forgets constraints and "goes rogue" — executing unrelated actions.
+
+**What Setu does:**
+1. **Active Task Tracking** — Every task is saved to `.setu/active.json` with constraints
+2. **Compaction Hook** — When OpenCode compacts, Setu injects the active task into the summary
+3. **Constraint Enforcement** — Constraints like `READ_ONLY`, `NO_PUSH` block inappropriate tools
+
+**Supported Constraints:**
+
+| Constraint | Effect |
+| ---------- | ------ |
+| `READ_ONLY` | Blocks write/edit tools |
+| `NO_PUSH` | Blocks git push |
+| `NO_DELETE` | Blocks rm, git reset --hard |
+| `SANDBOX` | Blocks operations outside project |
+
+**The difference:**
+- Without Setu: Session compacts → Agent forgets it was in "review only" mode → Pushes changes
+- With Setu: Session compacts → Constraints survive → Agent still respects "no push"
+
 ---
 
 ## Installation
@@ -184,6 +206,16 @@ Setu's persona is lean. Skills load on-demand, not upfront.
 | `setu_context` | Confirm context understanding, unlocks Phase 0 |
 | `setu_verify` | Run verification protocol (build/test/lint) |
 | `setu_feedback` | Record feedback on Setu behavior |
+
+### Hooks Used
+
+| Hook | Purpose |
+| ------ | --------- |
+| `experimental.chat.system.transform` | Inject Setu persona |
+| `tool.execute.before` | Phase 0 blocking, constraint enforcement |
+| `tool.execute.after` | Verification tracking, context collection |
+| `event` | Session lifecycle, context loading |
+| `experimental.session.compacting` | Inject active task into compaction summary |
 
 ---
 
