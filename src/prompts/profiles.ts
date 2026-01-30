@@ -4,7 +4,19 @@
  * Terminology:
  * - "Mode" = OpenCode's IDE-level agents (Plan, Build, Setu)
  * - "Style" = Setu's operational presets (ultrathink, quick, expert, collab)
+ * 
+ * Magic Command Patterns (in order of precedence):
+ * 1. Prefix: `:quick`, `:expert`, `:ultrathink`, `:collab`
+ * 2. Key-Value: `style: quick`, `mode: quick`, `preset: quick`
+ * 3. Aliases: `:fast` → quick, `:trust` → expert
  */
+
+import {
+  COMMAND_PREFIX,
+  VALID_STYLES,
+  STYLE_ALIASES,
+  KEY_VALUE_PREFIXES
+} from '../constants';
 
 export type SetuStyle = 'ultrathink' | 'quick' | 'expert' | 'collab';
 
@@ -20,43 +32,76 @@ export interface StyleState {
 export type ProfileState = StyleState;
 
 /**
- * Keywords that trigger style detection
- * 
- * Only persistent triggers allowed - user must explicitly request style change.
- * Supports both "style:" and legacy "mode:" prefixes.
+ * Check if a string is a valid SetuStyle
  */
-export const STYLE_TRIGGERS = {
-  ultrathink: {
-    persistent: ['style: ultrathink', 'style: default', 'style: full', 'mode: ultrathink', 'mode: default', 'mode: full'],
-  },
-  quick: {
-    persistent: ['style: quick', 'style: fast', 'mode: quick', 'mode: fast'],
-  },
-  expert: {
-    persistent: ['style: expert', 'style: trust', 'mode: expert', 'mode: trust'],
-  },
-  collab: {
-    persistent: ['style: collab', 'style: collaborate', 'style: discuss', 'mode: collab', 'mode: collaborate', 'mode: discuss'],
-  }
-} as const;
-
-// Backwards compatibility alias
-export const PROFILE_TRIGGERS = STYLE_TRIGGERS;
+function isValidStyle(value: string): value is SetuStyle {
+  return (VALID_STYLES as readonly string[]).includes(value);
+}
 
 /**
- * Detect style from user prompt
+ * Resolve a style name or alias to a canonical SetuStyle
  * 
- * Only checks for persistent triggers (explicit style declarations).
+ * @param name - Style name or alias (e.g., 'quick', 'fast', 'trust')
+ * @returns The canonical SetuStyle, or null if not recognized
+ */
+function resolveStyle(name: string): SetuStyle | null {
+  const lower = name.toLowerCase();
+  
+  // Direct match against valid styles
+  if (isValidStyle(lower)) {
+    return lower;
+  }
+  
+  // Check aliases
+  const aliased = STYLE_ALIASES[lower];
+  if (aliased) {
+    return aliased;
+  }
+  
+  return null;
+}
+
+/**
+ * Detect style from user prompt using magic command patterns.
+ * 
+ * Supports three patterns (checked in order):
+ * 1. Prefix pattern: Message starts with `:stylename` (e.g., `:quick`, `:fast`)
+ * 2. Key-value pattern: `style: quick`, `mode: expert`, `preset: collab`
+ * 3. Aliases are resolved automatically (e.g., `:fast` → quick)
+ * 
+ * @param prompt - The user's message content
  * @returns { style, isPersistent: true } or null if no style detected
  */
 export function detectStyle(prompt: string): { style: SetuStyle; isPersistent: boolean } | null {
-  const lowerPrompt = prompt.toLowerCase();
+  const trimmed = prompt.trim();
+  const lowerPrompt = trimmed.toLowerCase();
   
-  for (const [style, triggers] of Object.entries(STYLE_TRIGGERS)) {
-    // Check persistent triggers only
-    for (const trigger of triggers.persistent) {
-      if (lowerPrompt.includes(trigger)) {
-        return { style: style as SetuStyle, isPersistent: true };
+  // Pattern 1: Prefix command (`:quick`, `:fast`, `:ultrathink`)
+  // Must be at the start of the message
+  if (lowerPrompt.startsWith(COMMAND_PREFIX)) {
+    // Extract the word after the colon
+    const match = lowerPrompt.match(/^:(\w+)/);
+    if (match) {
+      const styleName = match[1];
+      const resolved = resolveStyle(styleName);
+      if (resolved) {
+        return { style: resolved, isPersistent: true };
+      }
+    }
+  }
+  
+  // Pattern 2: Key-value pattern (`style: quick`, `mode: expert`, `preset: collab`)
+  // Can appear anywhere in the message, but typically at the start
+  for (const prefix of KEY_VALUE_PREFIXES) {
+    // Match "prefix:" followed by optional whitespace and a word
+    // Case-insensitive matching
+    const regex = new RegExp(`${prefix}:\\s*(\\w+)`, 'i');
+    const match = lowerPrompt.match(regex);
+    if (match) {
+      const styleName = match[1];
+      const resolved = resolveStyle(styleName);
+      if (resolved) {
+        return { style: resolved, isPersistent: true };
       }
     }
   }
