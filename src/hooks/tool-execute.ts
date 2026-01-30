@@ -13,7 +13,7 @@ import {
   shouldBlockInPhase0,
   createPhase0BlockMessage,
   type Phase0State,
-  isReadOnlyToolName
+  isReadOnlyTool
 } from '../enforcement';
 import { PARALLEL_BATCH_WINDOW_MS } from '../constants';
 import { type ContextCollector, formatContextForInjection, contextToSummary } from '../context';
@@ -86,7 +86,7 @@ function recordToolExecution(
   toolName: string
 ): void {
   // Only track read-only tools (the parallelizable ones)
-  if (!isReadOnlyToolName(toolName)) {
+  if (!isReadOnlyTool(toolName)) {
     return;
   }
 

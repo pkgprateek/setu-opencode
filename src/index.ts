@@ -22,13 +22,11 @@ import {
   createToolExecuteBeforeHook,
   createToolExecuteAfterHook,
   createAttemptTracker,
-  createActiveBatchesMap,
   createEventHook,
   createCompactionHook,
   type VerificationStep
 } from './hooks';
 import { type Phase0State } from './enforcement';
-import { FILE_CACHE_TTL_MS } from './constants';
 import { createSetuVerifyTool } from './tools/setu-verify';
 import { createSetuContextTool } from './tools/setu-context';
 import { createSetuFeedbackTool } from './tools/setu-feedback';
@@ -145,23 +143,19 @@ export const SetuPlugin: Plugin = async (ctx) => {
   // Create attempt tracker for "2 tries then ask" pattern
   const attemptTracker = createAttemptTracker();
   
-  // Create active batches map for parallel execution tracking
-  // This is now in the plugin closure, not module-level state
-  const activeBatches = createActiveBatchesMap();
-  
   // State accessors
   const getProfileState = () => state.profile;
   const setProfileState = (newState: ProfileState) => { state.profile = newState; };
   const getSetuProfile = () => state.profile.current;
   
   // Cached file existence checker (silent, no errors)
-  // Cache uses FILE_CACHE_TTL_MS from constants to avoid repeated fs.existsSync calls
+  // Cache lasts 5 seconds to avoid repeated fs.existsSync calls
   const checkFileExists = (filePath: string): boolean => {
     const cached = state.fileCache.get(filePath);
     const now = Date.now();
     
-    // Return cached result if within TTL
-    if (cached && (now - cached.checkedAt < FILE_CACHE_TTL_MS)) {
+    // Return cached result if less than 5 seconds old
+    if (cached && (now - cached.checkedAt < 5000)) {
       return cached.exists;
     }
     
@@ -297,12 +291,10 @@ export const SetuPlugin: Plugin = async (ctx) => {
     
     // Track verification steps and context (file reads, searches)
     // Only tracks when in Setu agent - silent in Build/Plan
-    // Passes activeBatches from closure for session-isolated parallel tracking
     'tool.execute.after': createToolExecuteAfterHook(
       markVerificationStep,
       getCurrentAgent,
-      getContextCollector,
-      activeBatches
+      getContextCollector
     ),
     
     // Handle session lifecycle events

@@ -40,7 +40,7 @@ function generateParallelGuidance(): string {
   const sideEffectList = [...SIDE_EFFECT_TOOLS, 'bash'].join(', ');
   
   return `
-[EFFICIENCY RULES]
+[SETU: EFFICIENCY RULES]
 These rules apply ONLY to read-only operations. Safety constraints always take precedence.
 
 1. PARALLEL EXECUTION IS MANDATORY for independent read-only operations.

@@ -348,22 +348,19 @@ Three movements to production-ready.
 
 > **Why:** Senior devs and startup founders need speed. Serial reads waste time.
 
-- [x] **Persona Enhancement**
+- [ ] **Persona Enhancement**
     - **Why:** Models need explicit guidance to use parallel tools
     - **What:** Add parallel execution section to persona
-    - **Implementation:** `src/prompts/persona.ts` - `PARALLEL_GUIDANCE` constant
-    - **Security:** Tool list derived from `READ_ONLY_TOOLS` (single source of truth)
+    - **Addition:**
+      ```markdown
+      ## Efficiency: Parallel Execution
 
-- [x] **Parallel Execution Audit Trail**
-    - **Why:** Observability into whether agents are actually parallelizing
-    - **What:** Log parallel execution batches in debug mode
-    - **Implementation:** `src/hooks/tool-execute.ts` - `recordToolExecution()`
-    - **Output:** `Parallel execution: 3 tools in batch [read, read, glob]`
-
-- [x] **Type-Safe Tool Classification**
-    - **Why:** Unsafe casts (`as`) can hide bugs; type guards are explicit
-    - **What:** Added `isReadOnlyToolName()` type guard
-    - **Implementation:** `src/enforcement/phase-zero.ts`
+      When gathering context or running independent operations:
+      - Use PARALLEL tool calls (multiple tools in single message)
+      - DO: Read multiple files at once
+      - DO: Run independent searches in parallel
+      - DON'T: Serial reads one file at a time (wastes time)
+      ```
 
 - [ ] **System Directive Prefix**
     - **Why:** Clear separation of Setu injections from user content
