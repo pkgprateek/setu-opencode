@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Parallel Execution Enforcement:** System prompt now includes explicit efficiency rules
+  - Mandates parallel tool calls for independent read-only operations
+  - Explicitly lists allowed tools: read, glob, grep, webfetch, todoread
+  - Explicitly lists blocked tools: write, edit, bash
+  - References Priority Order (Safe > Efficient) to prevent safety bypass
+  - Tool list derived from `READ_ONLY_TOOLS` constant (single source of truth)
+
+- **Parallel Execution Audit Trail:** Logs parallel tool execution batches
+  - Tracks read-only tools executed within 100ms window
+  - Logs batch stats when 2+ tools execute in parallel
+  - Session-scoped to prevent cross-session state leakage
+  - Debug output: `Parallel execution: 3 tools in batch [read, read, glob]`
+
+- **Type-Safe Tool Classification:**
+  - Added `ReadOnlyTool` type derived from `READ_ONLY_TOOLS` constant
+  - Added `isReadOnlyToolName()` type guard for safe tool classification
+  - Exported from `enforcement` module for reuse
+
 - **Active Task Persistence:** Track current task, mode, and constraints in `.setu/active.json`
   - Survives session restarts and OpenCode restarts
   - Atomic write pattern prevents corruption

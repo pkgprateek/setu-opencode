@@ -13,45 +13,25 @@
  * - Hard constraints as bright lines, soft guidance for judgment
  */
 
+import {
+  SETU_TOOLS,
+  READ_ONLY_TOOLS,
+  SIDE_EFFECT_TOOLS,
+  READ_ONLY_BASH_COMMANDS,
+  GIT_WRITE_COMMANDS,
+  isSetuTool,
+  isReadOnlyToolName,
+  isSideEffectTool,
+  type ReadOnlyTool
+} from '../constants';
 import { debugLog } from '../debug';
 
-/**
- * Setu's own tools - always allowed regardless of Phase 0 state
- * These are tools provided by this plugin
- */
-const SETU_TOOLS = ['setu_verify', 'setu_context', 'setu_feedback'] as const;
+// Re-export types and guards for backwards compatibility
+export type { ReadOnlyTool };
+export { isReadOnlyToolName, isSetuTool, isSideEffectTool };
 
-/**
- * Read-only tools that are always allowed
- * These let the agent "look but don't touch"
- */
-const READ_ONLY_TOOLS = ['read', 'glob', 'grep', 'webfetch', 'todoread'] as const;
-
-/**
- * Bash commands that are read-only
- * Allow exploration, block modification
- */
-const READ_ONLY_BASH_COMMANDS = [
-  'glob', 'ls', 'cat', 'head', 'tail', 'grep', 'rg', 'find', 
-  'pwd', 'echo', 'which', 'env', 'printenv',
-  'git status', 'git log', 'git diff', 'git branch', 'git show',
-  'file', 'stat', 'wc', 'tree', 'less', 'more'
-] as const;
-
-/**
- * Side-effect tools that are blocked in Phase 0
- */
-const SIDE_EFFECT_TOOLS = ['write', 'edit', 'todowrite'] as const;
-
-/**
- * Git write operations that are blocked
- */
-const GIT_WRITE_COMMANDS = [
-  'git add', 'git commit', 'git push', 'git pull', 'git merge',
-  'git rebase', 'git reset', 'git checkout -b', 'git stash',
-  'git cherry-pick', 'git revert', 'git tag', 'git branch -d',
-  'git branch -D', 'git remote add', 'git remote remove'
-] as const;
+// Re-export constants for modules that import from enforcement
+export { READ_ONLY_TOOLS, SETU_TOOLS, SIDE_EFFECT_TOOLS };
 
 export interface Phase0State {
   /** Whether context has been confirmed by user response */
@@ -63,17 +43,12 @@ export interface Phase0State {
 }
 
 /**
- * Check if a tool is one of Setu's own tools
- */
-export function isSetuTool(toolName: string): boolean {
-  return SETU_TOOLS.includes(toolName as typeof SETU_TOOLS[number]);
-}
-
-/**
  * Check if a tool is read-only and allowed during Phase 0
+ * 
+ * @deprecated Use isReadOnlyToolName() type guard instead for better type safety
  */
 export function isReadOnlyTool(toolName: string): boolean {
-  return READ_ONLY_TOOLS.includes(toolName as typeof READ_ONLY_TOOLS[number]);
+  return isReadOnlyToolName(toolName);
 }
 
 /**
@@ -107,18 +82,6 @@ export function isReadOnlyBashCommand(command: string): boolean {
   }
   
   return false;
-}
-
-/**
- * Phase 0 enforcement logic
- * 
- * Allow exploration, block modification
- * 
- * Blocks side-effect tools until context is confirmed via setu_context.
- * Allows read-only tools so the agent can form smart questions.
- */
-export function isSideEffectTool(toolName: string): boolean {
-  return SIDE_EFFECT_TOOLS.includes(toolName as typeof SIDE_EFFECT_TOOLS[number]);
 }
 
 /**

@@ -38,7 +38,7 @@ export {
   ensureSetuDir
 } from './storage';
 
-// Active Task (Movement 3)
+// Active Task Persistence
 export {
   loadActiveTask,
   saveActiveTask,
@@ -48,7 +48,7 @@ export {
   shouldBlockDueToConstraint
 } from './active';
 
-// Token Status (Movement 3)
+// Token Status
 export type { TokenStatus, TokenSeverity } from './token';
 
 export {

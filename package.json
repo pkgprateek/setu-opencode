@@ -10,6 +10,7 @@
     "dev": "bun run --watch src/index.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/**/*.ts",
+    "test": "bun test",
     "prepublishOnly": "bun run build"
   },
   "keywords": [
@@ -44,6 +45,7 @@
   },
   "devDependencies": {
     "@opencode-ai/plugin": "^1.0.0",
+    "@types/bun": "^1.3.8",
     "@types/node": "^20.0.0",
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.54.0",

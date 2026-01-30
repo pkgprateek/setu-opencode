@@ -3,13 +3,18 @@
  * 
  * Uses: chat.message
  * 
- * Detects profile keywords like "mode: quick" or "mode: expert" and updates
- * the plugin state accordingly.
+ * Detects magic commands like `:quick`, `style: quick`, or `mode: expert` 
+ * and updates the plugin state accordingly.
+ * 
+ * Magic Command Patterns (in order of precedence):
+ * 1. Prefix: `:quick`, `:expert`, `:ultrathink`, `:collab`
+ * 2. Key-Value: `style: quick`, `mode: quick`, `preset: quick`
+ * 3. Aliases: `:fast` → quick, `:trust` → expert
  * 
  * Also tracks the current agent for profile-aware enforcement.
  */
 
-import { detectProfile, type ProfileState } from '../prompts/profiles';
+import { detectProfile, type ProfileState, type SetuStyle } from '../prompts/profiles';
 import { debugLog } from '../debug';
 
 /**
@@ -20,6 +25,16 @@ export interface AgentState {
   current: string;
   isSetuActive: boolean;
 }
+
+/**
+ * Style display names for user feedback
+ */
+const STYLE_DISPLAY: Record<SetuStyle, string> = {
+  ultrathink: 'Ultrathink',
+  quick: 'Quick',
+  expert: 'Expert',
+  collab: 'Collab'
+};
 
 /**
  * Creates a chat-message processing hook that detects profile keywords and updates profile state.
@@ -53,32 +68,42 @@ export function createChatMessageHook(
       setAgentState(input.agent);
     }
     
-    // Scan parts for mode keywords
+    // Scan parts for mode keywords (magic commands)
     for (const part of output.parts) {
       if (part.type === 'text' && typeof part.content === 'string') {
         const detected = detectProfile(part.content);
         
         if (detected) {
+          const previousStyle = currentState.current;
+          const newStyle = detected.profile;
+          
           if (detected.isPersistent) {
             // Persistent style change
             setProfileState({
-              current: detected.profile,
+              current: newStyle,
               isPersistent: true
             });
             temporaryStyleActive = false;
             styleBeforeTemporary = null;
-            debugLog(`Style switched to ${detected.profile} (persistent)`);
+            
+            // Log the style change (visible to user via debug.log if SETU_DEBUG=true)
+            const displayName = STYLE_DISPLAY[newStyle];
+            debugLog(`[Style: ${displayName}] switched from ${STYLE_DISPLAY[previousStyle]}`);
+            
+            // NOTE: Toast emission would happen here if OpenCode exposes a TUI bus
+            // For now, the model will acknowledge via [Style: X] in its response
+            // if system-transform injects the style reminder (Task 3 removes this)
           } else {
             // Temporary style - save current and will restore after
             if (!temporaryStyleActive) {
               styleBeforeTemporary = currentState.current;
             }
             setProfileState({
-              current: detected.profile,
+              current: newStyle,
               isPersistent: false
             });
             temporaryStyleActive = true;
-            debugLog(`Temporary style: ${detected.profile}`);
+            debugLog(`Temporary style: ${STYLE_DISPLAY[newStyle]}`);
           }
           break; // Only process first style keyword found
         }
@@ -97,7 +122,7 @@ export function createChatMessageHook(
         current: styleBeforeTemporary,
         isPersistent: true
       });
-      debugLog(`Restored style to ${styleBeforeTemporary}`);
+      debugLog(`Restored style to ${STYLE_DISPLAY[styleBeforeTemporary]}`);
       temporaryStyleActive = false;
       styleBeforeTemporary = null;
     }

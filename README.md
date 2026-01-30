@@ -109,6 +109,30 @@ The system prompt shows the current style so you always know what level of rigor
 - Without Setu: Agent retries broken import 15 times (it was a config issue)
 - With Setu: After 2 tries, agent asks "Could this be a config issue?"
 
+### Parallel Execution: Fast Context Gathering
+
+**Why this matters:** Serial file reads waste time. Reading files one-by-one when they could be read in parallel is inefficient.
+
+**What Setu does:** Intelligently batches read-only operations for maximum efficiency. When the agent needs to gather context, Setu guides it to execute independent reads in parallel rather than sequentially.
+
+```text
+Without Setu                          With Setu
+─────────────────────────────────     ─────────────────────────────────
+read(A) ─────┐                        read(A) ─┬─ read(B) ─┬─ glob(C)
+             │ wait                            │           │
+read(B) ─────┤                        ─────────┴───────────┴─────────▶
+             │ wait                            (one round trip)
+glob(C) ─────┘
+             ▼
+   (three round trips)
+```
+
+**The difference:**
+- Without Setu: 6 sequential file reads → 6 round trips → slow
+- With Setu: 6 parallel file reads → 1 round trip → fast
+
+**Security note:** Parallel execution only applies to read-only tools (`read`, `glob`, `grep`, `webfetch`, `todoread`). Side-effect tools are never parallelized — safety takes precedence over speed.
+
 ### Compaction Safety: Survive Memory Loss
 
 **Why this matters:** Long sessions get compressed by OpenCode (compaction). Without protection, the agent forgets constraints and "goes rogue" — executing unrelated actions.

@@ -16,6 +16,54 @@
  */
 
 import type { SetuProfile } from './profiles';
+import { READ_ONLY_TOOLS, SIDE_EFFECT_TOOLS } from '../constants';
+
+// ============================================================================
+// Parallel Execution Guidance
+// ============================================================================
+
+/**
+ * Generates parallel execution guidance for system prompt injection.
+ * 
+ * Why this is a function, not a constant:
+ * - Derives tool list from constants.ts (single source of truth)
+ * - Ensures prompt guidance cannot drift from enforcement logic
+ * - If we add a new read-only tool, the guidance updates automatically
+ * 
+ * Security notes:
+ * - Explicitly scoped to read-only operations only
+ * - References Priority Order (Safe > Efficient) to prevent override
+ * - Lists both allowed AND disallowed tools for clarity
+ */
+function generateParallelGuidance(): string {
+  const readOnlyList = READ_ONLY_TOOLS.join(', ');
+  const sideEffectList = [...SIDE_EFFECT_TOOLS, 'bash'].join(', ');
+  
+  return `
+[EFFICIENCY RULES]
+These rules apply ONLY to read-only operations. Safety constraints always take precedence.
+
+1. PARALLEL EXECUTION IS MANDATORY for independent read-only operations.
+   - Applies to: ${readOnlyList}
+   - Does NOT apply to: ${sideEffectList}, or any side-effect tool
+   - BAD: read(A) -> wait -> read(B) -> wait -> glob(C)
+   - GOOD: read(A) & read(B) & glob(C) in ONE message
+
+2. Batch your context gathering. Do not "explore" one file at a time.
+
+3. Use 'glob' to find files, then 'read' relevant ones in parallel.
+
+Remember: Safe > Efficient. When in doubt, ask.
+`;
+}
+
+/**
+ * Parallel execution guidance for system prompt injection.
+ * 
+ * Generated at module load time from constants to ensure
+ * the tool list is always in sync with enforcement logic.
+ */
+export const PARALLEL_GUIDANCE = generateParallelGuidance();
 
 /**
  * File existence state
@@ -81,10 +129,15 @@ export const getFileAvailability = (files: FileAvailability): string => {
 };
 
 /**
- * Get complete state injection for system prompt
+ * Get complete state injection for system prompt.
  * 
- * This is minimal - just profile and file availability.
- * The agent file already contains the full persona.
+ * Injects:
+ * - Profile prefix (mode indicator)
+ * - File availability (context awareness)
+ * - Parallel execution guidance (efficiency enforcement)
+ * 
+ * This is intentionally minimal — the full persona lives in the agent file.
+ * We only inject dynamic state that changes per-session.
  */
 export const getStateInjection = (
   profile: SetuProfile,
@@ -94,7 +147,8 @@ export const getStateInjection = (
   const profilePrefix = getModePrefix(profile, isDefault);
   const fileInfo = getFileAvailability(files);
   
-  return `${profilePrefix}\n${fileInfo}`;
+  // Efficiency rules are always injected — they're behavioral, not persona
+  return `${profilePrefix}\n${fileInfo}\n${PARALLEL_GUIDANCE}`;
 };
 
 // Legacy exports for backwards compatibility
