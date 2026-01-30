@@ -66,6 +66,16 @@ function isValidStatus(value: unknown): value is TaskStatus {
 }
 
 /**
+ * Validate that a string is a valid ISO 8601 timestamp.
+ * Returns true for valid timestamps like "2024-01-15T10:30:00.000Z"
+ */
+function isValidISOTimestamp(value: string): boolean {
+  const date = new Date(value);
+  // Check if date is valid and the string matches ISO format pattern
+  return !isNaN(date.getTime()) && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value);
+}
+
+/**
  * Load active task from .setu/active.json
  * 
  * Returns null if:
@@ -92,6 +102,7 @@ export function loadActiveTask(projectDir: string): ActiveTask | null {
       typeof parsed.task !== 'string' ||
       typeof parsed.mode !== 'string' ||
       typeof parsed.startedAt !== 'string' ||
+      !isValidISOTimestamp(parsed.startedAt) ||
       !isValidStatus(parsed.status) ||
       !Array.isArray(parsed.constraints)
     ) {
@@ -292,7 +303,11 @@ function tokenizeCommand(command: string): string[] {
   normalized = normalized.replace(/([^<]|^)<([^<]|$)/g, '$1 < $2');
   normalized = normalized.replace(/\|(?!\|)/g, ' | ');
   normalized = normalized.replace(/;/g, ' ; ');
+  // Handle & (background operator): match & not preceded/followed by &
+  // Also handle trailing & (end of string) and leading & (start of string)
   normalized = normalized.replace(/([^&])&([^&])/g, '$1 & $2');
+  normalized = normalized.replace(/([^&])&$/g, '$1 & ');  // Trailing &
+  normalized = normalized.replace(/^&([^&])/g, ' & $1');  // Leading &
   
   // Step 4: Normalize whitespace (collapse multiple spaces)
   normalized = normalized.replace(/\s+/g, ' ').trim();
@@ -362,6 +377,57 @@ function hasCommand(tokens: string[], cmd: string): boolean {
 }
 
 /**
+ * Check if tokens contain a dangerous `git clean` command.
+ * 
+ * Detects `git clean` followed by flags containing 'f', 'd', 'x' or '--force'.
+ * This is more robust than exact sequence matching because it handles:
+ * - Reordered flags: `git clean -d -f`
+ * - Separate flags: `git clean -f -d`
+ * - Long form: `git clean --force`
+ * - Combined flags: `git clean -fdx`
+ * 
+ * @param tokens - Normalized command tokens
+ * @returns true if dangerous git clean pattern detected
+ */
+function hasDangerousGitClean(tokens: string[]): boolean {
+  // Find 'git' followed by 'clean'
+  let cleanIndex = -1;
+  for (let i = 0; i < tokens.length - 1; i++) {
+    if (tokens[i] === 'git' && tokens[i + 1] === 'clean') {
+      cleanIndex = i + 1;
+      break;
+    }
+  }
+  
+  if (cleanIndex === -1) return false;
+  
+  // Check tokens after 'clean' for dangerous flags
+  for (let i = cleanIndex + 1; i < tokens.length; i++) {
+    const token = tokens[i];
+    
+    // Stop at chain operators (next command)
+    if (['&&', '||', ';', '|', '&'].includes(token)) break;
+    
+    // Check for flags
+    if (token.startsWith('-')) {
+      // Long form: --force
+      if (token === '--force') return true;
+      
+      // Short form: check for f, d, x in the flag
+      // e.g., -f, -fd, -fdx, -df, etc.
+      if (token.startsWith('-') && !token.startsWith('--')) {
+        const flagChars = token.slice(1);  // Remove leading '-'
+        if (flagChars.includes('f') || flagChars.includes('d') || flagChars.includes('x')) {
+          return true;
+        }
+      }
+    }
+  }
+  
+  return false;
+}
+
+/**
  * Check if a tool should be blocked due to active constraints.
  * 
  * @param tool - Tool name being executed
@@ -413,9 +479,7 @@ export function shouldBlockDueToConstraint(
       if (
         hasCommand(tokens, 'rm') ||
         hasCommandSequence(tokens, ['git', 'reset', '--hard']) ||
-        hasCommandSequence(tokens, ['git', 'clean', '-f']) ||
-        hasCommandSequence(tokens, ['git', 'clean', '-fd']) ||
-        hasCommandSequence(tokens, ['git', 'clean', '-fdx'])
+        hasDangerousGitClean(tokens)
       ) {
         return {
           blocked: true,
