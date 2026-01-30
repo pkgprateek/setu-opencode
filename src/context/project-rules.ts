@@ -14,18 +14,10 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { debugLog, errorLog } from '../debug';
+import type { ActiveTask } from './types';
 
-/**
- * Active task from .setu/active.json
- */
-export interface ActiveTask {
-  task: string;
-  mode: string;
-  constraints: string[];
-  references?: string[];
-  startedAt: string;
-  status: 'in_progress' | 'completed' | 'blocked';
-}
+// Re-export for convenience
+export type { ActiveTask };
 
 /**
  * Project rules and context loaded on session start

@@ -232,6 +232,96 @@ export function clearActiveTask(projectDir: string): void {
 }
 
 /**
+ * Normalize and tokenize a shell command for constraint checking.
+ * 
+ * IMPORTANT: This is a best-effort, defense-in-depth heuristic. It only inspects
+ * the static command string before shell execution and can be bypassed via:
+ * - Variable expansion: git $cmd (where cmd=push)
+ * - Shell aliases or functions
+ * - Wrapper scripts
+ * - Subshells: $(git push)
+ * 
+ * This should NOT be the sole mechanism for enforcing critical security constraints.
+ * Combine with runtime sandboxing or permission controls for stronger guarantees.
+ * 
+ * Handles common bypass attempts:
+ * - Backslash escaping: git\ push → git push
+ * - Quote variations: 'git push', "git push" → git push
+ * - Multiple spaces: git  push → git push
+ * - Command chaining: cmd1 && git push → detects git push
+ * - Semicolon chains: cmd1; git push → detects git push
+ * - Pipe chains: echo | git push → detects git push
+ * 
+ * @param command - Raw shell command string
+ * @returns Array of normalized tokens
+ */
+function tokenizeCommand(command: string): string[] {
+  // Step 1: Remove backslash escapes (git\ push → git push)
+  let normalized = command.replace(/\\(.)/g, '$1');
+  
+  // Step 2: Remove surrounding quotes from quoted segments
+  // Handle 'single quotes' and "double quotes"
+  normalized = normalized.replace(/'([^']*)'/g, '$1');
+  normalized = normalized.replace(/"([^"]*)"/g, '$1');
+  
+  // Step 3: Normalize whitespace (collapse multiple spaces)
+  normalized = normalized.replace(/\s+/g, ' ').trim();
+  
+  // Step 4: Split into tokens
+  return normalized.split(' ').filter(t => t.length > 0);
+}
+
+/**
+ * Check if tokens contain a specific command sequence.
+ * 
+ * @param tokens - Normalized command tokens
+ * @param sequence - Sequence to look for (e.g., ['git', 'push'])
+ * @returns true if sequence found anywhere in tokens
+ */
+function hasCommandSequence(tokens: string[], sequence: string[]): boolean {
+  if (sequence.length === 0) return false;
+  if (tokens.length < sequence.length) return false;
+  
+  for (let i = 0; i <= tokens.length - sequence.length; i++) {
+    let match = true;
+    for (let j = 0; j < sequence.length; j++) {
+      if (tokens[i + j] !== sequence[j]) {
+        match = false;
+        break;
+      }
+    }
+    if (match) return true;
+  }
+  return false;
+}
+
+/**
+ * Check if tokens contain a command (as first token or after chain operators).
+ * 
+ * Handles: cmd, && cmd, ; cmd, | cmd
+ * 
+ * @param tokens - Normalized command tokens
+ * @param cmd - Command to look for (e.g., 'rm')
+ * @returns true if command found in executable position
+ */
+function hasCommand(tokens: string[], cmd: string): boolean {
+  const chainOperators = ['&&', ';', '|', '||'];
+  
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    
+    // First token is a command
+    if (i === 0 && token === cmd) return true;
+    
+    // Token after chain operator is a command
+    if (i > 0 && chainOperators.includes(tokens[i - 1]) && token === cmd) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Check if a tool should be blocked due to active constraints.
  * 
  * @param tool - Tool name being executed
@@ -264,7 +354,8 @@ export function shouldBlockDueToConstraint(
   if (constraints.includes(CONSTRAINT_TYPES.NO_PUSH)) {
     if (tool === 'bash') {
       const command = String(args?.command || '');
-      if (command.includes('git push')) {
+      const tokens = tokenizeCommand(command);
+      if (hasCommandSequence(tokens, ['git', 'push'])) {
         return {
           blocked: true,
           reason: 'Active task has NO_PUSH constraint. Cannot push to remote.',
@@ -278,11 +369,13 @@ export function shouldBlockDueToConstraint(
   if (constraints.includes(CONSTRAINT_TYPES.NO_DELETE)) {
     if (tool === 'bash') {
       const command = String(args?.command || '');
+      const tokens = tokenizeCommand(command);
       if (
-        command.includes('rm ') ||
-        command.includes('rm -') ||
-        command.includes('git reset --hard') ||
-        command.includes('git clean -f')
+        hasCommand(tokens, 'rm') ||
+        hasCommandSequence(tokens, ['git', 'reset', '--hard']) ||
+        hasCommandSequence(tokens, ['git', 'clean', '-f']) ||
+        hasCommandSequence(tokens, ['git', 'clean', '-fd']) ||
+        hasCommandSequence(tokens, ['git', 'clean', '-fdx'])
       ) {
         return {
           blocked: true,
@@ -293,18 +386,20 @@ export function shouldBlockDueToConstraint(
     }
   }
   
-  // SANDBOX: Block operations outside project (basic check)
+  // SANDBOX: Block operations outside project
   // Note: Full implementation would need projectDir context
   if (constraints.includes(CONSTRAINT_TYPES.SANDBOX)) {
     if (tool === 'bash') {
       const command = String(args?.command || '');
-      // Basic heuristics for escaping project dir
-      if (
-        command.includes('cd /') ||
-        command.includes('cd ~') ||
-        command.includes('../..') ||
-        command.startsWith('/')
-      ) {
+      const tokens = tokenizeCommand(command);
+      // Check for directory escape patterns
+      const hasEscapePattern = 
+        hasCommandSequence(tokens, ['cd', '/']) ||
+        hasCommandSequence(tokens, ['cd', '~']) ||
+        tokens.some(t => t.includes('../..')) ||
+        (tokens.length > 0 && tokens[0].startsWith('/'));
+      
+      if (hasEscapePattern) {
         return {
           blocked: true,
           reason: 'Active task has SANDBOX constraint. Cannot operate outside project directory.',

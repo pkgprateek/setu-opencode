@@ -130,7 +130,7 @@ export async function getTokenStatus(
       return null;
     }
     
-    const percentage = Math.round((used / limit) * 100);
+    const percentage = Math.min(100, Math.max(0, Math.round((used / limit) * 100)));
     
     debugLog(`Token status: ${percentage}% (${used}/${limit})`);
     
