@@ -46,8 +46,9 @@
 **Context Persistence (Movement 2):**
 - [x] `.setu/` directory structure
 - [x] `context.json` — Machine-parseable context
-- [x] `context.md` — Human-readable context
+- [x] `active.json` — Current task, mode, constraints
 - [x] `feedback.md` — User feedback mechanism
+- [x] `verification.log` — Audit trail of build/test/lint results
 - [x] Context collector (tracks reads/searches during Phase 0)
 - [x] Context injection to subagent prompts
 - [x] Lazy context loading (performance optimization)
@@ -76,7 +77,6 @@
 **Future Enhancements:**
 - [ ] `session.idle` hook — Verification enforcement (waiting for API)
 - [ ] Subagent tool interception — Defense in depth for child sessions
-- [ ] Verification logging to `.setu/verification.log`
 
 ---
 
@@ -107,16 +107,19 @@ To avoid confusion with OpenCode's Plan/Build modes:
 
 Before publishing:
 - [x] Setu as primary agent (appears in Tab cycle, default on startup)
-- [x] Context persistence (`.setu/context.md`, `.setu/context.json`)
+- [x] Context persistence (`.setu/context.json`, `.setu/active.json`)
+- [x] Verification logging (`.setu/verification.log`)
 - [x] Parallel execution guidance in persona
+- [x] System directive prefix (`[Style: X]`)
 - [x] Mode-aware enforcement (don't conflict with Plan mode)
 - [x] Agent file contains ONLY soul (identity, covenant, philosophy)
 - [x] Plugin hooks enforce behavior (no behavioral instructions in agent file)
 - [x] Removed `setu_mode` tool (agent cannot bypass Phase 0)
 - [x] Performance optimizations (lazy loading, file cache)
+- [x] Security: Constraint bypass detection with warnings
 - [ ] Build and test plugin end-to-end
 - [ ] Publish to npm as `setu-opencode`
-- [ ] Test all 4 operational profiles
+- [ ] Test all 4 operational styles
 - [ ] Documentation (usage examples, configuration options)
 
 ### Anthropic Alignment Enhancements (Completed)
@@ -249,11 +252,12 @@ Three movements to production-ready.
     - **Files:**
       ```
       .setu/
-      ├── context.md     # Human-readable understanding
-      ├── context.json   # Machine-parseable for injection
-      ├── feedback.md    # User feedback on Setu behavior
+      ├── context.json      # Machine-parseable for injection
+      ├── active.json       # Current task, mode, constraints
+      ├── feedback.md       # User feedback on Setu behavior
       └── verification.log  # Build/test/lint results (append-only)
       ```
+    - **Note:** `context.md` was deprecated — AGENTS.md serves as human-readable rules
     - **How:** Created on first `setu_context` call
     - **Implementation:** `src/context/storage.ts`
 
@@ -277,7 +281,7 @@ Three movements to production-ready.
 
 - [x] **Context Persistence on Confirmation**
     - **Why:** Understanding shouldn't be lost
-    - **What:** Write both `.setu/context.md` and `.setu/context.json` when confirmed
+    - **What:** Write `.setu/context.json` when confirmed (human-readable rules in AGENTS.md)
     - **How:** Enhanced `setu_context` tool to persist
     - **Implementation:** `src/tools/setu-context.ts`, `src/context/storage.ts`
 
@@ -348,24 +352,22 @@ Three movements to production-ready.
 
 > **Why:** Senior devs and startup founders need speed. Serial reads waste time.
 
-- [ ] **Persona Enhancement**
+- [x] **Parallel Execution Audit Trail**
+    - **Why:** Observability into whether agents are actually parallelizing
+    - **What:** Log parallel execution batches in debug mode
+    - **Implementation:** `src/hooks/tool-execute.ts` - `recordToolExecution()`
+    - **Output:** `Parallel execution: 3 tools in batch [read, read, glob]`
+
+- [x] **Persona Enhancement**
     - **Why:** Models need explicit guidance to use parallel tools
     - **What:** Add parallel execution section to persona
-    - **Addition:**
-      ```markdown
-      ## Efficiency: Parallel Execution
+    - **Implementation:** `src/prompts/persona.ts` - `PARALLEL_GUIDANCE` constant
+    - **Result:** System prompt includes efficiency rules with tool lists
 
-      When gathering context or running independent operations:
-      - Use PARALLEL tool calls (multiple tools in single message)
-      - DO: Read multiple files at once
-      - DO: Run independent searches in parallel
-      - DON'T: Serial reads one file at a time (wastes time)
-      ```
-
-- [ ] **System Directive Prefix**
+- [x] **System Directive Prefix**
     - **Why:** Clear separation of Setu injections from user content
-    - **What:** Prefix all Setu prompts with `[SETU:]`
-    - **How:** Wrap all persona/context injections
+    - **What:** Prefix all Setu prompts with `[Style:]`
+    - **Implementation:** `src/prompts/persona.ts` - `getStylePrefix()`
 
 #### Pre-emptive Enforcement (Phase 0)
 
@@ -519,10 +521,10 @@ Example configuration:
 
 > **Why:** "Done" should mean "verified working." Audit trails and regression tests prevent bugs from returning.
 
-- [ ] **Verification Log**
+- [x] **Verification Log** (moved from v1.1 — already implemented)
     - **Why:** Audit trail of build/test/lint results
     - **What:** Append to `.setu/verification.log`
-    - **Format:** Markdown with timestamps
+    - **Implementation:** `src/context/storage.ts` - `logVerification()`
 
 - [ ] **Gold Test Generation (Opt-in)**
     - **Why:** When a bug is fixed, that scenario becomes a valuable regression test. Capturing it prevents the same bug from returning. ("Freeze state" for reproducible benchmarks.)

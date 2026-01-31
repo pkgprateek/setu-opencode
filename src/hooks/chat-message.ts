@@ -1,5 +1,5 @@
 /**
- * Chat message hook - Detects profile keywords and handles profile switching
+ * Chat message hook - Detects style keywords and handles style switching
  * 
  * Uses: chat.message
  * 
@@ -11,10 +11,11 @@
  * 2. Key-Value: `style: quick`, `mode: quick`, `preset: quick`
  * 3. Aliases: `:fast` → quick, `:trust` → expert
  * 
- * Also tracks the current agent for profile-aware enforcement.
+ * Also tracks the current agent for style-aware enforcement.
  */
 
-import { detectProfile, type ProfileState, type SetuStyle } from '../prompts/profiles';
+import { detectProfile, type ProfileState } from '../prompts/profiles';
+import { STYLE_DISPLAY } from '../constants';
 import { debugLog } from '../debug';
 
 /**
@@ -25,16 +26,6 @@ export interface AgentState {
   current: string;
   isSetuActive: boolean;
 }
-
-/**
- * Style display names for user feedback
- */
-const STYLE_DISPLAY: Record<SetuStyle, string> = {
-  ultrathink: 'Ultrathink',
-  quick: 'Quick',
-  expert: 'Expert',
-  collab: 'Collab'
-};
 
 /**
  * Creates a chat-message processing hook that detects profile keywords and updates profile state.

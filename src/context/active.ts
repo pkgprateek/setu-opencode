@@ -18,6 +18,35 @@ import { ensureSetuDir } from './storage';
 import { type ActiveTask, type ConstraintType, type TaskStatus, type SetuMode, CONSTRAINT_TYPES } from './types';
 import { debugLog, errorLog } from '../debug';
 
+/**
+ * Patterns that may indicate constraint bypass attempts.
+ * 
+ * When detected, we log a warning but don't block (defense-in-depth).
+ * The permission system (`ask`) is the real security boundary.
+ * 
+ * This is intentionally conservative — we'd rather warn than miss.
+ */
+const BYPASS_INDICATORS = ['$', '`', '$(', 'eval ', 'source ', 'exec '] as const;
+
+/**
+ * Check if a command contains potential bypass indicators and log a warning.
+ * 
+ * This is defense-in-depth — we can't reliably detect all bypass attempts
+ * (see tokenizeCommand limitations), but we can warn on obvious patterns.
+ * 
+ * @param command - The shell command to check
+ * @returns true if bypass indicators found (for caller info, doesn't block)
+ */
+function checkBypassIndicators(command: string): boolean {
+  const found = BYPASS_INDICATORS.filter(p => command.includes(p));
+  if (found.length > 0) {
+    debugLog(`Security: Command may bypass constraint detection: ${found.join(', ')}`);
+    debugLog(`Command preview: ${command.slice(0, 80)}...`);
+    return true;
+  }
+  return false;
+}
+
 // Re-export types for convenience
 export type { ActiveTask, ConstraintType, TaskStatus, SetuMode };
 export { CONSTRAINT_TYPES };
@@ -460,6 +489,10 @@ export function shouldBlockDueToConstraint(
   if (constraints.includes(CONSTRAINT_TYPES.NO_PUSH)) {
     if (tool === 'bash') {
       const command = String(args?.command || '');
+      
+      // Security: Check for potential bypass patterns (warning only)
+      checkBypassIndicators(command);
+      
       const tokens = tokenizeCommand(command);
       if (hasCommandSequence(tokens, ['git', 'push'])) {
         return {
@@ -475,6 +508,10 @@ export function shouldBlockDueToConstraint(
   if (constraints.includes(CONSTRAINT_TYPES.NO_DELETE)) {
     if (tool === 'bash') {
       const command = String(args?.command || '');
+      
+      // Security: Check for potential bypass patterns (warning only)
+      checkBypassIndicators(command);
+      
       const tokens = tokenizeCommand(command);
       if (
         hasCommand(tokens, 'rm') ||
@@ -496,6 +533,10 @@ export function shouldBlockDueToConstraint(
   if (constraints.includes(CONSTRAINT_TYPES.SANDBOX)) {
     if (tool === 'bash') {
       const command = String(args?.command || '');
+      
+      // Security: Check for potential bypass patterns (warning only)
+      checkBypassIndicators(command);
+      
       const tokens = tokenizeCommand(command);
       // Check for directory escape patterns
       // Note: Single ../ is allowed (common for legitimate use within project)

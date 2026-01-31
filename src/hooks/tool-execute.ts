@@ -12,118 +12,14 @@
 import {
   shouldBlockInPhase0,
   createPhase0BlockMessage,
-  type Phase0State,
-  isReadOnlyTool
+  type Phase0State
 } from '../enforcement';
-import { PARALLEL_BATCH_WINDOW_MS } from '../constants';
 import { type ContextCollector, formatContextForInjection, contextToSummary } from '../context';
 import { loadActiveTask, shouldBlockDueToConstraint } from '../context/active';
 import { type SetuProfile, getProfileEnforcementLevel } from '../prompts/profiles';
 import { debugLog } from '../debug';
 import { isString, getStringProp } from '../utils';
-
-// ============================================================================
-// Parallel Execution Tracking
-// ============================================================================
-
-/**
- * Represents an in-flight batch of tool executions within a time window.
- * 
- * When multiple read-only tools execute within PARALLEL_BATCH_WINDOW_MS,
- * they're grouped into a single batch for audit logging.
- */
-export interface ToolExecutionBatch {
-  /** Tools executed in this batch */
-  toolNames: string[];
-  /** When the first tool in the batch executed */
-  batchStartedAt: number;
-  /** Timer that triggers batch completion */
-  completionTimer: ReturnType<typeof setTimeout> | null;
-}
-
-/**
- * Active batches indexed by session ID.
- * This type is exposed for the plugin to manage state in its closure.
- */
-export type ActiveBatchesMap = Map<string, ToolExecutionBatch>;
-
-/**
- * Creates a new active batches map for session-isolated tracking.
- * Call this from the plugin closure to create state.
- */
-export function createActiveBatchesMap(): ActiveBatchesMap {
-  return new Map();
-}
-
-/**
- * Completes a batch and logs parallel execution stats.
- * 
- * Only logs when 2+ read-only tools executed in parallel (the interesting case).
- * Single-tool batches are silently discarded.
- */
-function completeAndLogBatch(activeBatches: ActiveBatchesMap, sessionId: string): void {
-  const batch = activeBatches.get(sessionId);
-  if (batch && batch.toolNames.length > 1) {
-    debugLog(`Parallel execution: ${batch.toolNames.length} tools in batch [${batch.toolNames.join(', ')}]`);
-  }
-  activeBatches.delete(sessionId);
-}
-
-/**
- * Records a tool execution for parallel tracking.
- * 
- * Uses isReadOnlyToolName() from enforcement module as the single source
- * of truth for which tools can be parallelized. This ensures the tracking
- * list cannot drift from the enforcement list.
- * 
- * @param activeBatches - The active batches map from plugin state
- * @param sessionId - Current session ID for isolation
- * @param toolName - Name of the tool being executed
- */
-function recordToolExecution(
-  activeBatches: ActiveBatchesMap,
-  sessionId: string,
-  toolName: string
-): void {
-  // Only track read-only tools (the parallelizable ones)
-  if (!isReadOnlyTool(toolName)) {
-    return;
-  }
-
-  const now = Date.now();
-  let batch = activeBatches.get(sessionId);
-
-  // Start new batch if none exists
-  if (!batch) {
-    batch = {
-      toolNames: [toolName],
-      batchStartedAt: now,
-      completionTimer: setTimeout(() => completeAndLogBatch(activeBatches, sessionId), PARALLEL_BATCH_WINDOW_MS)
-    };
-    activeBatches.set(sessionId, batch);
-    return;
-  }
-
-  // Add to existing batch and reset the completion timer
-  batch.toolNames.push(toolName);
-  if (batch.completionTimer) {
-    clearTimeout(batch.completionTimer);
-  }
-  batch.completionTimer = setTimeout(() => completeAndLogBatch(activeBatches, sessionId), PARALLEL_BATCH_WINDOW_MS);
-}
-
-/**
- * Disposes the batch tracker for a session.
- * 
- * Call this when a session ends to prevent timer leaks.
- */
-export function disposeSessionBatch(activeBatches: ActiveBatchesMap, sessionId: string): void {
-  const batch = activeBatches.get(sessionId);
-  if (batch?.completionTimer) {
-    clearTimeout(batch.completionTimer);
-  }
-  activeBatches.delete(sessionId);
-}
+import { isReadOnlyTool, PARALLEL_BATCH_WINDOW_MS } from '../constants';
 
 // ============================================================================
 // Verification Step Tracking
@@ -306,7 +202,6 @@ export function createToolExecuteBeforeHook(
  * @param markVerificationStep - Callback invoked with a verification step ('build' | 'test' | 'lint') when the hook detects the corresponding command.
  * @param getCurrentAgent - Optional accessor for the current agent identifier; if not 'setu', hook does nothing.
  * @param getContextCollector - Optional function that returns a `ContextCollector` used to record file reads and search actions; if omitted or it returns `null`, context tracking is disabled.
- * @param activeBatches - Optional map for parallel execution tracking; if omitted, tracking is disabled.
  */
 /**
  * Count non-empty lines in output string
@@ -317,8 +212,7 @@ const countResultLines = (output: string): number =>
 export function createToolExecuteAfterHook(
   markVerificationStep: (step: VerificationStep) => void,
   getCurrentAgent?: () => string,
-  getContextCollector?: () => ContextCollector | null,
-  activeBatches?: ActiveBatchesMap
+  getContextCollector?: () => ContextCollector | null
 ): (
   input: { tool: string; sessionID: string; callID: string; args?: Record<string, unknown> },
   output: { title: string; output: string; metadata: unknown }
@@ -331,11 +225,6 @@ export function createToolExecuteAfterHook(
     const currentAgent = getCurrentAgent ? getCurrentAgent() : 'setu';
     if (currentAgent.toLowerCase() !== 'setu') {
       return;
-    }
-    
-    // Track parallel execution for audit trail (if activeBatches provided)
-    if (activeBatches) {
-      recordToolExecution(activeBatches, input.sessionID, input.tool);
     }
     
     const collector = getContextCollector ? getContextCollector() : null;
@@ -533,3 +422,106 @@ Would you like me to try a different approach, or do you have guidance?`;
 }
 
 export type AttemptTracker = ReturnType<typeof createAttemptTracker>;
+
+// ============================================================================
+// Parallel Execution Tracking
+// ============================================================================
+
+/**
+ * Represents an in-flight batch of tool executions within a time window.
+ * 
+ * When multiple read-only tools execute within PARALLEL_BATCH_WINDOW_MS,
+ * they're grouped into a single batch for audit logging.
+ */
+export interface ToolExecutionBatch {
+  /** Tools executed in this batch */
+  toolNames: string[];
+  /** When the first tool in the batch executed */
+  batchStartedAt: number;
+  /** Timer that triggers batch completion */
+  completionTimer: ReturnType<typeof setTimeout> | null;
+}
+
+/**
+ * Active batches indexed by session ID.
+ * This type is exposed for the plugin to manage state in its closure.
+ */
+export type ActiveBatchesMap = Map<string, ToolExecutionBatch>;
+
+/**
+ * Creates a new active batches map for session-isolated tracking.
+ * Call this from the plugin closure to create state.
+ */
+export function createActiveBatchesMap(): ActiveBatchesMap {
+  return new Map();
+}
+
+/**
+ * Completes a batch and logs parallel execution stats.
+ * 
+ * Only logs when 2+ read-only tools executed in parallel (the interesting case).
+ * Single-tool batches are silently discarded.
+ */
+function completeAndLogBatch(activeBatches: ActiveBatchesMap, sessionId: string): void {
+  const batch = activeBatches.get(sessionId);
+  if (batch && batch.toolNames.length > 1) {
+    debugLog(`Parallel execution: ${batch.toolNames.length} tools in batch [${batch.toolNames.join(', ')}]`);
+  }
+  activeBatches.delete(sessionId);
+}
+
+/**
+ * Records a tool execution for parallel tracking.
+ * 
+ * Uses isReadOnlyTool() from constants module as the single source
+ * of truth for which tools can be parallelized. This ensures the tracking
+ * list cannot drift from the enforcement list.
+ * 
+ * @param activeBatches - The active batches map from plugin state
+ * @param sessionId - Current session ID for isolation
+ * @param toolName - Name of the tool being executed
+ */
+export function recordToolExecution(
+  activeBatches: ActiveBatchesMap,
+  sessionId: string,
+  toolName: string
+): void {
+  // Only track read-only tools (the parallelizable ones)
+  if (!isReadOnlyTool(toolName)) {
+    return;
+  }
+
+  const now = Date.now();
+  let batch = activeBatches.get(sessionId);
+
+  // Start new batch if none exists
+  if (!batch) {
+    batch = {
+      toolNames: [toolName],
+      batchStartedAt: now,
+      completionTimer: setTimeout(() => completeAndLogBatch(activeBatches, sessionId), PARALLEL_BATCH_WINDOW_MS)
+    };
+    activeBatches.set(sessionId, batch);
+    return;
+  }
+
+  // Add to existing batch and reset the completion timer
+  batch.toolNames.push(toolName);
+  if (batch.completionTimer) {
+    clearTimeout(batch.completionTimer);
+  }
+  batch.completionTimer = setTimeout(() => completeAndLogBatch(activeBatches, sessionId), PARALLEL_BATCH_WINDOW_MS);
+}
+
+/**
+ * Disposes the batch tracker for a session.
+ * 
+ * Call this when a session ends to prevent timer leaks.
+ */
+export function disposeSessionBatch(activeBatches: ActiveBatchesMap, sessionId: string): void {
+  const batch = activeBatches.get(sessionId);
+  if (batch?.completionTimer) {
+    clearTimeout(batch.completionTimer);
+  }
+  activeBatches.delete(sessionId);
+}

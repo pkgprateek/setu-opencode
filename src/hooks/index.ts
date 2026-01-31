@@ -8,11 +8,16 @@ export {
   createToolExecuteBeforeHook,
   createToolExecuteAfterHook, 
   createAttemptTracker,
+  createActiveBatchesMap,
+  recordToolExecution,
+  disposeSessionBatch,
   type AttemptTracker,
   type VerificationStep,
   type AttemptState,
   type ToolExecuteBeforeInput,
-  type ToolExecuteBeforeOutput
+  type ToolExecuteBeforeOutput,
+  type ToolExecutionBatch,
+  type ActiveBatchesMap
 } from './tool-execute';
 export { createEventHook } from './event';
 export { 

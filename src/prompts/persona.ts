@@ -5,7 +5,7 @@
  * The full persona is in the agent file (.opencode/agents/setu.md).
  * 
  * What this injects:
- * - Current profile indicator
+ * - Current style indicator [Style: X]
  * - File availability
  * - Smart guidance based on what exists
  * 
@@ -16,7 +16,7 @@
  */
 
 import type { SetuProfile } from './profiles';
-import { READ_ONLY_TOOLS, SIDE_EFFECT_TOOLS } from '../constants';
+import { READ_ONLY_TOOLS, BLOCKED_TOOLS, STYLE_DISPLAY } from '../constants';
 
 // ============================================================================
 // Parallel Execution Guidance
@@ -37,7 +37,7 @@ import { READ_ONLY_TOOLS, SIDE_EFFECT_TOOLS } from '../constants';
  */
 function generateParallelGuidance(): string {
   const readOnlyList = READ_ONLY_TOOLS.join(', ');
-  const sideEffectList = [...SIDE_EFFECT_TOOLS, 'bash'].join(', ');
+  const blockedList = BLOCKED_TOOLS.join(', ');
   
   return `
 [SETU: EFFICIENCY RULES]
@@ -45,7 +45,7 @@ These rules apply ONLY to read-only operations. Safety constraints always take p
 
 1. PARALLEL EXECUTION IS MANDATORY for independent read-only operations.
    - Applies to: ${readOnlyList}
-   - Does NOT apply to: ${sideEffectList}, or any side-effect tool
+   - Does NOT apply to: ${blockedList}, or any side-effect tool
    - BAD: read(A) -> wait -> read(B) -> wait -> glob(C)
    - GOOD: read(A) & read(B) & glob(C) in ONE message
 
@@ -76,23 +76,19 @@ export interface FileAvailability {
 }
 
 /**
- * Profile display names
+ * Get style prefix for responses
+ * 
+ * Format: [Style: Ultrathink] or [Style: Quick]
+ * This aligns with the agent file instruction to acknowledge with [Style: X]
  */
-const PROFILE_DISPLAY: Record<SetuProfile, string> = {
-  ultrathink: 'Ultrathink',
-  quick: 'Quick',
-  expert: 'Expert',
-  collab: 'Collab'
+export const getStylePrefix = (style: SetuProfile, isDefault: boolean = false): string => {
+  const name = STYLE_DISPLAY[style];
+  const suffix = isDefault ? ' (Default)' : '';
+  return `[Style: ${name}${suffix}]`;
 };
 
-/**
- * Get profile prefix for responses
- */
-export const getModePrefix = (profile: SetuProfile, isDefault: boolean = false): string => {
-  const name = PROFILE_DISPLAY[profile];
-  const suffix = isDefault ? ' (Default)' : '';
-  return `[Profile: ${name}${suffix}]`;
-};
+// Backwards compatibility alias - deprecated, use getStylePrefix
+export const getModePrefix = getStylePrefix;
 
 /**
  * Get file availability message
@@ -151,11 +147,4 @@ export const getStateInjection = (
   return `${profilePrefix}\n${fileInfo}\n${PARALLEL_GUIDANCE}`;
 };
 
-// Legacy exports for backwards compatibility
-export const SETU_PERSONA = ''; // No longer used - persona is in agent file
-export const MODE_DESCRIPTIONS = {}; // No longer used - profiles described in agent file
-
-export const getInitialPrompt = (_profile: string): string => {
-  // No longer injects full persona - that's in the agent file
-  return '';
-};
+// Legacy exports removed - no consumers exist

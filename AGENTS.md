@@ -62,7 +62,6 @@ skills/               # Bundled skills (loaded on-demand)
 └── pr-review/              # Pull request analysis
 
 .setu/                # Context persistence directory (created per-project)
-├── context.md              # Human-readable understanding
 ├── context.json            # Machine-parseable for injection
 ├── active.json             # Current task, mode, constraints (survives compaction)
 ├── feedback.md             # User feedback on Setu behavior

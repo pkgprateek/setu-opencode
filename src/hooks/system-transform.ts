@@ -6,7 +6,7 @@
  * IMPORTANT: This hook injects dynamic state AND loaded context.
  * The full persona is already in the agent file (.opencode/agents/setu.md).
  * 
- * When in Setu mode: Injects profile + file availability + project rules + context content + read history
+ * When in Setu mode: Injects style + file availability + project rules + context content + read history
  * When in Build/Plan: Does nothing (Setu is off)
  */
 
@@ -44,7 +44,7 @@ function formatFilesAlreadyRead(filesRead: Array<{ path: string }>): string {
  * Creates the system transform hook
  * 
  * Injects:
- * - [Mode: Ultrathink] (or current profile)
+ * - [Style: Ultrathink] (or current style)
  * - [Context: AGENTS.md, .setu/context.json]
  * - Silent Exploration: Project rules (AGENTS.md, CLAUDE.md, active task)
  * - Loaded context content (summary, constraints, patterns)
@@ -62,7 +62,10 @@ export function createSystemTransformHook(
   getCurrentAgent?: () => string,
   getContextCollector?: () => ContextCollector | null,
   getProjectRules?: () => ProjectRules | null
-) {
+): (
+  _input: { sessionID: string },
+  output: { system: string[] }
+) => Promise<void> {
   return async (
     _input: { sessionID: string },
     output: { system: string[] }
@@ -81,7 +84,7 @@ export function createSystemTransformHook(
       ? getSetuFilesExist() 
       : { active: false, context: false, agentsMd: false, claudeMd: false };
     
-    // Inject minimal state - profile and file availability
+    // Inject minimal state - style and file availability
     const stateInjection = getStateInjection(profileState.current, filesExist, isDefault);
     output.system.push(stateInjection);
     

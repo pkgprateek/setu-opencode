@@ -32,6 +32,12 @@ export const READ_ONLY_TOOLS = ['read', 'glob', 'grep', 'webfetch', 'todoread'] 
 export const SIDE_EFFECT_TOOLS = ['write', 'edit', 'todowrite'] as const;
 
 /**
+ * All tools that should be blocked in Phase 0 (for prompt guidance).
+ * Combines SIDE_EFFECT_TOOLS with 'bash' which requires special handling.
+ */
+export const BLOCKED_TOOLS = [...SIDE_EFFECT_TOOLS, 'bash'] as const;
+
+/**
  * Bash commands that are read-only (exploration allowed).
  */
 export const READ_ONLY_BASH_COMMANDS = [
@@ -84,8 +90,15 @@ export function isSetuTool(toolName: string): toolName is SetuTool {
 /**
  * Type guard to check if a tool is read-only
  */
-export function isReadOnlyToolName(toolName: string): toolName is ReadOnlyTool {
+export function isReadOnlyTool(toolName: string): toolName is ReadOnlyTool {
   return READ_ONLY_TOOLS.includes(toolName as ReadOnlyTool);
+}
+
+/**
+ * @deprecated Use isReadOnlyTool instead
+ */
+export function isReadOnlyToolName(toolName: string): toolName is ReadOnlyTool {
+  return isReadOnlyTool(toolName);
 }
 
 /**
@@ -123,6 +136,16 @@ export const COMMAND_PREFIX = ':' as const;
  * Valid style names for magic commands
  */
 export const VALID_STYLES = ['ultrathink', 'quick', 'expert', 'collab'] as const;
+
+/**
+ * Style display names for user-facing feedback
+ */
+export const STYLE_DISPLAY: Record<typeof VALID_STYLES[number], string> = {
+  ultrathink: 'Ultrathink',
+  quick: 'Quick',
+  expert: 'Expert',
+  collab: 'Collab'
+} as const;
 
 /**
  * Aliases for style names (shorthand convenience)

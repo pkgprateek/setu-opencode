@@ -11,6 +11,7 @@
 
 import { type ContextCollector, detectProjectInfo, type ProjectRules, loadProjectRules } from '../context';
 import { debugLog } from '../debug';
+import { type ActiveBatchesMap, disposeSessionBatch } from './tool-execute';
 
 /**
  * Create an event handler for session lifecycle events.
@@ -24,6 +25,7 @@ import { debugLog } from '../debug';
  * @param checkFilesExist - Optional callback to silently check file existence without errors
  * @param setProjectRules - Optional callback to store loaded project rules (Silent Exploration)
  * @param getProjectDir - Optional callback to get the project directory (avoids process.cwd() fallback)
+ * @param activeBatches - Optional active batches map for parallel execution tracking cleanup
  * @returns The event handler function that processes session events and updates internal state and context
  */
 export function createEventHook(
@@ -35,7 +37,8 @@ export function createEventHook(
   getContextCollector?: () => ContextCollector | null,
   checkFilesExist?: () => { active: boolean; context: boolean; agentsMd: boolean; claudeMd: boolean },
   setProjectRules?: (rules: ProjectRules | null) => void,
-  getProjectDir?: () => string
+  getProjectDir?: () => string,
+  activeBatches?: ActiveBatchesMap
 ) {
   return async ({ event }: { event: { type: string; properties?: Record<string, unknown> } }): Promise<void> => {
     switch (event.type) {
@@ -123,6 +126,11 @@ export function createEventHook(
       case 'session.deleted': {
         const sessionId = (event.properties?.sessionID as string) || 'unknown';
         debugLog(`Session ended: ${sessionId}`);
+        
+        // Clean up parallel execution tracking to prevent timer leaks
+        if (activeBatches) {
+          disposeSessionBatch(activeBatches, sessionId);
+        }
         break;
       }
         

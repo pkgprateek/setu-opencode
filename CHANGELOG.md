@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Terminology: Profile → Style:** Fixed `[Profile: X]` prefix to `[Style: X]` in `persona.ts` to match agent file instructions and user expectations
+- **Security: Constraint Bypass Detection:** Added warning logs when bash commands contain potential bypass patterns (`$`, backticks, `$(`, `eval`, `source`, `exec`)
+- **Code Quality: Removed Duplicates:** Removed duplicate tool classification constants from `phase-zero.ts` (now imports from `constants.ts`)
+- **Code Quality: Removed Legacy Exports:** Removed unused `SETU_PERSONA`, `MODE_DESCRIPTIONS`, and `getInitialPrompt` exports from `persona.ts`
+- **Documentation: ROADMAP Accuracy:** Updated ROADMAP.md to accurately reflect implementation status:
+  - Marked Persona Enhancement as complete
+  - Marked System Directive Prefix as complete  
+  - Marked Verification Logging as complete
+  - Fixed context.md discrepancy (deprecated in favor of AGENTS.md)
+  - Updated file structure documentation
+
 ### Added
 - **Parallel Execution Enforcement:** System prompt now includes explicit efficiency rules
   - Mandates parallel tool calls for independent read-only operations
@@ -23,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Type-Safe Tool Classification:**
   - Added `ReadOnlyTool` type derived from `READ_ONLY_TOOLS` constant
-  - Added `isReadOnlyToolName()` type guard for safe tool classification
+  - Added `isReadOnlyTool()` type guard for safe tool classification
   - Exported from `enforcement` module for reuse
 
 - **Active Task Persistence:** Track current task, mode, and constraints in `.setu/active.json`
