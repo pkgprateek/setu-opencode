@@ -156,9 +156,18 @@ export function logSecurityEvent(
     const logPath = join(setuDir, SECURITY_LOG);
     
     // Add header if file doesn't exist
+    // Use atomic operation to prevent TOCTOU race
     if (!existsSync(logPath)) {
       const header = `# Setu Security Log\n# This file records security-relevant events for forensics\n# Format: [timestamp] SEVERITY | EVENT_TYPE | session:id | tool:name | details\n${'='.repeat(80)}\n\n`;
-      appendFileSync(logPath, header, 'utf-8');
+      try {
+        // Atomic write with exclusive flag - fails if file exists
+        appendFileSync(logPath, header, { flag: 'wx' });
+      } catch (err: unknown) {
+        // File was created by another process - that's fine, skip header
+        if (err && typeof err === 'object' && 'code' in err && err.code !== 'EEXIST') {
+          throw err; // Re-throw non-EEXIST errors
+        }
+      }
     }
     
     appendFileSync(logPath, formatted + '\n', 'utf-8');

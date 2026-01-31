@@ -16,7 +16,8 @@
  *   opencode                    # Production mode (debug off)
  * 
  * Security:
- * - All debug output is redacted to prevent leaking secrets
+ * - debugLog and errorLog output is redacted to prevent leaking secrets
+ * - alwaysLog intentionally bypasses redaction (use only for non-sensitive messages)
  * - See src/security/redaction.ts for redaction patterns
  */
 
@@ -150,18 +151,22 @@ export function alwaysLog(message: string, ...args: unknown[]): void {
 }
 
 /**
- * Error logger - always logs errors
+ * Error logger - always logs errors with redaction
  * 
- * Writes to both console and debug.log (if debug enabled)
+ * Writes to both console and debug.log (if debug enabled).
+ * SECURITY: Redacts sensitive data from error messages and objects.
  * 
  * @param message - The error message
  * @param error - The error object
  */
 export function errorLog(message: string, error?: unknown): void {
-  console.error(`[Setu] ${message}`, error || '');
+  const redactedMessage = redactSensitive(message);
+  const redactedError = error ? redactSensitive(String(error)) : '';
+  
+  console.error(`[Setu] ${redactedMessage}`, redactedError);
   
   // Also write to log file if debug is enabled
   if (isDebugMode()) {
-    writeToLogFile(`ERROR: ${message}`, error ? [error] : []);
+    writeToLogFile(`ERROR: ${redactedMessage}`, redactedError ? [redactedError] : []);
   }
 }
