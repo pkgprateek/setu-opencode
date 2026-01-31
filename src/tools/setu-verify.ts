@@ -181,6 +181,19 @@ Automatically detects project build tool (npm/yarn/pnpm/bun for JS/TS, cargo for
       // Generate steps for detected build tool
       const allSteps = generateVerificationSteps(buildTool);
       
+      // SECURITY: Validate step names against whitelist
+      const VALID_STEP_NAMES = ['build', 'test', 'lint', 'typecheck', 'visual'] as const;
+      
+      // Filter user-provided steps to only valid values
+      const validatedSteps = args.steps?.filter(
+        (step: string): step is typeof VALID_STEP_NAMES[number] => 
+          VALID_STEP_NAMES.includes(step as typeof VALID_STEP_NAMES[number])
+      );
+      const validatedSkipSteps = args.skipSteps?.filter(
+        (step: string): step is typeof VALID_STEP_NAMES[number] => 
+          VALID_STEP_NAMES.includes(step as typeof VALID_STEP_NAMES[number])
+      );
+      
       let stepsToRun: VerificationStep[];
       
       switch (verificationLevel) {
@@ -196,15 +209,25 @@ Automatically detects project build tool (npm/yarn/pnpm/bun for JS/TS, cargo for
           break;
       }
       
-      // Apply filters
-      if (args.steps?.length) {
-        stepsToRun = allSteps.filter(s => args.steps!.includes(s.name));
+      // Apply filters with validated input
+      if (validatedSteps?.length) {
+        stepsToRun = allSteps.filter(s => validatedSteps.includes(s.name as typeof VALID_STEP_NAMES[number]));
       }
-      if (args.skipSteps?.length) {
-        stepsToRun = stepsToRun.filter(s => !args.skipSteps!.includes(s.name));
+      if (validatedSkipSteps?.length) {
+        stepsToRun = stepsToRun.filter(s => !validatedSkipSteps.includes(s.name as typeof VALID_STEP_NAMES[number]));
       }
       
-      markVerificationComplete();
+      // NOTE: We intentionally do NOT call markVerificationComplete() here.
+      // Verification is tracked by tool.execute.after hook when actual bash
+      // commands run (build, test, lint, typecheck). This tool just provides
+      // the commands to run - the hook tracks when they actually execute.
+      //
+      // The only exception is when user explicitly requests 'visual' verification,
+      // which is manual and cannot be detected by the after hook.
+      if (validatedSteps?.includes('visual')) {
+        // Visual check is inherently manual - mark as complete if user requested it
+        markVerificationComplete();
+      }
       
       if (stepsToRun.length > 0) {
         const stepsList = stepsToRun

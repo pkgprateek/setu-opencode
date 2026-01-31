@@ -117,10 +117,9 @@ export function createSystemTransformHook(
           const contextBlock = formatContextForInjection(summary);
           output.system.push(contextBlock);
           
-          // Also inject explicit constraints/rules if present in summary
-          if (context.summary) {
-            output.system.push(`[Previous Understanding]\n${context.summary}`);
-          }
+          // NOTE: We no longer inject context.summary separately.
+          // formatContextForInjection() already includes the task via summary.task.
+          // The previous "[Previous Understanding]" block was redundant and wasted tokens.
         }
       }
     }

@@ -150,11 +150,12 @@ Before publishing:
 
 > **Why:** Defense in depth. Catch tools that could bypass Phase 0 enforcement.
 
-- [ ] **Rate Limit `setu_feedback` Tool**
+- [x] **Rate Limit `setu_feedback` Tool**
   - **Why:** Prevent abuse (filling disk with feedback entries)
   - **What:** Limit to N feedback entries per session (e.g., 10)
   - **How:** Track feedback count in session state; reject after limit
   - **Implementation:** `src/tools/setu-feedback.ts`
+  - **Status:** Implemented with session-scoped tracking and cleanup on session.deleted ✓
 
 - [x] **Add `patch` to SIDE_EFFECT_TOOLS**
   - **Why:** OpenCode has a `patch` tool that modifies files; was not blocked
@@ -877,18 +878,22 @@ Setu as a primary agent means:
 - OpenCode features (Plan/Build) remain accessible
 - No breaking changes to OpenCode behavior
 
-### Priority: Other Plugin Compatibility (MEDIUM)
+### Priority: Other Plugin Compatibility (v3.0 - Deferred)
 
-When other discipline plugins are detected:
-- Setu enters minimal mode
+> **Note:** No other discipline plugins currently exist for OpenCode. This section describes future interoperability that will be implemented if/when needed.
+
+When other discipline plugins are detected (future):
+- Setu enters "minimal mode" (reduced functionality to avoid conflicts)
 - Defers context injection (other plugin handles it)
 - Focuses on Phase 0 and verification only
 - Avoids conflicting with other plugin directories
 
-### Detection Strategy
+### Detection Strategy (v3.0 - Deferred)
+
+> This is speculative architecture for when other discipline plugins exist.
 
 ```typescript
-// At plugin init - detect other plugins
+// At plugin init - detect other plugins (FUTURE)
 const hasOtherPlugin = detectOtherPlugins(projectDir);
 if (hasOtherPlugin) {
   console.log('[Setu] Other plugin detected - minimal mode');

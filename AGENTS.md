@@ -249,10 +249,12 @@ Setu is a primary agent. OpenCode's Plan/Build remain accessible via Tab.
 - In Plan mode: Setu hooks defer to OpenCode
 - In Build mode: Light enforcement
 
-### With Other Plugins
+### With Other Plugins (v3.0 - Deferred)
 
-When other discipline plugins are detected:
-- Setu enters minimal mode
+> **Note:** No other discipline plugins currently exist for OpenCode. This section describes future interoperability that will be implemented if/when needed.
+
+When other discipline plugins are detected (future):
+- Setu enters "minimal mode" (reduced functionality to avoid conflicts)
 - Defers context injection to the other plugin
 - Focuses on Phase 0 and verification only
 - Avoids conflicting with other plugin directories
@@ -366,12 +368,24 @@ export function loadContext(projectDir: string): SetuContext | null {
 | 3.1 | `src/prompts/persona.ts` | Add parallel execution guidance section |
 | 3.2 | `src/prompts/persona.ts` | Add `[SETU:]` prefix to all injections |
 
-#### Phase 4: Other Plugin Detection (v1.0 Nice-to-have)
+#### Phase 4: Active Task Management (v1.1)
 
 | Step | File to Create/Modify | What to Do |
 |------|----------------------|------------|
-| 4.1 | `src/detection/plugins.ts` | Detect other discipline plugins |
-| 4.2 | `src/index.ts` | Enter minimal mode if other plugin detected |
+| 4.1 | `src/tools/setu-task.ts` | Create tool for managing active tasks with constraints |
+| 4.2 | `src/index.ts` | Register `setu_task` tool and wire verification reset |
+| 4.3 | `src/hooks/tool-execute.ts` | Reset verification state when new task created |
+
+#### Phase 5: Other Plugin Detection (v3.0 - Deferred)
+
+> **Note:** This phase is deferred until other discipline plugins exist for OpenCode.
+> "Minimal mode" means Setu steps back when conflicting plugins are detected: no persona injection, defers context injection, focuses only on Phase 0 + verification.
+> This is speculative architecture — no known plugins require this today.
+
+| Step | File to Create/Modify | What to Do |
+|------|----------------------|------------|
+| 5.1 | `src/detection/plugins.ts` | Detect other discipline plugins |
+| 5.2 | `src/index.ts` | Enter minimal mode if other plugin detected |
 
 ### Reference: Existing Files
 
