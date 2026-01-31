@@ -69,7 +69,7 @@ export {
 } from './feedback';
 
 // Project rules (Silent Exploration)
-export type { ProjectRules } from './project-rules';
+export type { ProjectRules, GitState } from './project-rules';
 
 export {
   loadProjectRules,

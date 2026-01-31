@@ -9,6 +9,7 @@
  * - tool.execute.after: Tracks verification steps, file reads, searches
  */
 
+import { basename } from 'path';
 import {
   shouldBlockInPhase0,
   createPhase0BlockMessage,
@@ -88,18 +89,46 @@ export function getEnforcementLevel(currentAgent: string): EnforcementLevel {
 }
 
 /**
+ * Verification state accessor type
+ */
+export interface VerificationState {
+  complete: boolean;
+  stepsRun: Set<VerificationStep>;
+}
+
+/**
+ * Git commit/push command patterns for interception
+ */
+const GIT_COMMIT_PATTERN = /\bgit\b(?:\s+[-\w.=\/]+)*\s+commit\b/i;
+const GIT_PUSH_PATTERN = /\bgit\b(?:\s+[-\w.=\/]+)*\s+push\b/i;
+
+/**
+ * Package manifest file patterns for dependency safety
+ * Blocks direct edits to these files to prevent accidental corruption
+ */
+const PACKAGE_MANIFEST_PATTERNS = [
+  /package\.json$/,
+  /package-lock\.json$/,
+  /yarn\.lock$/,
+  /pnpm-lock\.yaml$/,
+  /bun\.lockb$/
+] as const;
+
+/**
  * Create a before-execution hook that enforces Phase 0 rules for tool execution.
  *
  * Setu plugin operates exclusively within Setu agent mode.
  * When not in Setu agent, this hook remains silent.
  * When in Setu agent, enforces Phase 0 based on the current profile.
  * Also enforces active task constraints (READ_ONLY, NO_PUSH, etc.)
+ * Also enforces Git Discipline: requires verification before commit/push.
  *
  * @param getPhase0State - Accessor that returns the current Phase 0 state
  * @param getCurrentAgent - Optional accessor for the current agent identifier; defaults to "setu" when omitted
  * @param getContextCollector - Optional accessor for a ContextCollector used to obtain and format confirmed context for injection
  * @param getSetuProfile - Optional accessor for the current Setu profile (used for profile-level enforcement when in Setu mode)
  * @param getProjectDir - Optional accessor for project directory (used for constraint loading)
+ * @param getVerificationState - Optional accessor for verification state (used for git discipline enforcement)
  * @returns A hook function invoked before tool execution that enforces Phase 0 rules and may throw an Error when a tool is blocked under full enforcement
  */
 export function createToolExecuteBeforeHook(
@@ -107,7 +136,8 @@ export function createToolExecuteBeforeHook(
   getCurrentAgent?: () => string,
   getContextCollector?: () => ContextCollector | null,
   getSetuProfile?: () => SetuProfile,
-  getProjectDir?: () => string
+  getProjectDir?: () => string,
+  getVerificationState?: () => VerificationState
 ): (input: ToolExecuteBeforeInput, output: ToolExecuteBeforeOutput) => Promise<void> {
   return async (
     input: ToolExecuteBeforeInput,
@@ -137,6 +167,59 @@ export function createToolExecuteBeforeHook(
         output.args.prompt = `${contextBlock}\n\n[TASK]\n${originalPrompt}`;
         
         debugLog('Injected context into subagent prompt');
+      }
+    }
+    
+    // GIT DISCIPLINE ENFORCEMENT
+    // Block git commit/push if verification is not complete
+    // This applies in Setu mode regardless of Phase 0 state
+    if (input.tool === 'bash' && getVerificationState && enforcementLevel === 'full') {
+      const command = getStringProp(output.args, 'command') ?? '';
+      const verificationState = getVerificationState();
+      
+      // Check for git commit
+      if (GIT_COMMIT_PATTERN.test(command) && !verificationState.complete) {
+        debugLog('Git Discipline BLOCKED: git commit without verification');
+        throw new Error(
+          `🚫 [Git Discipline] Verification required before commit.\n\n` +
+          `Run verification first:\n` +
+          `  • Use \`setu_verify\` tool, OR\n` +
+          `  • Run build + test manually\n\n` +
+          `Current status: ${verificationState.stepsRun.size === 0 ? 'No verification steps run' : `Completed: ${[...verificationState.stepsRun].join(', ')}`}`
+        );
+      }
+      
+      // Check for git push
+      if (GIT_PUSH_PATTERN.test(command) && !verificationState.complete) {
+        debugLog('Git Discipline BLOCKED: git push without verification');
+        throw new Error(
+          `🚫 [Git Discipline] Verification required before push.\n\n` +
+          `Ensure build and tests pass before pushing.\n\n` +
+          `Current status: ${verificationState.stepsRun.size === 0 ? 'No verification steps run' : `Completed: ${[...verificationState.stepsRun].join(', ')}`}`
+        );
+      }
+    }
+    
+    // DEPENDENCY SAFETY ENFORCEMENT
+    // Block direct edits to package manifests to prevent accidental corruption
+    // Applies to: package.json, lockfiles
+    // Reason: Direct edits can corrupt manifests; use package managers instead
+    if ((input.tool === 'write' || input.tool === 'edit') && enforcementLevel === 'full') {
+      const filePath = getStringProp(output.args, 'filePath') ?? '';
+      
+      const isPackageManifest = PACKAGE_MANIFEST_PATTERNS.some(pattern => 
+        pattern.test(filePath)
+      );
+      
+      if (isPackageManifest) {
+        debugLog(`Dependency Safety BLOCKED: ${input.tool} to ${filePath}`);
+        throw new Error(
+          `⚠️ [Dependency Safety] Direct edits to '${basename(filePath)}' blocked.\n\n` +
+          `Package manifests should be modified via package manager commands:\n` +
+          `  • npm/pnpm/yarn/bun install <package>\n` +
+          `  • npm/pnpm/yarn/bun remove <package>\n\n` +
+          `If you need to edit this file directly, explain why to the user first.`
+        );
       }
     }
     

@@ -285,6 +285,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
     // Phase 0: Block side-effect tools until context is confirmed
     // Consolidated enforcement (agent + profile level)
     // Also enforces active task constraints (READ_ONLY, NO_PUSH, etc.)
+    // Also enforces Git Discipline (verification before commit/push)
     // Also records tool execution for parallel tracking (audit trail)
     'tool.execute.before': async (
       input: { tool: string; sessionID: string; callID: string },
@@ -303,7 +304,8 @@ export const SetuPlugin: Plugin = async (ctx) => {
         getCurrentAgent,
         getContextCollector,
         getSetuProfile,
-        getProjectDir
+        getProjectDir,
+        getVerificationState  // Git Discipline: verification enforcement
       );
       return beforeHook(input, output);
     },
