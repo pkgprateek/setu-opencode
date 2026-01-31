@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Git Discipline Enforcement:** Hook-based blocking of git commit/push without verification
+  - Detects `git commit` and `git push` commands in bash
+  - Blocks with clear message if verification is not complete
+  - Shows current verification status (which steps have been run)
+  - Enforced in Ultrathink style only (Quick/Expert bypass)
+
+- **Native Git Repo Detection:** Silent detection of git repository state on session start
+  - Checks for `.git` directory existence
+  - Detects current branch via `git branch --show-current`
+  - Identifies protected branches (main, master, production, prod)
+  - Zero token cost — runs synchronously at session start
+
+- **Protected Branch Warnings:** System prompt injection for protected branch awareness
+  - If on main/master/production/prod, injects warning into context
+  - Suggests creating feature branch for non-trivial changes
+  - If not a git repo, suggests `git init`
+
+- **Dependency Safety Hook:** Blocks direct edits to package manifests
+  - Blocks `write`/`edit` to: package.json, package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb
+  - Clear message explaining why and suggesting package manager commands
+  - Enforced in Ultrathink style only
+
+- **Enhanced Native Tool Guidance:** Improved efficiency rules in persona
+  - Explicit preference for native tools over bash equivalents
+  - `list` over `bash ls` — structured output, no shell spawn
+  - `read` over `bash cat` — handles large files properly
+  - `glob` over `bash find` — faster pattern matching
+
+### Changed
+
+- **Tool Execute Hook:** Now accepts `getVerificationState` accessor for git discipline enforcement
+- **Project Rules Interface:** Added `GitState` interface with `initialized`, `branch`, and `isProtectedBranch` fields
+- **System Prompt:** Git status now appears in Silent Exploration header
+
 ### Fixed
 - **Terminology: Profile → Style:** Fixed `[Profile: X]` prefix to `[Style: X]` in `persona.ts` to match agent file instructions and user expectations
 - **Security: Constraint Bypass Detection:** Added warning logs when bash commands contain potential bypass patterns (`$`, backticks, `$(`, `eval`, `source`, `exec`)
