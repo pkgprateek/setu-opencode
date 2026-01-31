@@ -13,11 +13,24 @@
 
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { execSync } from 'child_process';
 import { debugLog, errorLog } from '../debug';
 import type { ActiveTask } from './types';
 
 // Re-export for convenience
 export type { ActiveTask };
+
+/**
+ * Git repository state detected on session start
+ */
+export interface GitState {
+  /** Whether .git directory exists */
+  initialized: boolean;
+  /** Current branch name (if git initialized) */
+  branch?: string;
+  /** Whether on a protected branch (main/master) */
+  isProtectedBranch?: boolean;
+}
 
 /**
  * Project rules and context loaded on session start
@@ -31,12 +44,64 @@ export interface ProjectRules {
   activeTask?: ActiveTask;
   /** Summary from previous context */
   contextSummary?: string;
+  /** Git repository state */
+  git?: GitState;
 }
 
 /**
  * Maximum file size to read (prevent loading huge files)
  */
 const MAX_FILE_SIZE = 50000; // 50KB (~12,500 tokens)
+
+/**
+ * Protected branch names that require extra caution
+ */
+const PROTECTED_BRANCHES = ['main', 'master', 'production', 'prod'] as const;
+
+/**
+ * Detect git repository state synchronously
+ * 
+ * Uses execSync to run git commands - fast and doesn't pollute context.
+ * Fails silently if git is not installed or not a git repo.
+ * 
+ * @param projectDir - Project root directory
+ * @returns GitState object with initialization and branch info
+ */
+function detectGitState(projectDir: string): GitState {
+  const gitDir = join(projectDir, '.git');
+  const initialized = existsSync(gitDir);
+  
+  if (!initialized) {
+    debugLog('Git: Not a git repository');
+    return { initialized: false };
+  }
+  
+  try {
+    // Get current branch name using git branch --show-current
+    const branch = execSync('git branch --show-current', {
+      cwd: projectDir,
+      encoding: 'utf-8',
+      timeout: 5000, // 5 second timeout
+      stdio: ['pipe', 'pipe', 'pipe'] // Suppress stderr
+    }).trim();
+    
+    const isProtectedBranch = PROTECTED_BRANCHES.includes(
+      branch.toLowerCase() as typeof PROTECTED_BRANCHES[number]
+    );
+    
+    debugLog(`Git: On branch '${branch}'${isProtectedBranch ? ' (PROTECTED)' : ''}`);
+    
+    return {
+      initialized: true,
+      branch: branch || undefined,
+      isProtectedBranch
+    };
+  } catch (error) {
+    // Git command failed - maybe detached HEAD or git not installed
+    debugLog('Git: Could not determine branch:', error);
+    return { initialized: true };
+  }
+}
 
 /**
  * Read a file safely with size limits and error handling
@@ -76,6 +141,9 @@ function readFileSafe(filePath: string, maxSize: number = MAX_FILE_SIZE): string
  */
 export function loadProjectRules(projectDir: string): ProjectRules {
   const rules: ProjectRules = {};
+  
+  // 0. Detect git repository state (fast, synchronous)
+  rules.git = detectGitState(projectDir);
   
   // 1. Load AGENTS.md (project rules)
   const agentsMdPath = join(projectDir, 'AGENTS.md');
@@ -154,6 +222,23 @@ export function formatRulesForInjection(rules: ProjectRules): string {
   // Header
   blocks.push('[SILENT EXPLORATION - PROJECT CONTEXT PRELOADED]');
   
+  // Git repository state and warnings
+  if (rules.git) {
+    if (!rules.git.initialized) {
+      blocks.push('');
+      blocks.push('[GIT: Not initialized]');
+      blocks.push('Consider: `git init` to enable version control for this project.');
+    } else if (rules.git.branch) {
+      blocks.push('');
+      blocks.push(`[GIT: Branch '${rules.git.branch}']`);
+      if (rules.git.isProtectedBranch) {
+        blocks.push(`⚠️ WARNING: On protected branch '${rules.git.branch}'.`);
+        blocks.push('Consider creating a feature branch for non-trivial changes.');
+        blocks.push('Command: `git checkout -b feat/your-feature-name`');
+      }
+    }
+  }
+  
   // AGENTS.md rules
   if (rules.agentsMd) {
     blocks.push('');
@@ -215,6 +300,7 @@ export function hasProjectRules(rules: ProjectRules): boolean {
     rules.agentsMd ||
     rules.claudeMd ||
     rules.activeTask ||
-    rules.contextSummary
+    rules.contextSummary ||
+    rules.git
   );
 }
