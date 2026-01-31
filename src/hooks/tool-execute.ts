@@ -343,8 +343,8 @@ export function createToolExecuteAfterHook(
       title.includes('typecheck') ||
       title.includes('type-check') ||
       title.includes('type check') ||
-      commandOutput.includes('tsc --noEmit') ||
-      commandOutput.includes('tsc -noEmit') ||
+      commandOutput.includes('tsc --noemit') ||
+      commandOutput.includes('tsc -noemit') ||
       commandOutput.includes('npm run typecheck') ||
       commandOutput.includes('pnpm typecheck') ||
       commandOutput.includes('yarn typecheck') ||

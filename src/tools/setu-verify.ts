@@ -104,7 +104,7 @@ function generateVerificationSteps(buildTool: string): VerificationStep[] {
   if (commands.test) {
     steps.push({
       name: 'test',
-      command: `bash -c 'set -o pipefail; ${commands.test} 2>&1 | { grep -A 3 "FAIL\\|Error\\|✗\\|FAILED" || true; } | head -30'`,
+      command: `bash -lc 'set -o pipefail; ${commands.test} 2>&1 | { grep -A 3 "FAIL\\|Error\\|✗\\|FAILED" || true; } | head -30'`,
       description: 'Capture only failures, not full output',
       required: true
     });
@@ -113,7 +113,7 @@ function generateVerificationSteps(buildTool: string): VerificationStep[] {
   if (commands.lint) {
     steps.push({
       name: 'lint',
-      command: `bash -c 'set -o pipefail; ${commands.lint} 2>&1 | { grep -E "error|warning" || true; } | head -20'`,
+      command: `bash -lc 'set -o pipefail; ${commands.lint} 2>&1 | { grep -E "error|warning" || true; } | head -20'`,
       description: 'Capture errors/warnings count',
       required: true
     });
@@ -122,7 +122,7 @@ function generateVerificationSteps(buildTool: string): VerificationStep[] {
   if (commands.typecheck) {
     steps.push({
       name: 'typecheck',
-      command: `bash -c 'set -o pipefail; ${commands.typecheck} 2>&1 | head -30'`,
+      command: `bash -lc 'set -o pipefail; ${commands.typecheck} 2>&1 | head -30'`,
       description: 'Type checking if available',
       required: false
     });
