@@ -9,6 +9,7 @@
 import { existsSync, mkdirSync, writeFileSync, appendFileSync } from 'fs';
 import { join } from 'path';
 import { debugLog } from '../debug';
+import { MAX_FEEDBACK_PER_SESSION } from '../constants';
 
 const SETU_DIR = '.setu';
 const FEEDBACK_FILE = 'feedback.md';
@@ -124,4 +125,70 @@ export function getFeedbackPath(projectDir: string): string {
  */
 export function hasFeedbackFile(projectDir: string): boolean {
   return existsSync(getFeedbackPath(projectDir));
+}
+
+// ============================================================================
+// Session Rate Limiting
+// ============================================================================
+
+/**
+ * Session-scoped feedback count tracking.
+ * Key: sessionID, Value: number of feedback entries submitted this session.
+ * 
+ * Why module-level Map?
+ * - Session state isolated per sessionID
+ * - No coupling to plugin state
+ * - Cleaned up via clearSessionFeedback on session.deleted event
+ */
+const sessionFeedbackCounts = new Map<string, number>();
+
+/**
+ * Result of a rate limit check
+ */
+export interface RateLimitResult {
+  /** Whether the feedback submission is allowed */
+  allowed: boolean;
+  /** Number of submissions remaining this session */
+  remaining: number;
+  /** Current count (after increment if allowed) */
+  current: number;
+}
+
+/**
+ * Check rate limit and increment counter if allowed.
+ * 
+ * @param sessionID - The session identifier from ToolContext
+ * @returns Rate limit check result with allowed status and counts
+ */
+export function incrementFeedbackCount(sessionID: string): RateLimitResult {
+  const current = sessionFeedbackCounts.get(sessionID) || 0;
+  
+  if (current >= MAX_FEEDBACK_PER_SESSION) {
+    debugLog(`Feedback rate limit reached for session ${sessionID} (${current}/${MAX_FEEDBACK_PER_SESSION})`);
+    return { allowed: false, remaining: 0, current };
+  }
+  
+  const newCount = current + 1;
+  sessionFeedbackCounts.set(sessionID, newCount);
+  
+  debugLog(`Feedback submitted (${newCount}/${MAX_FEEDBACK_PER_SESSION}) for session ${sessionID}`);
+  
+  return { 
+    allowed: true, 
+    remaining: MAX_FEEDBACK_PER_SESSION - newCount,
+    current: newCount
+  };
+}
+
+/**
+ * Clear feedback count for a session.
+ * Called on session.deleted event to prevent memory leaks.
+ * 
+ * @param sessionID - The session identifier to clear
+ */
+export function clearSessionFeedback(sessionID: string): void {
+  if (sessionFeedbackCounts.has(sessionID)) {
+    sessionFeedbackCounts.delete(sessionID);
+    debugLog(`Cleared feedback count for session ${sessionID}`);
+  }
 }

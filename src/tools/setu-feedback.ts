@@ -6,7 +6,13 @@
  */
 
 import { tool } from '@opencode-ai/plugin';
-import { appendFeedback, initializeFeedbackFile, type FeedbackEntry } from '../context/feedback';
+import { 
+  appendFeedback, 
+  initializeFeedbackFile, 
+  incrementFeedbackCount,
+  type FeedbackEntry 
+} from '../context/feedback';
+import { MAX_FEEDBACK_PER_SESSION } from '../constants';
 
 export interface SetuFeedbackResult {
   success: boolean;
@@ -40,8 +46,20 @@ Feedback is saved to .setu/feedback.md for review.`,
       )
     },
     
-    async execute(args, _context): Promise<string> {
+    async execute(args, context): Promise<string> {
       const projectDir = getProjectDir();
+      const sessionID = context.sessionID || 'unknown';
+      
+      // Check rate limit BEFORE doing any work
+      const rateCheck = incrementFeedbackCount(sessionID);
+      
+      if (!rateCheck.allowed) {
+        return `**Feedback limit reached** (${MAX_FEEDBACK_PER_SESSION} per session)
+
+Your feedback matters! To submit more:
+- Start a new session, or
+- Open an issue at https://github.com/pkgprateek/setu-opencode/issues`;
+      }
       
       try {
         // Ensure feedback file exists
@@ -60,9 +78,8 @@ Feedback is saved to .setu/feedback.md for review.`,
         
         return `**Feedback recorded** (${args.type})
 
-Thank you for the feedback! It's been saved to \`.setu/feedback.md\`.
-
-This helps improve Setu's behavior for everyone.`;
+Thank you! Saved to \`.setu/feedback.md\`.
+(${rateCheck.remaining} submission${rateCheck.remaining !== 1 ? 's' : ''} remaining this session)`;
       } catch (error) {
         return `Failed to record feedback: ${error instanceof Error ? error.message : 'Unknown error'}`;
       }

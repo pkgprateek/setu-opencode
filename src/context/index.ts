@@ -65,8 +65,13 @@ export {
   initializeFeedbackFile,
   appendFeedback,
   getFeedbackPath,
-  hasFeedbackFile
+  hasFeedbackFile,
+  // Session rate limiting
+  incrementFeedbackCount,
+  clearSessionFeedback
 } from './feedback';
+
+export type { RateLimitResult } from './feedback';
 
 // Project rules (Silent Exploration)
 export type { ProjectRules, GitState } from './project-rules';
