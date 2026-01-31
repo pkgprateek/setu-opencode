@@ -4,7 +4,7 @@
  * Prevents path traversal attacks and access to sensitive files.
  */
 
-import { resolve, basename, relative, isAbsolute, sep } from 'path';
+import { resolve, basename, relative, isAbsolute } from 'path';
 
 /**
  * Patterns for files that should not be accessed/modified by the agent
@@ -53,6 +53,11 @@ export interface PathValidationResult {
 /**
  * Check if a path is within the project directory
  * 
+ * Uses path.relative() for robust containment checking that handles:
+ * - Root paths correctly
+ * - Windows case-sensitivity issues
+ * - Cross-platform path separators
+ * 
  * @param projectDir - The project root directory
  * @param filePath - The path to validate
  * @returns true if the path is within the project
@@ -61,8 +66,14 @@ export function isPathWithinProject(projectDir: string, filePath: string): boole
   const resolvedProject = resolve(projectDir);
   const resolvedPath = resolve(projectDir, filePath);
   
-  // Path must start with project directory (cross-platform)
-  return resolvedPath.startsWith(resolvedProject + sep) || resolvedPath === resolvedProject;
+  // Use path.relative for robust containment checking
+  const rel = relative(resolvedProject, resolvedPath);
+  
+  // Path is within project if:
+  // - rel is not empty (not the same path)
+  // - rel doesn't start with '..' (not a parent directory)
+  // - rel is not absolute (not outside the project root)
+  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);
 }
 
 /**
@@ -114,12 +125,9 @@ export function validateFilePath(
 ): PathValidationResult {
   const { allowSensitive = false, allowAbsoluteWithinProject = true } = options;
   
-  // Handle absolute paths
+  // Handle absolute paths - reuse isPathWithinProject for consistency
   if (isAbsolute(filePath)) {
-    const resolved = resolve(filePath);
-    const projectRoot = resolve(projectDir);
-    
-    if (!resolved.startsWith(projectRoot + sep) && resolved !== projectRoot) {
+    if (!isPathWithinProject(projectDir, filePath)) {
       return {
         valid: false,
         error: `Path '${filePath}' is outside the project directory`,

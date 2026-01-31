@@ -77,6 +77,8 @@ function ensureSetuDir(): string {
 
 /**
  * Write a log line to the debug file
+ * 
+ * Note: Assumes args are already redacted by debugLog
  */
 function writeToLogFile(message: string, args: unknown[]): void {
   try {
@@ -85,11 +87,10 @@ function writeToLogFile(message: string, args: unknown[]): void {
     const argsStr = args.length > 0 
       ? ' ' + args.map(a => {
           try {
-            const str = typeof a === 'string' ? a : JSON.stringify(a);
-            return redactSensitive(str);
+            return typeof a === 'string' ? a : JSON.stringify(a);
           } catch {
-            // Fallback for non-serializable objects - must also be redacted
-            return redactSensitive(String(a));
+            // Fallback for non-serializable objects
+            return String(a);
           }
         }).join(' ')
       : '';

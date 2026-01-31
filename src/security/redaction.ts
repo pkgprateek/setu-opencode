@@ -47,8 +47,9 @@ export const REDACTION_PATTERNS = [
  * @returns The message with sensitive data redacted
  */
 export function redactSensitive(message: string): string {
+  // Type safety: always return a string, never null/undefined
   if (!message || typeof message !== 'string') {
-    return message;
+    return '';
   }
   
   let redacted = message;

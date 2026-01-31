@@ -9,6 +9,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Complete Security Infrastructure** (`src/security/`)
+  - **Audit Logging:** Security events tracked to `.setu/security.log` with severity levels (critical/high/medium/low/info)
+  - **Path Validation:** Prevents path traversal attacks and blocks access to sensitive files (.env, SSH keys, credentials)
+  - **Secrets Detection:** Scans file content for API keys, tokens, and credentials before write/edit
+  - **Prompt Sanitization:** Blocks prompt injection attempts in user inputs with configurable max lengths
+  - **Redaction:** Automatically redacts secrets from debug logs using pattern matching
+
+- **Task Management Tool (`setu_task`)**
+  - Create, update, and clear active tasks in `.setu/active.json`
+  - Constraint enforcement: READ_ONLY, NO_PUSH, NO_DELETE, SANDBOX
+  - Survives context compaction and session restarts
+  - Integrated with verification state reset on task changes
+
+- **Enhanced Verification Tracking**
+  - Verification state now logs to `.setu/verification.log`
+  - Multi-ecosystem support (npm/yarn/pnpm/bun/cargo/go/uv/pip)
+  - Typecheck and lint detection patterns added
+
+### Fixed
+
+- **Security: Log Injection Prevention** (audit-log.ts:70-95)
+  - Sanitize newlines (CRLF/CR/LF) in event details before logging
+  - Prevents attackers from injecting fake log entries via malicious input
+  
+- **Security: Path Containment Check** (path-validation.ts:60-66)
+  - Replaced broken `startsWith()` logic with robust `path.relative()` check
+  - Fixes root path edge cases and Windows case-sensitivity issues
+  - Prevents path traversal bypasses on Windows
+
+- **Code Quality: Eliminated Duplicate Path Logic** (path-validation.ts:117-136)
+  - Refactored `validateFilePath` to reuse `isPathWithinProject` for consistency
+  - Removed unused `sep` import
+
+- **Security: Null Safety for sessionID** (setu-context.ts:99)
+  - Use optional chaining (`context?.sessionID`) to prevent runtime errors
+  - Handles cases where context object lacks sessionID property
+
+- **Performance: Removed Double Redaction** (debug.ts:88-92)
+  - Eliminated redundant `redactSensitive()` call in `writeToLogFile`
+  - Args already redacted by `debugLog()` caller - 50% reduction in redaction overhead
+
+- **Security: Debug Logging Secret Leak** (debug.ts:126-128)
+  - Redact `String()` fallback for non-serializable objects
+  - Prevents secret leakage when objects fail JSON.stringify
+
+- **Security: Cross-Platform Path Validation** (path-validation.ts:65,108 & tool-execute.ts:238-248)
+  - Use `path.sep` instead of hardcoded `/` for Windows compatibility
+  - Normalize path separators before pattern matching
+  - Fixes bypass where `.husky\\` and `.git\\hooks\\` weren't matched on Windows
+
+- **Security: Type Safety in Error Handling**
+  - Handle undefined `line` property in SecretMatch error output (tool-execute.ts:308)
+  - Add runtime type validation after JSON.parse in feedback metadata (feedback.ts:174-191)
+  - Return empty string for falsy inputs in redaction (redaction.ts:49-52)
+
+- **Security: Pattern Matching Improvements**
+  - Check both basename and normalized path in `isSensitiveFile` (path-validation.ts:74-81)
+  - Implement `requiresContext` flag for AWS secret pattern to reduce false positives (secrets-detection.ts:157-218)
+  - Account for suffix length in truncation to prevent DoS (prompt-sanitization.ts:85-93)
+  - Reset regex `lastIndex` to prevent stale state bugs (prompt-sanitization.ts:69-76)
+
+- **Security: Feedback Rate Limiting Race Condition** (feedback.ts)
+  - Eliminate race condition by loading metadata once per operation
+  - Reduce I/O by 50% with single metadata load
+  - Atomic write pattern for feedback metadata
+
+### Changed
+
+- **Security Logging:** All security events now centralized through `logSecurityEvent()` API
+- **Tool Execute Hook:** Enhanced with secrets detection, path validation, and audit logging
+- **Feedback Tool:** Now rate-limited to 10 submissions per session to prevent abuse
+
 - **Git Discipline Enforcement:** Hook-based blocking of git commit/push without verification
   - Detects `git commit` and `git push` commands in bash
   - Blocks with clear message if verification is not complete

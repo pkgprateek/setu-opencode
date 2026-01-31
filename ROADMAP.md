@@ -150,11 +150,12 @@ Before publishing:
 
 > **Why:** Defense in depth. Catch tools that could bypass Phase 0 enforcement.
 
-- [ ] **Rate Limit `setu_feedback` Tool**
+- [x] **Rate Limit `setu_feedback` Tool**
   - **Why:** Prevent abuse (filling disk with feedback entries)
   - **What:** Limit to N feedback entries per session (e.g., 10)
   - **How:** Track feedback count in session state; reject after limit
   - **Implementation:** `src/tools/setu-feedback.ts`
+  - **Status:** Implemented with session-scoped tracking and cleanup on session.deleted ✓
 
 - [x] **Add `patch` to SIDE_EFFECT_TOOLS**
   - **Why:** OpenCode has a `patch` tool that modifies files; was not blocked

@@ -96,7 +96,7 @@ If you need to update the context or plan, you can continue working.`;
           projectDir,
           SecurityEventType.PROMPT_INJECTION_SANITIZED,
           'Context input was sanitized - possible injection attempt',
-          { sessionId: context.sessionID, tool: 'setu_context' }
+          { sessionId: context?.sessionID, tool: 'setu_context' }
         );
       }
       

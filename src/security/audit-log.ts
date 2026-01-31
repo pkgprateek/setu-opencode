@@ -86,7 +86,8 @@ function formatSecurityEvent(event: SecurityEvent): string {
     entry += ` | tool:${event.tool}`;
   }
   
-  // Truncate details to prevent log bloat
+  // Details are already sanitized in logSecurityEvent
+  // Truncate to prevent log bloat
   const TRUNCATION_SUFFIX = '...(truncated)';
   const details = event.details.length > MAX_LOG_ENTRY_LENGTH
     ? event.details.slice(0, Math.max(0, MAX_LOG_ENTRY_LENGTH - TRUNCATION_SUFFIX.length)) + TRUNCATION_SUFFIX
@@ -95,6 +96,24 @@ function formatSecurityEvent(event: SecurityEvent): string {
   entry += ` | ${details}`;
   
   return entry;
+}
+
+/**
+ * Sanitize event details to prevent log injection
+ * 
+ * Normalizes newlines (CRLF/CR/LF) to single spaces and collapses repeated whitespace.
+ * This prevents attackers from injecting fake log entries via newline characters.
+ * 
+ * @param details - Raw event details
+ * @returns Sanitized details safe for logging
+ */
+function sanitizeLogDetails(details: string): string {
+  // Replace all CRLF, CR, and LF with a single space
+  return details
+    .replace(/\r\n|\r|\n/g, ' ')
+    // Collapse multiple spaces into one
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
@@ -118,12 +137,15 @@ export function logSecurityEvent(
     tool?: string;
   } = {}
 ): string {
+  // SECURITY: Sanitize newlines BEFORE creating event to prevent log injection
+  const sanitizedDetails = sanitizeLogDetails(details);
+  
   const event: SecurityEvent = {
     type,
     timestamp: new Date().toISOString(),
     sessionId: options.sessionId,
     tool: options.tool,
-    details,
+    details: sanitizedDetails,
     severity: EVENT_SEVERITY[type]
   };
   
