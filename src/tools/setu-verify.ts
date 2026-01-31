@@ -95,8 +95,8 @@ function generateVerificationSteps(buildTool: string): VerificationStep[] {
   if (commands.build) {
     steps.push({
       name: 'build',
-      command: `${commands.build} || (${commands.build} 2>&1 | tail -30)`,
-      description: 'Check exit code first; if failed, capture last 30 lines',
+      command: `bash -lc '${commands.build} 2>&1 | tee /tmp/build.log; exit \${PIPESTATUS[0]}' || tail -30 /tmp/build.log`,
+      description: 'Capture output on first run; show last 30 lines on failure',
       required: true
     });
   }
