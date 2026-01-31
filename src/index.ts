@@ -343,7 +343,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
     // Custom tools
     tool: {
       setu_verify: createSetuVerifyTool(getProfileState, markVerificationComplete, getProjectDir),
-      setu_context: createSetuContextTool(getPhase0State, confirmContext, getContextCollector),
+      setu_context: createSetuContextTool(getPhase0State, confirmContext, getContextCollector, getProjectDir),
       setu_feedback: createSetuFeedbackTool(getProjectDir),
       setu_task: createSetuTaskTool(getProjectDir, resetVerificationState)
     }

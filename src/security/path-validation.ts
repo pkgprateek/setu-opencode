@@ -76,8 +76,18 @@ export function isSensitiveFile(filePath: string): boolean {
   // Normalize path separators for cross-platform pattern matching
   const normalizedPath = filePath.replace(/\\/g, '/');
   
+  // Generate all trailing path suffixes for anchored pattern matching
+  // Example: "/project/.aws/credentials" -> ["/project/.aws/credentials", ".aws/credentials", "credentials"]
+  const parts = normalizedPath.split('/').filter(p => p.length > 0);
+  const suffixes: string[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    suffixes.push(parts.slice(i).join('/'));
+  }
+  
   return SENSITIVE_FILE_PATTERNS.some(pattern => 
-    pattern.test(name) || pattern.test(normalizedPath)
+    pattern.test(name) || 
+    pattern.test(normalizedPath) ||
+    suffixes.some(suffix => pattern.test(suffix))
   );
 }
 

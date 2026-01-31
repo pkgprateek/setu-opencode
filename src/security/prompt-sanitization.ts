@@ -84,7 +84,13 @@ export function sanitizeForPrompt(input: string, maxLength: number = MAX_CONTEXT
   
   // Step 5: Truncate to max length
   if (sanitized.length > maxLength) {
-    sanitized = sanitized.slice(0, maxLength) + '\n... (truncated for safety)';
+    const suffix = '\n... (truncated for safety)';
+    if (suffix.length >= maxLength) {
+      // Edge case: suffix itself is longer than maxLength
+      sanitized = suffix.slice(0, maxLength);
+    } else {
+      sanitized = sanitized.slice(0, Math.max(0, maxLength - suffix.length)) + suffix;
+    }
   }
   
   // Step 6: Trim whitespace

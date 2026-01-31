@@ -85,9 +85,11 @@ function writeToLogFile(message: string, args: unknown[]): void {
     const argsStr = args.length > 0 
       ? ' ' + args.map(a => {
           try {
-            return typeof a === 'string' ? a : JSON.stringify(a);
+            const str = typeof a === 'string' ? a : JSON.stringify(a);
+            return redactSensitive(str);
           } catch {
-            return String(a);
+            // Fallback for non-serializable objects - must also be redacted
+            return redactSensitive(String(a));
           }
         }).join(' ')
       : '';
@@ -121,7 +123,8 @@ export function debugLog(message: string, ...args: unknown[]): void {
     try {
       return redactSensitive(JSON.stringify(arg));
     } catch {
-      return String(arg);
+      // Fallback for non-serializable objects - must also be redacted
+      return redactSensitive(String(arg));
     }
   });
   

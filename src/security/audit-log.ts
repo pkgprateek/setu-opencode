@@ -8,6 +8,7 @@
 import { existsSync, appendFileSync } from 'fs';
 import { join } from 'path';
 import { ensureSetuDir } from '../context/feedback';
+import { debugLog } from '../debug';
 
 const SECURITY_LOG = 'security.log';
 const MAX_LOG_ENTRY_LENGTH = 1000;
@@ -86,8 +87,9 @@ function formatSecurityEvent(event: SecurityEvent): string {
   }
   
   // Truncate details to prevent log bloat
+  const TRUNCATION_SUFFIX = '...(truncated)';
   const details = event.details.length > MAX_LOG_ENTRY_LENGTH
-    ? event.details.slice(0, MAX_LOG_ENTRY_LENGTH) + '...(truncated)'
+    ? event.details.slice(0, Math.max(0, MAX_LOG_ENTRY_LENGTH - TRUNCATION_SUFFIX.length)) + TRUNCATION_SUFFIX
     : event.details;
   
   entry += ` | ${details}`;
@@ -138,8 +140,10 @@ export function logSecurityEvent(
     }
     
     appendFileSync(logPath, formatted + '\n', 'utf-8');
-  } catch {
+  } catch (err) {
     // Silent fail - security logging should not break functionality
+    // Log to debug for operational visibility during development
+    debugLog('Security audit log write failed:', err);
   }
   
   return formatted;

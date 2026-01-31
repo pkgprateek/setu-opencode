@@ -37,12 +37,14 @@ export interface SetuContextResult {
  * @param confirmContext - Callback used to mark Phase 0 context as confirmed
  * @param getContextCollector - Optional accessor that returns a ContextCollector or `null`; if provided and non-null,
  *                              the collector is used to persist the confirmed context to disk
+ * @param getProjectDir - Optional accessor for project directory (defaults to process.cwd())
  * @returns A tool definition that performs the context confirmation, optional persistence, and produces a status string
  */
 export function createSetuContextTool(
   getPhase0State: () => Phase0State,
   confirmContext: () => void,
-  getContextCollector?: () => ContextCollector | null
+  getContextCollector?: () => ContextCollector | null,
+  getProjectDir?: () => string
 ): ReturnType<typeof tool> {
   return tool({
     description: `Confirm that context has been gathered and understood. 
@@ -74,7 +76,7 @@ Once confirmed, context is persisted to .setu/ for continuity.`,
     
     async execute(args, context): Promise<string> {
       const state = getPhase0State();
-      const projectDir = process.cwd();  // For security logging
+      const projectDir = getProjectDir ? getProjectDir() : process.cwd();
       
       if (state.contextConfirmed) {
         return `Context was already confirmed. Side-effect tools are already unlocked.

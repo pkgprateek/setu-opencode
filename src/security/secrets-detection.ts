@@ -144,8 +144,38 @@ export const SECRET_PATTERNS = [
 export interface SecretMatch {
   name: string;
   severity: 'critical' | 'high' | 'medium' | 'low';
-  match: string;  // The matched text (redacted for safety)
+  redactedMatch: string;  // The matched text (redacted for safety)
   line?: number;
+}
+
+/**
+ * Check if a match passes context requirements
+ * 
+ * For patterns with requiresContext: true, validates that context keywords
+ * (like 'aws' or 'secret') appear within ±50 characters of the match.
+ * 
+ * @param pattern - The secret pattern being tested
+ * @param content - The full content being scanned
+ * @param matchIndex - Start index of the match
+ * @param matchLength - Length of the matched string
+ * @returns true if context check passes or is not required
+ */
+function passesContextCheck(
+  pattern: typeof SECRET_PATTERNS[number],
+  content: string,
+  matchIndex: number,
+  matchLength: number
+): boolean {
+  if (!('requiresContext' in pattern) || !pattern.requiresContext) {
+    return true;
+  }
+  
+  const contextWindow = content.slice(
+    Math.max(0, matchIndex - 50),
+    Math.min(content.length, matchIndex + matchLength + 50)
+  ).toLowerCase();
+  
+  return contextWindow.includes('aws') || contextWindow.includes('secret');
 }
 
 /**
@@ -164,14 +194,8 @@ export function detectSecrets(content: string): SecretMatch[] {
     let match;
     while ((match = pattern.regex.exec(content)) !== null) {
       // Skip patterns requiring context if context keywords not present
-      if ('requiresContext' in pattern && pattern.requiresContext) {
-        const contextWindow = content.slice(
-          Math.max(0, match.index - 50),
-          Math.min(content.length, match.index + match[0].length + 50)
-        ).toLowerCase();
-        if (!contextWindow.includes('aws') && !contextWindow.includes('secret')) {
-          continue;
-        }
+      if (!passesContextCheck(pattern, content, match.index, match[0].length)) {
+        continue;
       }
       
       // Find line number
@@ -184,7 +208,7 @@ export function detectSecrets(content: string): SecretMatch[] {
       matches.push({
         name: pattern.name,
         severity: pattern.severity,
-        match: redactedMatch,
+        redactedMatch,
         line: lineNumber
       });
     }
@@ -206,14 +230,8 @@ export function containsSecrets(content: string): boolean {
     let match;
     while ((match = pattern.regex.exec(content)) !== null) {
       // Skip patterns requiring context if context keywords not present
-      if ('requiresContext' in pattern && pattern.requiresContext) {
-        const contextWindow = content.slice(
-          Math.max(0, match.index - 50),
-          Math.min(content.length, match.index + match[0].length + 50)
-        ).toLowerCase();
-        if (!contextWindow.includes('aws') && !contextWindow.includes('secret')) {
-          continue;
-        }
+      if (!passesContextCheck(pattern, content, match.index, match[0].length)) {
+        continue;
       }
       
       // Found a valid secret match
