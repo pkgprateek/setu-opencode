@@ -104,7 +104,7 @@ function generateVerificationSteps(buildTool: string): VerificationStep[] {
   if (commands.test) {
     steps.push({
       name: 'test',
-      command: `${commands.test} 2>&1 | grep -A 3 "FAIL\\|Error\\|✗\\|FAILED" | head -30`,
+      command: `bash -c 'set -o pipefail; ${commands.test} 2>&1 | grep -A 3 "FAIL\\|Error\\|✗\\|FAILED" | head -30' || true`,
       description: 'Capture only failures, not full output',
       required: true
     });
@@ -113,7 +113,7 @@ function generateVerificationSteps(buildTool: string): VerificationStep[] {
   if (commands.lint) {
     steps.push({
       name: 'lint',
-      command: `${commands.lint} 2>&1 | grep -E "error|warning" | head -20`,
+      command: `bash -c 'set -o pipefail; ${commands.lint} 2>&1 | grep -E "error|warning" | head -20' || true`,
       description: 'Capture errors/warnings count',
       required: true
     });
@@ -122,7 +122,7 @@ function generateVerificationSteps(buildTool: string): VerificationStep[] {
   if (commands.typecheck) {
     steps.push({
       name: 'typecheck',
-      command: `${commands.typecheck} 2>&1 | head -30`,
+      command: `bash -c 'set -o pipefail; ${commands.typecheck} 2>&1 | head -30' || true`,
       description: 'Type checking if available',
       required: false
     });
@@ -154,7 +154,7 @@ export function createSetuVerifyTool(
   return tool({
     description: `Run Setu's verification protocol before completing a task.
 Checks build, tests, lint based on current mode.
-Automatically detects project build tool (npm/yarn/pnpm/bun/cargo/go).
+Automatically detects project build tool (npm/yarn/pnpm/bun for JS/TS, cargo for Rust, go for Go, uv/pip for Python).
 - Ultrathink: Full verification (all steps)
 - Quick: Minimal (build only if risky)
 - Expert: User-driven (suggest, don't enforce)

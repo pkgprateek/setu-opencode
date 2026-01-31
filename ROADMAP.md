@@ -133,7 +133,7 @@ Before publishing:
 > **Why:** OpenCode provides native tools that are faster and more reliable than bash equivalents. Setu should prefer these for efficiency and consistency.
 
 | Native Tool | Where to Use | Current State | Improvement |
-|-------------|--------------|---------------|-------------|
+| ----------- | ------------ | ------------- | ----------- |
 | `list` | Phase 0 file discovery | Allowing `bash ls` instead | Use `list` tool — faster, no shell spawn, structured output |
 | `lsp` | Pre-build diagnostics | Placeholder tools ("not available") | Call `lsp.hover`/`lsp.diagnostics` before build to catch errors early |
 | `question` | Interactive prompts | Not using | Could enhance Phase 0 clarification with structured questions |
@@ -148,20 +148,20 @@ Before publishing:
 > **Why:** Defense in depth. Catch tools that could bypass Phase 0 enforcement.
 
 - [ ] **Rate Limit `setu_feedback` Tool**
-    - **Why:** Prevent abuse (filling disk with feedback entries)
-    - **What:** Limit to N feedback entries per session (e.g., 10)
-    - **How:** Track feedback count in session state; reject after limit
-    - **Implementation:** `src/tools/setu-feedback.ts`
+  - **Why:** Prevent abuse (filling disk with feedback entries)
+  - **What:** Limit to N feedback entries per session (e.g., 10)
+  - **How:** Track feedback count in session state; reject after limit
+  - **Implementation:** `src/tools/setu-feedback.ts`
 
 - [x] **Add `patch` to SIDE_EFFECT_TOOLS**
-    - **Why:** OpenCode has a `patch` tool that modifies files; was not blocked
-    - **What:** Add to blocked tools list
-    - **Status:** Already added in `src/constants.ts` ✓
+  - **Why:** OpenCode has a `patch` tool that modifies files; was not blocked
+  - **What:** Add to blocked tools list
+  - **Status:** Already added in `src/constants.ts` ✓
 
 - [x] **Add `multiedit` to SIDE_EFFECT_TOOLS**
-    - **Why:** OpenCode has `multiedit` for batch edits; was not blocked
-    - **What:** Add to blocked tools list
-    - **Status:** Already added in `src/constants.ts` ✓
+  - **Why:** OpenCode has `multiedit` for batch edits; was not blocked
+  - **What:** Add to blocked tools list
+  - **Status:** Already added in `src/constants.ts` ✓
 
 ### Phase 0 Silent Reconnaissance (Required for v1.0)
 
@@ -199,24 +199,24 @@ Before publishing:
     - **Implementation:** `src/hooks/event.ts`, `src/context/storage.ts`
 
 - [ ] **Commit Approval Protocol (Hook-Based Enforcement)**
-    - **Why:** Agents commit without asking, creating messy histories. Persona guidance alone is unreliable.
-    - **What:** Intercept `git commit` and `git push` commands and show warning/block until approved.
-    - **How:**
-      1. In `tool.execute.before` hook, detect bash commands containing `git commit` or `git push`
-      2. Check if commit/push was explicitly approved in current session
-      3. If not approved: throw error with message asking for confirmation
-      4. Track approval state in session (not persisted — each session requires fresh approval)
-    - **Implementation:** `src/hooks/tool-execute.ts` (add to constraint enforcement)
-    - **Message Format:**
-      ```
-      [Git Discipline] Commit requires approval.
-      
-      Changes to commit:
-      - [list staged files]
-      
-      Reply "commit approved" to proceed.
-      ```
-    - **Reference:** setu.md lines 345-358
+  - **Why:** Agents commit without asking, creating messy histories. Persona guidance alone is unreliable.
+  - **What:** Intercept `git commit` and `git push` commands and show warning/block until approved.
+  - **How:**
+    1. In `tool.execute.before` hook, detect bash commands containing `git commit` or `git push`
+    2. Check if commit/push was explicitly approved in current session
+    3. If not approved: throw error with message asking for confirmation
+    4. Track approval state in session (not persisted — each session requires fresh approval)
+  - **Implementation:** `src/hooks/tool-execute.ts` (add to constraint enforcement)
+  - **Message Format:**
+    ```text
+    [Git Discipline] Commit requires approval.
+    
+    Changes to commit:
+    - [list staged files]
+    
+    Reply "commit approved" to proceed.
+    ```
+  - **Reference:** setu.md lines 345-358
 
 - [ ] **Dependency Change Approval**
     - **Why:** Unreviewed dependency changes can introduce security risks, bloat, or breaking changes.
@@ -228,15 +228,15 @@ Before publishing:
     - **Implementation:** `src/prompts/persona.ts` (guidance), `src/hooks/tool-execute.ts` (optional enforcement)
 
 - [ ] **Branch Safety Warnings (Context-Injected)**
-    - **Why:** Accidental commits to main on complex tasks cause problems.
-    - **What:** Detect branch in Phase 0 and inject warning into context if on main/master.
-    - **How:**
-      1. During Silent Exploration (session start), run `git branch --show-current`
-      2. If branch is `main` or `master`, add warning to `ProjectRules`
-      3. Warning is injected into system prompt: `[WARNING: On protected branch 'main'. Consider creating a feature branch for non-trivial changes.]`
-      4. Agent sees warning before making any changes
-    - **Trigger:** Session start (part of Silent Exploration)
-    - **Implementation:** `src/hooks/event.ts`, `src/context/project-rules.ts`
+  - **Why:** Accidental commits to main on complex tasks cause problems.
+  - **What:** Detect branch in Phase 0 and inject warning into context if on main/master.
+  - **How:**
+    1. During Silent Exploration (session start), run `git branch --show-current`
+    2. If branch is `main` or `master`, add warning to `ProjectRules`
+    3. Warning is injected into system prompt: `[WARNING: On protected branch 'main'. Consider creating a feature branch for non-trivial changes.]`
+    4. Agent sees warning before making any changes
+  - **Trigger:** Session start (part of Silent Exploration)
+  - **Implementation:** `src/hooks/event.ts`, `src/context/project-rules.ts`
 
 ### Skill Updates (Required for v1.0)
 
@@ -252,20 +252,20 @@ The bundled skills and local development skills need updates to reflect recent c
     - Add: compaction hook pattern (new)
 
 - [ ] **Update `setu-bootstrap` skill** (`skills/`)
-    - Add: `.setu/` directory creation
-    - Add: `active.json` initialization
-    - Add: Check for existing context on new project
-    - **Native Tool Opportunity:** Use OpenCode's `list` tool instead of suggesting `ls` commands
-      - `list` is faster (no shell spawn) and returns structured data
-      - Example: `list({ path: "src", depth: 2 })` instead of `bash ls -la src`
+  - Add: `.setu/` directory creation
+  - Add: `active.json` initialization
+  - Add: Check for existing context on new project
+  - **Native Tool Opportunity:** Use OpenCode's `list` tool instead of suggesting `ls` commands
+    - `list` is faster (no shell spawn) and returns structured data
+    - Example: `list({ path: "src", depth: 2 })` instead of `bash ls -la src`
 
 - [ ] **Update `setu-verification` skill** (`skills/`)
-    - Add: Logging to `.setu/verification.log`
-    - Add: Stack-specific verification commands
-    - **Native Tool Opportunity:** Use OpenCode's `lsp` tool for pre-build diagnostics
-      - Call `lsp.hover` or `lsp.diagnostics` before running build
-      - Catch type errors early without spawning full build
-      - Falls back gracefully if LSP not available
+  - Add: Logging to `.setu/verification.log`
+  - Add: Stack-specific verification commands
+  - **Native Tool Opportunity:** Use OpenCode's `lsp` tool for pre-build diagnostics
+    - Call `lsp.hover` or `lsp.diagnostics` before running build
+    - Catch type errors early without spawning full build
+    - Falls back gracefully if LSP not available
 
 ---
 
@@ -452,17 +452,17 @@ Three movements to production-ready.
 > **Why:** "Done" should mean "verified working."
 
 - [ ] **Session Idle Enforcement** ⚠️ BLOCKED ON OPENCODE API
-    - **Why:** Agents claim "Done!" without running tests
-    - **What:** Intercept before yield; force verification if incomplete
-    - **How:** Use `session.idle` hook (when available)
-    - **Status (2026-01-31):** The `session.idle` hook does not exist in OpenCode yet. This feature is blocked until OpenCode adds the API.
-    - **Workaround:** Rely on persona guidance ("verify before claiming done") and `setu_verify` tool
+  - **Why:** Agents claim "Done!" without running tests
+  - **What:** Intercept before yield; force verification if incomplete
+  - **How:** Use `session.idle` hook (when available)
+  - **Status (2026-01-31):** The `session.idle` hook does not exist in OpenCode yet. This feature is blocked until OpenCode adds the API.
+  - **Workaround:** Rely on persona guidance ("verify before claiming done") and `setu_verify` tool
 
 - [ ] **Verification Logging**
-    - **Why:** Audit trail of what was verified
-    - **What:** Append to `.setu/verification.log`
-    - **Format:** Markdown with timestamps
-    - **Priority:** v1.1
+  - **Why:** Audit trail of what was verified
+  - **What:** Append to `.setu/verification.log`
+  - **Format:** Markdown with timestamps
+  - **Priority:** v1.1
 
 #### Attempt Limits
 
@@ -553,35 +553,35 @@ Example configuration:
 > **Why:** Agents get stuck in "Ghost Loops" trying to fix code when the environment is broken. This wastes tokens and frustrates users.
 
 - [ ] **Create `setu-environment-doctor` skill** (`skills/`)
-    - **Why:** When build/test fails, the error might be environment (missing deps, wrong node version) not code. Setu should diagnose the root cause before attempting code fixes.
-    - **What:** Diagnostic skill that checks runtime, dependencies, and config health.
-    - **How:**
-      - Check runtime versions (`node -v`, `bun -v`) against `package.json` engines
-      - Compare `package.json` dependencies vs lockfile (missing installs?)
-      - Validate `tsconfig.json` paths and references
-      - Check for missing `node_modules` directory
-      - Check for common env issues: wrong CWD, missing env vars
-    - **Native Tool Opportunity (2026-01-31):** Use OpenCode's `lsp` tool to check if LSP servers are running
-      - Call `lsp.diagnostics` to verify language server health
-      - If LSP is down, that's an environment issue, not code
-    - **Trigger:** Called by `setu-verification` ONLY when verification fails with environment-specific errors
-    - **Error Classification:**
-      | Pattern | Classification |
-      |---------|---------------|
-      | `ENOENT`, `command not found`, exit 127 | Environment |
-      | `MODULE_NOT_FOUND`, `Cannot find module` | Environment |
-      | `node: command not found`, `bun: command not found` | Environment |
-      | `SyntaxError`, `TypeError`, test failures | Code |
-    - **Implementation:** `skills/setu-environment-doctor/SKILL.md`
+  - **Why:** When build/test fails, the error might be environment (missing deps, wrong node version) not code. Setu should diagnose the root cause before attempting code fixes.
+  - **What:** Diagnostic skill that checks runtime, dependencies, and config health.
+  - **How:**
+    - Check runtime versions (`node -v`, `bun -v`) against `package.json` engines
+    - Compare `package.json` dependencies vs lockfile (missing installs?)
+    - Validate `tsconfig.json` paths and references
+    - Check for missing `node_modules` directory
+    - Check for common env issues: wrong CWD, missing env vars
+  - **Native Tool Opportunity (2026-01-31):** Use OpenCode's `lsp` tool to check if LSP servers are running
+    - Call `lsp.diagnostics` to verify language server health
+    - If LSP is down, that's an environment issue, not code
+  - **Trigger:** Called by `setu-verification` ONLY when verification fails with environment-specific errors
+  - **Error Classification:**
+    | Pattern | Classification |
+    | ------- | -------------- |
+    | `ENOENT`, `command not found`, exit 127 | Environment |
+    | `MODULE_NOT_FOUND`, `Cannot find module` | Environment |
+    | `node: command not found`, `bun: command not found` | Environment |
+    | `SyntaxError`, `TypeError`, test failures | Code |
+  - **Implementation:** `skills/setu-environment-doctor/SKILL.md`
 
 - [ ] **Update `setu-verification` skill for env-doctor routing**
-    - **Why:** Verification skill needs to classify errors and route to env-doctor when appropriate.
-    - **What:** Add error classification logic and conditional skill loading.
-    - **How:**
-      - Parse error output for environment patterns (see table above)
-      - If environment error detected: `use_skill("setu-environment-doctor")`
-      - If code error: proceed with normal fix flow
-    - **Implementation:** `skills/setu-verification/SKILL.md`
+  - **Why:** Verification skill needs to classify errors and route to env-doctor when appropriate.
+  - **What:** Add error classification logic and conditional skill loading.
+  - **How:**
+    - Parse error output for environment patterns (see table above)
+    - If environment error detected: `use_skill("setu-environment-doctor")`
+    - If code error: proceed with normal fix flow
+  - **Implementation:** `skills/setu-verification/SKILL.md`
 
 ### Verification & Regression
 
