@@ -23,17 +23,12 @@ import { READ_ONLY_TOOLS, BLOCKED_TOOLS, STYLE_DISPLAY } from '../constants';
 // ============================================================================
 
 /**
- * Generates efficiency guidance for system prompt injection.
- * 
- * Why this is a function, not a constant:
- * - Derives tool list from constants.ts (single source of truth)
- * - Ensures prompt guidance cannot drift from enforcement logic
- * - If we add a new read-only tool, the guidance updates automatically
- * 
- * Security notes:
- * - Explicitly scoped to read-only operations only
- * - References Priority Order (Safe > Efficient) to prevent override
- * - Lists both allowed AND disallowed tools for clarity
+ * Builds the canonical multi-line efficiency guidance used for system prompt state injection.
+ *
+ * The returned guidance enforces Priority Order (Safe > Efficient), requires parallel execution
+ * for independent read-only operations, and includes the current lists of read-only and blocked tools.
+ *
+ * @returns A multi-line guidance string that enforces efficiency rules, mandatory parallel execution for read-only tools, and the interpolated lists of read-only and blocked tools.
  */
 function generateParallelGuidance(): string {
   const readOnlyList = READ_ONLY_TOOLS.join(', ');

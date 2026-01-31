@@ -209,6 +209,18 @@ export function createToolExecuteBeforeHook(
 const countResultLines = (output: string): number =>
   output.split('\n').filter(l => l.trim()).length;
 
+/**
+ * Creates a post-execution hook that records context events and detects verification steps from tool outputs.
+ *
+ * The returned hook is intended to run after a tool executes: it records file reads and search patterns into
+ * the provided ContextCollector (using a debounced persistence mechanism), and it inspects bash command
+ * outputs and titles to mark verification steps (`build`, `test`, `lint`) via the provided callback.
+ *
+ * @param markVerificationStep - Callback to mark a verification step; called with `'build' | 'test' | 'lint'`.
+ * @param getCurrentAgent - Optional function that returns the current agent identifier; the hook is a no-op unless this returns `'setu'` (case-insensitive).
+ * @param getContextCollector - Optional function that returns a ContextCollector used to record file reads and searches.
+ * @returns A function that processes a tool execution event (input and output) and performs context recording and verification-step tracking.
+ */
 export function createToolExecuteAfterHook(
   markVerificationStep: (step: VerificationStep) => void,
   getCurrentAgent?: () => string,

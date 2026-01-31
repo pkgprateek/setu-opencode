@@ -85,7 +85,10 @@ interface VerificationStep {
 }
 
 /**
- * Generate verification steps for the detected build tool
+ * Create an ordered list of verification steps tailored to the given build tool.
+ *
+ * @param buildTool - The detected build tool identifier (e.g., 'npm', 'yarn', 'pnpm', 'bun', 'cargo', 'go', 'uv', 'pip'); if unrecognized, the default build tool is used.
+ * @returns An array of VerificationStep objects describing the applicable build, test, lint, and typecheck commands (when available) and a final visual/manual step.
  */
 function generateVerificationSteps(buildTool: string): VerificationStep[] {
   const commands = BUILD_COMMANDS[buildTool] || BUILD_COMMANDS[DEFAULT_BUILD_TOOL];

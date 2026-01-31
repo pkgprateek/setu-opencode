@@ -6,12 +6,14 @@
  */
 
 /**
- * Creates a debounced version of a function that delays execution
- * until after `ms` milliseconds have elapsed since the last call.
- * 
+ * Return a debounced wrapper that delays invoking `fn` until `ms` milliseconds have passed since the last call.
+ *
+ * The returned function schedules `fn(...args)` to run after the delay; subsequent calls reset the delay. The wrapper
+ * exposes a `cancel` method to clear any pending invocation.
+ *
  * @param fn - The function to debounce
  * @param ms - The debounce delay in milliseconds
- * @returns A debounced version of the function
+ * @returns A function that delays calling `fn` until `ms` milliseconds of inactivity; includes `cancel()` to clear a pending call
  */
 export function debounce<T extends (...args: unknown[]) => void>(
   fn: T,
