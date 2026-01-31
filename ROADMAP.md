@@ -191,18 +191,18 @@ Before publishing:
 > **Improvement (2026-01-31):** Use `tool.execute.before` hook to intercept git commands rather than relying solely on persona guidance. Hook-based enforcement is more reliable than trusting the agent to follow instructions.
 
 - [x] **Git Repo Detection**
-    - **Why:** Non-git projects shouldn't be nagged about commits. Ask once, remember forever.
-    - **What:** Detect if current directory is a git repo on session start.
-    - **How:**
-      1. On session start, check if `.git/` exists
-      2. If not initialized, inject suggestion into system prompt
-      3. Store state in `ProjectRules.git` (not persisted — checked each session)
-    - **Trigger:** Session start (part of Silent Exploration)
-    - **Implementation:** `src/context/project-rules.ts` - `detectGitState()`
+  - **Why:** Non-git projects shouldn't be nagged about commits. Ask once, remember forever.
+  - **What:** Detect if current directory is a git repo on session start.
+  - **How:**
+    1. On session start, check if `.git/` exists
+    2. If not initialized, inject suggestion into system prompt
+    3. Store state in `ProjectRules.git` (not persisted — checked each session)
+  - **Trigger:** Session start (part of Silent Exploration)
+  - **Implementation:** `src/context/project-rules.ts` - `detectGitState()`
 
 - [x] **Commit/Push Verification Enforcement (Hook-Based)**
   - **Why:** Agents commit without verifying, pushing broken code. Hook enforcement is more reliable than persona guidance.
-  - **What:** Block `git commit` and `git push` if verification is not complete.
+  - **What:** Block `git commit` and `git push` if verification is incomplete.
   - **How:**
     1. In `tool.execute.before` hook, detect bash commands containing `git commit` or `git push`
     2. Check if verification state is complete (build + test passed)
@@ -220,12 +220,12 @@ Before publishing:
     ```
 
 - [x] **Dependency Safety Hook**
-    - **Why:** Direct edits to package.json can corrupt manifests or add unapproved dependencies.
-    - **What:** Block `write`/`edit` to package manifests (package.json, lockfiles).
-    - **How:**
-      1. In `tool.execute.before`, detect write/edit targeting package manifest files
-      2. Block with error explaining why and suggesting package manager commands
-    - **Implementation:** `src/hooks/tool-execute.ts` - `PACKAGE_MANIFEST_PATTERNS`
+  - **Why:** Direct edits to package.json can corrupt manifests or add unapproved dependencies.
+  - **What:** Block `write`/`edit` to package manifests (package.json, lockfiles).
+  - **How:**
+    1. In `tool.execute.before`, detect write/edit targeting package manifest files
+    2. Block with error explaining why and suggesting package manager commands
+  - **Implementation:** `src/hooks/tool-execute.ts` - `PACKAGE_MANIFEST_PATTERNS`
 
 - [x] **Branch Safety Warnings (Context-Injected)**
   - **Why:** Accidental commits to main on complex tasks cause problems.

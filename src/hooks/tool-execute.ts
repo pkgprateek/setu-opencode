@@ -99,8 +99,8 @@ export interface VerificationState {
 /**
  * Git commit/push command patterns for interception
  */
-const GIT_COMMIT_PATTERN = /\bgit\s+commit\b/i;
-const GIT_PUSH_PATTERN = /\bgit\s+push\b/i;
+const GIT_COMMIT_PATTERN = /\bgit\b(?:\s+[-\w.=\/]+)*\s+commit\b/i;
+const GIT_PUSH_PATTERN = /\bgit\b(?:\s+[-\w.=\/]+)*\s+push\b/i;
 
 /**
  * Package manifest file patterns for dependency safety
