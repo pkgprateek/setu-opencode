@@ -196,10 +196,13 @@ export function createToolExecuteBeforeHook(
  * Setu plugin operates exclusively within Setu agent mode.
  * When not in Setu agent, this hook remains silent.
  *
- * Calls `markVerificationStep` when bash command output or titles indicate build, test, or lint activity.
+ * Calls `markVerificationStep` when bash command output or titles indicate build, test, lint, or typecheck activity.
  * When a `ContextCollector` is available it records file reads and grep/glob searches (pattern and result count).
  *
- * @param markVerificationStep - Callback invoked with a verification step ('build' | 'test' | 'lint') when the hook detects the corresponding command.
+ * Note: The 'visual' step is not auto-detected — it requires manual invocation via the setu_verify tool
+ * with `steps: ['visual']`. This prompts the user to visually verify UI correctness.
+ *
+ * @param markVerificationStep - Callback invoked with a verification step ('build' | 'test' | 'lint' | 'typecheck' | 'visual') when the hook detects the corresponding command.
  * @param getCurrentAgent - Optional accessor for the current agent identifier; if not 'setu', hook does nothing.
  * @param getContextCollector - Optional function that returns a `ContextCollector` used to record file reads and search actions; if omitted or it returns `null`, context tracking is disabled.
  */
@@ -334,6 +337,29 @@ export function createToolExecuteAfterHook(
       markVerificationStep('lint');
       debugLog('Verification step tracked: lint');
     }
+    
+    // Detect typecheck commands
+    if (
+      title.includes('typecheck') ||
+      title.includes('type-check') ||
+      title.includes('type check') ||
+      commandOutput.includes('tsc --noEmit') ||
+      commandOutput.includes('tsc -noEmit') ||
+      commandOutput.includes('npm run typecheck') ||
+      commandOutput.includes('pnpm typecheck') ||
+      commandOutput.includes('yarn typecheck') ||
+      commandOutput.includes('bun run typecheck') ||
+      commandOutput.includes('mypy') ||
+      commandOutput.includes('pyright') ||
+      commandOutput.includes('cargo check') ||
+      commandOutput.includes('cargo clippy')
+    ) {
+      markVerificationStep('typecheck');
+      debugLog('Verification step tracked: typecheck');
+    }
+    
+    // Note: 'visual' step requires manual invocation via setu_verify tool
+    // It cannot be auto-detected from bash commands
   };
 }
 
