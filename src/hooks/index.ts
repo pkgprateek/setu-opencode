@@ -13,6 +13,7 @@ export {
   disposeSessionBatch,
   type AttemptTracker,
   type VerificationStep,
+  type VerificationState,
   type AttemptState,
   type ToolExecuteBeforeInput,
   type ToolExecuteBeforeOutput,
