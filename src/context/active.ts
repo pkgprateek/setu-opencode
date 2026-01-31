@@ -216,9 +216,11 @@ export function saveActiveTask(projectDir: string, task: ActiveTask): void {
     try {
       if (existsSync(tmpPath)) {
         unlinkSync(tmpPath);
+        debugLog('Cleaned up orphan tmp file after save failure');
       }
-    } catch {
-      // Ignore cleanup errors
+    } catch (cleanupError) {
+      // Log cleanup failure but don't throw (save failure is more important)
+      debugLog('Warning: Failed to cleanup tmp file:', cleanupError);
     }
     
     throw error; // Re-throw so caller knows save failed

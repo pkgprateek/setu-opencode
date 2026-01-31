@@ -877,18 +877,22 @@ Setu as a primary agent means:
 - OpenCode features (Plan/Build) remain accessible
 - No breaking changes to OpenCode behavior
 
-### Priority: Other Plugin Compatibility (MEDIUM)
+### Priority: Other Plugin Compatibility (v3.0 - Deferred)
 
-When other discipline plugins are detected:
-- Setu enters minimal mode
+> **Note:** No other discipline plugins currently exist for OpenCode. This section describes future interoperability that will be implemented if/when needed.
+
+When other discipline plugins are detected (future):
+- Setu enters "minimal mode" (reduced functionality to avoid conflicts)
 - Defers context injection (other plugin handles it)
 - Focuses on Phase 0 and verification only
 - Avoids conflicting with other plugin directories
 
-### Detection Strategy
+### Detection Strategy (v3.0 - Deferred)
+
+> This is speculative architecture for when other discipline plugins exist.
 
 ```typescript
-// At plugin init - detect other plugins
+// At plugin init - detect other plugins (FUTURE)
 const hasOtherPlugin = detectOtherPlugins(projectDir);
 if (hasOtherPlugin) {
   console.log('[Setu] Other plugin detected - minimal mode');

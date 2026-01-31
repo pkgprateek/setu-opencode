@@ -14,10 +14,15 @@
  * Usage:
  *   SETU_DEBUG=true opencode   # Enable debug mode
  *   opencode                    # Production mode (debug off)
+ * 
+ * Security:
+ * - All debug output is redacted to prevent leaking secrets
+ * - See src/security/redaction.ts for redaction patterns
  */
 
 import { existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join } from 'path';
+import { redactSensitive } from './security/redaction';
 
 const SETU_DIR = '.setu';
 const DEBUG_LOG = 'debug.log';
@@ -97,6 +102,7 @@ function writeToLogFile(message: string, args: unknown[]): void {
  * Debug logger - only logs when debug mode is enabled
  * 
  * Logs to both console and .setu/debug.log file.
+ * All output is redacted to prevent leaking secrets.
  * 
  * @param message - The message to log
  * @param args - Additional arguments to log
@@ -104,11 +110,26 @@ function writeToLogFile(message: string, args: unknown[]): void {
 export function debugLog(message: string, ...args: unknown[]): void {
   if (!isDebugMode()) return;
   
+  // Redact sensitive data from message
+  const redactedMessage = redactSensitive(message);
+  
+  // Redact sensitive data from args
+  const redactedArgs = args.map(arg => {
+    if (typeof arg === 'string') {
+      return redactSensitive(arg);
+    }
+    try {
+      return redactSensitive(JSON.stringify(arg));
+    } catch {
+      return String(arg);
+    }
+  });
+  
   // Write to console
-  console.log(`[Setu] ${message}`, ...args);
+  console.log(`[Setu] ${redactedMessage}`, ...redactedArgs);
   
   // Write to file
-  writeToLogFile(message, args);
+  writeToLogFile(redactedMessage, redactedArgs);
 }
 
 /**

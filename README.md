@@ -151,6 +151,8 @@ glob(C) ─────┘
 | `NO_DELETE` | Blocks rm, git reset --hard |
 | `SANDBOX` | Blocks operations outside project |
 
+> **Security Notice:** Task constraints are enforced via static command analysis and can be bypassed by shell metacharacters, variable expansion, or eval. They are a defense-in-depth layer, not a security boundary. OpenCode's permission system (`bash: "*": ask`) is the real security gate. Do not rely on constraints alone for critical security requirements.
+
 **The difference:**
 - Without Setu: Session compacts → Agent forgets it was in "review only" mode → Pushes changes
 - With Setu: Session compacts → Constraints survive → Agent still respects "no push"

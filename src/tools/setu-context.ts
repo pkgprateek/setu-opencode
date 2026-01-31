@@ -8,12 +8,18 @@
  * - Session continuity (survives restarts)
  * - Subagent injection (context shared with child agents)
  * - Audit trail (what was understood)
+ * 
+ * Security:
+ * - All user inputs are sanitized to prevent prompt injection
+ * - See src/security/prompt-sanitization.ts for details
  */
 
 import { tool } from '@opencode-ai/plugin';
 import { type Phase0State } from '../enforcement';
 import { type ContextCollector } from '../context';
 import { errorLog } from '../debug';
+import { sanitizeContextInput } from '../security/prompt-sanitization';
+import { logSecurityEvent, SecurityEventType } from '../security/audit-log';
 
 export interface SetuContextResult {
   success: boolean;
@@ -66,13 +72,30 @@ Once confirmed, context is persisted to .setu/ for continuity.`,
       )
     },
     
-    async execute(args, _context): Promise<string> {
+    async execute(args, context): Promise<string> {
       const state = getPhase0State();
+      const projectDir = process.cwd();  // For security logging
       
       if (state.contextConfirmed) {
         return `Context was already confirmed. Side-effect tools are already unlocked.
 
 If you need to update the context or plan, you can continue working.`;
+      }
+      
+      // SECURITY: Sanitize all user inputs to prevent prompt injection
+      const sanitizedSummary = sanitizeContextInput(args.summary, 'summary');
+      const sanitizedTask = sanitizeContextInput(args.task, 'task');
+      const sanitizedPlan = args.plan ? sanitizeContextInput(args.plan, 'plan') : undefined;
+      
+      // Log if sanitization changed the input (possible injection attempt)
+      if (sanitizedSummary !== args.summary || sanitizedTask !== args.task || 
+          (args.plan && sanitizedPlan !== args.plan)) {
+        logSecurityEvent(
+          projectDir,
+          SecurityEventType.PROMPT_INJECTION_SANITIZED,
+          'Context input was sanitized - possible injection attempt',
+          { sessionId: context.sessionID, tool: 'setu_context' }
+        );
       }
       
       // Confirm context in Phase 0 state
@@ -83,7 +106,8 @@ If you need to update the context or plan, you can continue working.`;
         const collector = getContextCollector();
         if (collector) {
           try {
-            collector.confirm(args.summary, args.task, args.plan);
+            // Use sanitized values for persistence
+            collector.confirm(sanitizedSummary, sanitizedTask, sanitizedPlan);
             collector.saveToDisk();
           } catch (error) {
             errorLog('Failed to persist context:', error);
@@ -94,17 +118,17 @@ If you need to update the context or plan, you can continue working.`;
       
       const duration = Math.round((Date.now() - state.startedAt) / 1000);
       
-      const planSection = args.plan 
-        ? `\n\n**Plan:**\n${args.plan}` 
+      const planSection = sanitizedPlan 
+        ? `\n\n**Plan:**\n${sanitizedPlan}` 
         : '';
       
       return `**Phase 0 Complete** (${duration}s)
 
 **Understanding:**
-${args.summary}
+${sanitizedSummary}
 
 **Task:**
-${args.task}${planSection}
+${sanitizedTask}${planSection}
 
 ---
 
