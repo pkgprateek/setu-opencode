@@ -230,7 +230,7 @@ export function createToolExecuteAfterHook(
     const collector = getContextCollector ? getContextCollector() : null;
     
     // Track file reads for context collection
-    // WRITE-THROUGH: Persist immediately to prevent amnesia on crash
+    // WRITE-THROUGH with debounce: Batches rapid parallel reads
     if (input.tool === 'read' && collector) {
       // Use type guard instead of unsafe cast
       const filePath = getStringProp(input.args, 'filePath');
@@ -238,17 +238,17 @@ export function createToolExecuteAfterHook(
         collector.recordFileRead(filePath);
         debugLog(`Context: Recorded file read: ${filePath}`);
         
-        // Immediate persistence - prevents "Loop of Stupid" (re-reading files)
+        // Debounced persistence - batches parallel reads into single write
         try {
-          collector.saveToDisk();
+          collector.debouncedSave();
         } catch (err) {
-          debugLog('Context: Failed to persist after file read:', err);
+          debugLog('Context: Failed to queue debounced save:', err);
         }
       }
     }
     
     // Track grep searches for context collection
-    // WRITE-THROUGH: Persist immediately to prevent amnesia on crash
+    // WRITE-THROUGH with debounce: Batches rapid parallel searches
     if (input.tool === 'grep' && collector) {
       // Use type guard instead of unsafe cast
       const pattern = getStringProp(input.args, 'pattern');
@@ -256,17 +256,17 @@ export function createToolExecuteAfterHook(
         collector.recordSearch(pattern, 'grep', countResultLines(output.output));
         debugLog(`Context: Recorded grep search: ${pattern}`);
         
-        // Immediate persistence
+        // Debounced persistence
         try {
-          collector.saveToDisk();
+          collector.debouncedSave();
         } catch (err) {
-          debugLog('Context: Failed to persist after grep:', err);
+          debugLog('Context: Failed to queue debounced save:', err);
         }
       }
     }
     
     // Track glob searches for context collection
-    // WRITE-THROUGH: Persist immediately to prevent amnesia on crash
+    // WRITE-THROUGH with debounce: Batches rapid parallel searches
     if (input.tool === 'glob' && collector) {
       // Use type guard instead of unsafe cast
       const pattern = getStringProp(input.args, 'pattern');
@@ -274,11 +274,11 @@ export function createToolExecuteAfterHook(
         collector.recordSearch(pattern, 'glob', countResultLines(output.output));
         debugLog(`Context: Recorded glob search: ${pattern}`);
         
-        // Immediate persistence
+        // Debounced persistence
         try {
-          collector.saveToDisk();
+          collector.debouncedSave();
         } catch (err) {
-          debugLog('Context: Failed to persist after glob:', err);
+          debugLog('Context: Failed to queue debounced save:', err);
         }
       }
     }

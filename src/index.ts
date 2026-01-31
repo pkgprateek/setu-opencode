@@ -32,7 +32,6 @@ import { type Phase0State } from './enforcement';
 import { createSetuVerifyTool } from './tools/setu-verify';
 import { createSetuContextTool } from './tools/setu-context';
 import { createSetuFeedbackTool } from './tools/setu-feedback';
-import { lspTools } from './tools/lsp-tools';
 import { createSetuAgent } from './agent/setu-agent';
 import { 
   initializeFeedbackFile, 
@@ -247,7 +246,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
   debugLog('Default profile:', state.profile.current);
   debugLog('Phase 0 enforcement: ACTIVE');
   debugLog('Context persistence: .setu/ directory');
-  debugLog('Tools: setu_verify, setu_context, setu_feedback, lsp_*');
+  debugLog('Tools: setu_verify, setu_context, setu_feedback');
   debugLog('Skills bundled: setu-bootstrap, setu-verification, setu-rules-creation, code-quality, refine-code, commit-helper, pr-review');
   
   return {
@@ -340,10 +339,9 @@ export const SetuPlugin: Plugin = async (ctx) => {
     
     // Custom tools
     tool: {
-      setu_verify: createSetuVerifyTool(getProfileState, markVerificationComplete),
+      setu_verify: createSetuVerifyTool(getProfileState, markVerificationComplete, getProjectDir),
       setu_context: createSetuContextTool(getPhase0State, confirmContext, getContextCollector),
-      setu_feedback: createSetuFeedbackTool(getProjectDir),
-      ...lspTools
+      setu_feedback: createSetuFeedbackTool(getProjectDir)
     }
   };
 };

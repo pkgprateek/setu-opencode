@@ -21,40 +21,45 @@ Before declaring a task complete, verify using targeted extraction.
 ### 1. Build Check
 
 ```bash
-npm run build || (npm run build 2>&1 | tail -30)
+# Adapt to detected build tool (npm/yarn/pnpm/bun/cargo/go)
+<build-command> || (<build-command> 2>&1 | tail -30)
 ```
 
 - Check exit code first
 - If failed, capture only last 30 lines or grep for "error"
-- Adapt command to project: `pnpm build`, `yarn build`, `bun build`, etc.
+- The `setu_verify` tool auto-detects and generates correct commands
 
 ### 2. Test Check
 
 ```bash
-npm test 2>&1 | grep -A 3 "FAIL\|Error\|✗" | head -30
+# Adapt to detected test runner
+<test-command> 2>&1 | grep -A 3 "FAIL\|Error\|✗" | head -30
 ```
 
 - Capture only failures, not full test output
 - Look for patterns: `FAIL`, `Error`, `✗`, `failed`
-- Adapt to test runner: `vitest`, `jest`, `pytest`, etc.
+- The `setu_verify` tool auto-detects vitest/jest/pytest/etc.
 
 ### 3. Lint Check
 
 ```bash
-npm run lint 2>&1 | grep -E "error|warning" | head -20
+# Adapt to detected linter
+<lint-command> 2>&1 | grep -E "error|warning" | head -20
 ```
 
 - Capture errors/warnings count or first few issues
-- Adapt to linter: `eslint`, `biome`, `ruff`, etc.
+- The `setu_verify` tool auto-detects eslint/biome/ruff/clippy/etc.
 
 ### 4. Type Check (if applicable)
 
 ```bash
-npm run typecheck || tsc --noEmit 2>&1 | head -30
+# For TypeScript projects
+<typecheck-command> 2>&1 | head -30
 ```
 
 - For TypeScript projects
 - Capture type errors only
+- The `setu_verify` tool generates this for TS/Flow projects only
 
 ### 5. Visual Check
 

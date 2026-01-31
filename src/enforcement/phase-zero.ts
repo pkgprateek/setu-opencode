@@ -11,21 +11,6 @@
  * - Explain "why" not just "what" - models need to understand reasoning
  * - Prioritization: Safe → Contextual → Efficient → Helpful
  * - Hard constraints as bright lines, soft guidance for judgment
- */
-
-/**
- * Phase 0: Pre-emptive Context Gate
- * 
- * The core insight: Block side-effect tools until context is confirmed.
- * Allow read-only tools so the agent can form smart questions.
- * 
- * This is pre-emptive, not reactive. We prevent wrong actions rather
- * than fixing them after the damage is done.
- * 
- * Philosophy (from Anthropic's Constitution approach):
- * - Explain "why" not just "what" - models need to understand reasoning
- * - Prioritization: Safe → Contextual → Efficient → Helpful
- * - Hard constraints as bright lines, soft guidance for judgment
  * 
  * Tool classification imported from constants.ts (single source of truth).
  * This module provides Phase 0-specific logic: blocking decisions, bash command parsing.
@@ -33,12 +18,15 @@
 
 import { debugLog } from '../debug';
 import {
-  SETU_TOOLS,
-  READ_ONLY_TOOLS,
   READ_ONLY_BASH_COMMANDS,
   SIDE_EFFECT_TOOLS,
-  GIT_WRITE_COMMANDS
+  GIT_WRITE_COMMANDS,
+  isSetuTool,
+  isReadOnlyTool
 } from '../constants';
+
+// Re-export type guards for consumers of this module
+export { isSetuTool, isReadOnlyTool };
 
 export interface Phase0State {
   /** Whether context has been confirmed by user response */
@@ -47,20 +35,6 @@ export interface Phase0State {
   sessionId: string;
   /** Timestamp when Phase 0 started */
   startedAt: number;
-}
-
-/**
- * Check if a tool is one of Setu's own tools
- */
-export function isSetuTool(toolName: string): boolean {
-  return SETU_TOOLS.includes(toolName as typeof SETU_TOOLS[number]);
-}
-
-/**
- * Check if a tool is read-only and allowed during Phase 0
- */
-export function isReadOnlyTool(toolName: string): boolean {
-  return READ_ONLY_TOOLS.includes(toolName as typeof READ_ONLY_TOOLS[number]);
 }
 
 /**
