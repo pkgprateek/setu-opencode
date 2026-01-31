@@ -43,11 +43,11 @@ function generateParallelGuidance(): string {
 [SETU: EFFICIENCY RULES]
 These rules enforce the *Efficient* value in Priority Order. Safety constraints always take precedence.
 
-1. **Use glob, not ls** — To find files, use the \`glob\` tool with patterns like \`**/*.ts\`.
-   - glob is faster and more efficient than spawning shell processes
-   - NEVER use \`ls -R\` or recursive bash commands for file discovery
-   - PREFER: glob("**/*.ts") → finds all TypeScript files
-   - AVOID: bash("ls -R") or bash("find . -name '*.ts'")
+1. **Use glob or list, not bash ls** — For file discovery, use native tools.
+   - \`glob("**/*.ts")\` → find files by pattern
+   - \`list("/src")\` → get directory tree structure
+   - NEVER use \`bash("ls -R")\` or \`bash("find . -name '*.ts'")\`
+   - Native tools are faster and don't spawn shell processes
 
 2. **PARALLEL EXECUTION IS MANDATORY** for independent read-only operations.
    - Applies to: ${readOnlyList}
@@ -96,9 +96,6 @@ export const getStylePrefix = (style: SetuProfile, isDefault: boolean = false): 
   const suffix = isDefault ? ' (Default)' : '';
   return `[Style: ${name}${suffix}]`;
 };
-
-// Backwards compatibility alias - deprecated, use getStylePrefix
-export const getModePrefix = getStylePrefix;
 
 /**
  * Get file availability message
@@ -150,7 +147,7 @@ export const getStateInjection = (
   files: FileAvailability,
   isDefault: boolean = false
 ): string => {
-  const profilePrefix = getModePrefix(profile, isDefault);
+  const profilePrefix = getStylePrefix(profile, isDefault);
   const fileInfo = getFileAvailability(files);
   
   // Efficiency rules are always injected — they're behavioral, not persona

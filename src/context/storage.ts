@@ -21,6 +21,7 @@ import {
 } from './types';
 import { ensureSetuDir } from './feedback';
 import { debugLog, errorLog } from '../debug';
+import { debounce, CONTEXT_SAVE_DEBOUNCE_MS } from '../utils';
 
 // Re-export for convenience
 export { ensureSetuDir };
@@ -109,6 +110,9 @@ export interface ContextCollector {
   
   /** Save to disk */
   saveToDisk: () => void;
+  
+  /** Save to disk (debounced) - batches rapid writes within 100ms window */
+  debouncedSave: () => void;
 }
 
 /**
@@ -127,6 +131,12 @@ export function createContextCollector(projectDir: string): ContextCollector {
     }
     return filePath;
   };
+  
+  // Create debounced save function once (reused across all calls)
+  const debouncedSaveFn = debounce(() => {
+    saveContext(projectDir, context);
+    debugLog('Context: Debounced save completed');
+  }, CONTEXT_SAVE_DEBOUNCE_MS);
   
   return {
     getContext: () => context,
@@ -180,6 +190,8 @@ export function createContextCollector(projectDir: string): ContextCollector {
     },
     
     reset: () => {
+      // Cancel any pending debounced save to prevent stale writes
+      debouncedSaveFn.cancel();
       context = createEmptyContext();
     },
     
@@ -195,7 +207,9 @@ export function createContextCollector(projectDir: string): ContextCollector {
     
     saveToDisk: () => {
       saveContext(projectDir, context);
-    }
+    },
+    
+    debouncedSave: debouncedSaveFn
   };
 }
 

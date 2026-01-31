@@ -22,14 +22,29 @@ export const SETU_TOOLS = ['setu_verify', 'setu_context', 'setu_feedback'] as co
  * These let the agent "look but don't touch".
  * 
  * This is the single source of truth for parallelizable read-only tools.
+ * 
+ * Includes:
+ * - read: Read file contents
+ * - glob: Find files by pattern
+ * - grep: Search file contents
+ * - list: Directory tree (OpenCode native, faster than bash ls)
+ * - webfetch: Fetch web content
+ * - todoread: Read todo list
  */
-export const READ_ONLY_TOOLS = ['read', 'glob', 'grep', 'webfetch', 'todoread'] as const;
+export const READ_ONLY_TOOLS = ['read', 'glob', 'grep', 'list', 'webfetch', 'todoread'] as const;
 
 /**
  * Side-effect tools that are blocked in Phase 0.
  * These can modify files or state.
+ * 
+ * Includes OpenCode native tools that write or modify:
+ * - write: Create/overwrite files
+ * - edit: Modify existing files
+ * - patch: Apply patches to files
+ * - multiedit: Batch edits across files
+ * - todowrite: Modify todo list
  */
-export const SIDE_EFFECT_TOOLS = ['write', 'edit', 'todowrite'] as const;
+export const SIDE_EFFECT_TOOLS = ['write', 'edit', 'patch', 'multiedit', 'todowrite'] as const;
 
 /**
  * All tools that should be blocked in Phase 0 (for prompt guidance).
@@ -41,12 +56,15 @@ export const BLOCKED_TOOLS = [...SIDE_EFFECT_TOOLS, 'bash'] as const;
  * Bash commands that are read-only (exploration allowed).
  * 
  * Strictly matches the Phase 0 allowlist from AGENTS.md:
- * - Basic file exploration: ls, cat, head, tail, grep, find
+ * - Basic file viewing: cat, head, tail, grep, find
  * - Environment info: pwd, echo, which, env
  * - Git read-only: git status, git log, git diff, git branch, git show
+ * 
+ * Note: 'ls' is intentionally excluded — use glob or list tools instead.
+ * This enforces efficient tool usage and avoids shell spawning overhead.
  */
 export const READ_ONLY_BASH_COMMANDS = [
-  'ls', 'cat', 'head', 'tail', 'grep', 'find',
+  'cat', 'head', 'tail', 'grep', 'find',
   'pwd', 'echo', 'which', 'env',
   'git status', 'git log', 'git diff', 'git branch', 'git show'
 ] as const;

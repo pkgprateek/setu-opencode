@@ -28,7 +28,7 @@ import { isReadOnlyTool, PARALLEL_BATCH_WINDOW_MS } from '../constants';
 /**
  * Verification step tracking
  */
-export type VerificationStep = 'build' | 'test' | 'lint';
+export type VerificationStep = 'build' | 'test' | 'lint' | 'typecheck' | 'visual';
 
 /**
  * Input type for tool.execute.before hook (from OpenCode API)
@@ -196,10 +196,13 @@ export function createToolExecuteBeforeHook(
  * Setu plugin operates exclusively within Setu agent mode.
  * When not in Setu agent, this hook remains silent.
  *
- * Calls `markVerificationStep` when bash command output or titles indicate build, test, or lint activity.
+ * Calls `markVerificationStep` when bash command output or titles indicate build, test, lint, or typecheck activity.
  * When a `ContextCollector` is available it records file reads and grep/glob searches (pattern and result count).
  *
- * @param markVerificationStep - Callback invoked with a verification step ('build' | 'test' | 'lint') when the hook detects the corresponding command.
+ * Note: The 'visual' step is not auto-detected — it requires manual invocation via the setu_verify tool
+ * with `steps: ['visual']`. This prompts the user to visually verify UI correctness.
+ *
+ * @param markVerificationStep - Callback invoked with a verification step ('build' | 'test' | 'lint' | 'typecheck' | 'visual') when the hook detects the corresponding command.
  * @param getCurrentAgent - Optional accessor for the current agent identifier; if not 'setu', hook does nothing.
  * @param getContextCollector - Optional function that returns a `ContextCollector` used to record file reads and search actions; if omitted or it returns `null`, context tracking is disabled.
  */
@@ -230,7 +233,7 @@ export function createToolExecuteAfterHook(
     const collector = getContextCollector ? getContextCollector() : null;
     
     // Track file reads for context collection
-    // WRITE-THROUGH: Persist immediately to prevent amnesia on crash
+    // WRITE-THROUGH with debounce: Batches rapid parallel reads
     if (input.tool === 'read' && collector) {
       // Use type guard instead of unsafe cast
       const filePath = getStringProp(input.args, 'filePath');
@@ -238,17 +241,17 @@ export function createToolExecuteAfterHook(
         collector.recordFileRead(filePath);
         debugLog(`Context: Recorded file read: ${filePath}`);
         
-        // Immediate persistence - prevents "Loop of Stupid" (re-reading files)
+        // Debounced persistence - batches parallel reads into single write
         try {
-          collector.saveToDisk();
+          collector.debouncedSave();
         } catch (err) {
-          debugLog('Context: Failed to persist after file read:', err);
+          debugLog('Context: Failed to queue debounced save:', err);
         }
       }
     }
     
     // Track grep searches for context collection
-    // WRITE-THROUGH: Persist immediately to prevent amnesia on crash
+    // WRITE-THROUGH with debounce: Batches rapid parallel searches
     if (input.tool === 'grep' && collector) {
       // Use type guard instead of unsafe cast
       const pattern = getStringProp(input.args, 'pattern');
@@ -256,17 +259,17 @@ export function createToolExecuteAfterHook(
         collector.recordSearch(pattern, 'grep', countResultLines(output.output));
         debugLog(`Context: Recorded grep search: ${pattern}`);
         
-        // Immediate persistence
+        // Debounced persistence
         try {
-          collector.saveToDisk();
+          collector.debouncedSave();
         } catch (err) {
-          debugLog('Context: Failed to persist after grep:', err);
+          debugLog('Context: Failed to queue debounced save:', err);
         }
       }
     }
     
     // Track glob searches for context collection
-    // WRITE-THROUGH: Persist immediately to prevent amnesia on crash
+    // WRITE-THROUGH with debounce: Batches rapid parallel searches
     if (input.tool === 'glob' && collector) {
       // Use type guard instead of unsafe cast
       const pattern = getStringProp(input.args, 'pattern');
@@ -274,11 +277,11 @@ export function createToolExecuteAfterHook(
         collector.recordSearch(pattern, 'glob', countResultLines(output.output));
         debugLog(`Context: Recorded glob search: ${pattern}`);
         
-        // Immediate persistence
+        // Debounced persistence
         try {
-          collector.saveToDisk();
+          collector.debouncedSave();
         } catch (err) {
-          debugLog('Context: Failed to persist after glob:', err);
+          debugLog('Context: Failed to queue debounced save:', err);
         }
       }
     }
@@ -334,6 +337,29 @@ export function createToolExecuteAfterHook(
       markVerificationStep('lint');
       debugLog('Verification step tracked: lint');
     }
+    
+    // Detect typecheck commands
+    if (
+      title.includes('typecheck') ||
+      title.includes('type-check') ||
+      title.includes('type check') ||
+      commandOutput.includes('tsc --noemit') ||
+      commandOutput.includes('tsc -noemit') ||
+      commandOutput.includes('npm run typecheck') ||
+      commandOutput.includes('pnpm typecheck') ||
+      commandOutput.includes('yarn typecheck') ||
+      commandOutput.includes('bun run typecheck') ||
+      commandOutput.includes('mypy') ||
+      commandOutput.includes('pyright') ||
+      commandOutput.includes('cargo check') ||
+      commandOutput.includes('cargo clippy')
+    ) {
+      markVerificationStep('typecheck');
+      debugLog('Verification step tracked: typecheck');
+    }
+    
+    // Note: 'visual' step requires manual invocation via setu_verify tool
+    // It cannot be auto-detected from bash commands
   };
 }
 

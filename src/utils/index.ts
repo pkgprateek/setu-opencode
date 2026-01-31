@@ -13,3 +13,5 @@ export {
   getNumberProp,
   getBooleanProp
 } from './guards';
+
+export { debounce, CONTEXT_SAVE_DEBOUNCE_MS } from './debounce';
