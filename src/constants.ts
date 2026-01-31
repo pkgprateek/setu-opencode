@@ -196,3 +196,10 @@ export const STYLE_ALIASES: Record<string, typeof VALID_STYLES[number]> = {
  * Supports: "style: quick", "mode: quick", "preset: quick"
  */
 export const KEY_VALUE_PREFIXES = ['style', 'mode', 'preset'] as const;
+
+// ============================================================================
+// Rate Limits
+// ============================================================================
+
+/** Maximum feedback entries per session to prevent abuse */
+export const MAX_FEEDBACK_PER_SESSION = 10;
