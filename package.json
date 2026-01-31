@@ -10,6 +10,7 @@
     "dev": "bun run --watch src/index.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/**/*.ts",
+    "test": "bun test",
     "prepublishOnly": "bun run build"
   },
   "keywords": [

@@ -7,7 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Terminology: Profile → Style:** Fixed `[Profile: X]` prefix to `[Style: X]` in `persona.ts` to match agent file instructions and user expectations
+- **Security: Constraint Bypass Detection:** Added warning logs when bash commands contain potential bypass patterns (`$`, backticks, `$(`, `eval`, `source`, `exec`)
+- **Code Quality: Removed Duplicates:** Removed duplicate tool classification constants from `phase-zero.ts` (now imports from `constants.ts`)
+- **Code Quality: Removed Legacy Exports:** Removed unused `SETU_PERSONA`, `MODE_DESCRIPTIONS`, and `getInitialPrompt` exports from `persona.ts`
+- **Architecture: Efficiency Rules Location:** Moved "Efficiency Rules" from agent file (soul) to `persona.ts` (behavioral injection) — agent file now contains only identity/philosophy
+- **Markdownlint: MD007 Indentation:** Fixed nested list indentation in ROADMAP.md (4-space → 2-space)
+- **Phase 0 Allowlist:** Trimmed `READ_ONLY_BASH_COMMANDS` to strict allowlist (removed `glob`, `rg`, `file`, `stat`, `wc`, `tree`, `less`, `more`, `printenv`)
+- **Setu-Only Tracking:** `recordToolExecution` now only runs in Setu mode (was running for all modes)
+- **Documentation: ROADMAP Accuracy:** Updated ROADMAP.md to accurately reflect implementation status:
+  - Marked Persona Enhancement as complete
+  - Marked System Directive Prefix as complete  
+  - Marked Verification Logging as complete
+  - Fixed context.md discrepancy (deprecated in favor of AGENTS.md)
+  - Updated file structure documentation
+
+### Changed
+- **Agent Version:** Bumped to v2.4.0 (soul-only, behavioral rules in hooks)
+- **Efficiency Guidance:** Enhanced `PARALLEL_GUIDANCE` with explicit `glob > ls` preference and full efficiency rules
+
 ### Added
+- **Parallel Execution Enforcement:** System prompt now includes explicit efficiency rules
+  - Mandates parallel tool calls for independent read-only operations
+  - Explicitly lists allowed tools: read, glob, grep, webfetch, todoread
+  - Explicitly lists blocked tools: write, edit, bash
+  - References Priority Order (Safe > Efficient) to prevent safety bypass
+  - Tool list derived from `READ_ONLY_TOOLS` constant (single source of truth)
+
+- **Parallel Execution Audit Trail:** Logs parallel tool execution batches
+  - Tracks read-only tools executed within 100ms window
+  - Logs batch stats when 2+ tools execute in parallel
+  - Session-scoped to prevent cross-session state leakage
+  - Debug output: `Parallel execution: 3 tools in batch [read, read, glob]`
+
+- **Type-Safe Tool Classification:**
+  - Added `ReadOnlyTool` type derived from `READ_ONLY_TOOLS` constant
+  - Added `isReadOnlyTool()` type guard for safe tool classification
+  - Exported from `enforcement` module for reuse
+
 - **Active Task Persistence:** Track current task, mode, and constraints in `.setu/active.json`
   - Survives session restarts and OpenCode restarts
   - Atomic write pattern prevents corruption

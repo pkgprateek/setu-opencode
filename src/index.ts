@@ -24,6 +24,8 @@ import {
   createAttemptTracker,
   createEventHook,
   createCompactionHook,
+  createActiveBatchesMap,
+  recordToolExecution,
   type VerificationStep
 } from './hooks';
 import { type Phase0State } from './enforcement';
@@ -142,6 +144,9 @@ export const SetuPlugin: Plugin = async (ctx) => {
   
   // Create attempt tracker for "2 tries then ask" pattern
   const attemptTracker = createAttemptTracker();
+  
+  // Create active batches map for parallel execution tracking (audit trail)
+  const activeBatches = createActiveBatchesMap();
   
   // State accessors
   const getProfileState = () => state.profile;
@@ -281,13 +286,28 @@ export const SetuPlugin: Plugin = async (ctx) => {
     // Phase 0: Block side-effect tools until context is confirmed
     // Consolidated enforcement (agent + profile level)
     // Also enforces active task constraints (READ_ONLY, NO_PUSH, etc.)
-    'tool.execute.before': createToolExecuteBeforeHook(
-      getPhase0State, 
-      getCurrentAgent,
-      getContextCollector,
-      getSetuProfile,
-      getProjectDir  // For constraint enforcement
-    ),
+    // Also records tool execution for parallel tracking (audit trail)
+    'tool.execute.before': async (
+      input: { tool: string; sessionID: string; callID: string },
+      output: { args: Record<string, unknown> }
+    ) => {
+      // Record for parallel execution tracking (debug audit trail)
+      // Only track when in Setu mode to avoid polluting other modes
+      const currentAgent = getCurrentAgent();
+      if (currentAgent.toLowerCase() === 'setu') {
+        recordToolExecution(activeBatches, input.sessionID, input.tool);
+      }
+      
+      // Delegate to the main before hook for Phase 0 enforcement
+      const beforeHook = createToolExecuteBeforeHook(
+        getPhase0State, 
+        getCurrentAgent,
+        getContextCollector,
+        getSetuProfile,
+        getProjectDir
+      );
+      return beforeHook(input, output);
+    },
     
     // Track verification steps and context (file reads, searches)
     // Only tracks when in Setu agent - silent in Build/Plan
@@ -300,6 +320,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
     // Handle session lifecycle events
     // Loads existing context on session start for continuity
     // Performs Silent Exploration: loads project rules automatically
+    // Cleans up parallel execution tracking on session end
     event: createEventHook(
       resetVerificationState,
       () => attemptTracker.clearAll(),
@@ -309,7 +330,8 @@ export const SetuPlugin: Plugin = async (ctx) => {
       getContextCollector,
       refreshSetuFilesExist,  // Silent file existence check
       setProjectRules,         // Silent Exploration: store loaded rules
-      getProjectDir            // Project directory accessor (avoids process.cwd())
+      getProjectDir,           // Project directory accessor (avoids process.cwd())
+      activeBatches            // Parallel execution tracking cleanup
     ),
     
     // Compaction safety: inject active task into compaction summary

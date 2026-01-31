@@ -18,6 +18,12 @@ import { type ContextCollector, formatContextForInjection, contextToSummary } fr
 import { loadActiveTask, shouldBlockDueToConstraint } from '../context/active';
 import { type SetuProfile, getProfileEnforcementLevel } from '../prompts/profiles';
 import { debugLog } from '../debug';
+import { isString, getStringProp } from '../utils';
+import { isReadOnlyTool, PARALLEL_BATCH_WINDOW_MS } from '../constants';
+
+// ============================================================================
+// Verification Step Tracking
+// ============================================================================
 
 /**
  * Verification step tracking
@@ -126,7 +132,8 @@ export function createToolExecuteBeforeHook(
         const summary = contextToSummary(context);
         const contextBlock = formatContextForInjection(summary);
         
-        const originalPrompt = output.args.prompt as string || '';
+        // Use type guard instead of unsafe cast
+        const originalPrompt = getStringProp(output.args, 'prompt') ?? '';
         output.args.prompt = `${contextBlock}\n\n[TASK]\n${originalPrompt}`;
         
         debugLog('Injected context into subagent prompt');
@@ -223,37 +230,65 @@ export function createToolExecuteAfterHook(
     const collector = getContextCollector ? getContextCollector() : null;
     
     // Track file reads for context collection
+    // WRITE-THROUGH: Persist immediately to prevent amnesia on crash
     if (input.tool === 'read' && collector) {
-      const filePath = input.args?.filePath as string;
+      // Use type guard instead of unsafe cast
+      const filePath = getStringProp(input.args, 'filePath');
       if (filePath) {
         collector.recordFileRead(filePath);
         debugLog(`Context: Recorded file read: ${filePath}`);
+        
+        // Immediate persistence - prevents "Loop of Stupid" (re-reading files)
+        try {
+          collector.saveToDisk();
+        } catch (err) {
+          debugLog('Context: Failed to persist after file read:', err);
+        }
       }
     }
     
     // Track grep searches for context collection
+    // WRITE-THROUGH: Persist immediately to prevent amnesia on crash
     if (input.tool === 'grep' && collector) {
-      const pattern = input.args?.pattern as string;
+      // Use type guard instead of unsafe cast
+      const pattern = getStringProp(input.args, 'pattern');
       if (pattern) {
         collector.recordSearch(pattern, 'grep', countResultLines(output.output));
         debugLog(`Context: Recorded grep search: ${pattern}`);
+        
+        // Immediate persistence
+        try {
+          collector.saveToDisk();
+        } catch (err) {
+          debugLog('Context: Failed to persist after grep:', err);
+        }
       }
     }
     
     // Track glob searches for context collection
+    // WRITE-THROUGH: Persist immediately to prevent amnesia on crash
     if (input.tool === 'glob' && collector) {
-      const pattern = input.args?.pattern as string;
+      // Use type guard instead of unsafe cast
+      const pattern = getStringProp(input.args, 'pattern');
       if (pattern) {
         collector.recordSearch(pattern, 'glob', countResultLines(output.output));
         debugLog(`Context: Recorded glob search: ${pattern}`);
+        
+        // Immediate persistence
+        try {
+          collector.saveToDisk();
+        } catch (err) {
+          debugLog('Context: Failed to persist after glob:', err);
+        }
       }
     }
     
     // Only track verification for bash tool executions
     if (input.tool !== 'bash') return;
     
-    const commandOutput = output.output.toLowerCase();
-    const title = output.title.toLowerCase();
+    // Ensure output.output is a string before calling toLowerCase
+    const commandOutput = isString(output.output) ? output.output.toLowerCase() : '';
+    const title = isString(output.title) ? output.title.toLowerCase() : '';
     
     // Detect build commands
     if (
@@ -387,3 +422,106 @@ Would you like me to try a different approach, or do you have guidance?`;
 }
 
 export type AttemptTracker = ReturnType<typeof createAttemptTracker>;
+
+// ============================================================================
+// Parallel Execution Tracking
+// ============================================================================
+
+/**
+ * Represents an in-flight batch of tool executions within a time window.
+ * 
+ * When multiple read-only tools execute within PARALLEL_BATCH_WINDOW_MS,
+ * they're grouped into a single batch for audit logging.
+ */
+export interface ToolExecutionBatch {
+  /** Tools executed in this batch */
+  toolNames: string[];
+  /** When the first tool in the batch executed */
+  batchStartedAt: number;
+  /** Timer that triggers batch completion */
+  completionTimer: ReturnType<typeof setTimeout> | null;
+}
+
+/**
+ * Active batches indexed by session ID.
+ * This type is exposed for the plugin to manage state in its closure.
+ */
+export type ActiveBatchesMap = Map<string, ToolExecutionBatch>;
+
+/**
+ * Creates a new active batches map for session-isolated tracking.
+ * Call this from the plugin closure to create state.
+ */
+export function createActiveBatchesMap(): ActiveBatchesMap {
+  return new Map();
+}
+
+/**
+ * Completes a batch and logs parallel execution stats.
+ * 
+ * Only logs when 2+ read-only tools executed in parallel (the interesting case).
+ * Single-tool batches are silently discarded.
+ */
+function completeAndLogBatch(activeBatches: ActiveBatchesMap, sessionId: string): void {
+  const batch = activeBatches.get(sessionId);
+  if (batch && batch.toolNames.length > 1) {
+    debugLog(`Parallel execution: ${batch.toolNames.length} tools in batch [${batch.toolNames.join(', ')}]`);
+  }
+  activeBatches.delete(sessionId);
+}
+
+/**
+ * Records a tool execution for parallel tracking.
+ * 
+ * Uses isReadOnlyTool() from constants module as the single source
+ * of truth for which tools can be parallelized. This ensures the tracking
+ * list cannot drift from the enforcement list.
+ * 
+ * @param activeBatches - The active batches map from plugin state
+ * @param sessionId - Current session ID for isolation
+ * @param toolName - Name of the tool being executed
+ */
+export function recordToolExecution(
+  activeBatches: ActiveBatchesMap,
+  sessionId: string,
+  toolName: string
+): void {
+  // Only track read-only tools (the parallelizable ones)
+  if (!isReadOnlyTool(toolName)) {
+    return;
+  }
+
+  const now = Date.now();
+  let batch = activeBatches.get(sessionId);
+
+  // Start new batch if none exists
+  if (!batch) {
+    batch = {
+      toolNames: [toolName],
+      batchStartedAt: now,
+      completionTimer: setTimeout(() => completeAndLogBatch(activeBatches, sessionId), PARALLEL_BATCH_WINDOW_MS)
+    };
+    activeBatches.set(sessionId, batch);
+    return;
+  }
+
+  // Add to existing batch and reset the completion timer
+  batch.toolNames.push(toolName);
+  if (batch.completionTimer) {
+    clearTimeout(batch.completionTimer);
+  }
+  batch.completionTimer = setTimeout(() => completeAndLogBatch(activeBatches, sessionId), PARALLEL_BATCH_WINDOW_MS);
+}
+
+/**
+ * Disposes the batch tracker for a session.
+ * 
+ * Call this when a session ends to prevent timer leaks.
+ */
+export function disposeSessionBatch(activeBatches: ActiveBatchesMap, sessionId: string): void {
+  const batch = activeBatches.get(sessionId);
+  if (batch?.completionTimer) {
+    clearTimeout(batch.completionTimer);
+  }
+  activeBatches.delete(sessionId);
+}

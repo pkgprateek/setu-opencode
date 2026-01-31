@@ -5,7 +5,7 @@
  * The full persona is in the agent file (.opencode/agents/setu.md).
  * 
  * What this injects:
- * - Current profile indicator
+ * - Current style indicator [Style: X]
  * - File availability
  * - Smart guidance based on what exists
  * 
@@ -16,6 +16,64 @@
  */
 
 import type { SetuProfile } from './profiles';
+import { READ_ONLY_TOOLS, BLOCKED_TOOLS, STYLE_DISPLAY } from '../constants';
+
+// ============================================================================
+// Parallel Execution Guidance
+// ============================================================================
+
+/**
+ * Generates efficiency guidance for system prompt injection.
+ * 
+ * Why this is a function, not a constant:
+ * - Derives tool list from constants.ts (single source of truth)
+ * - Ensures prompt guidance cannot drift from enforcement logic
+ * - If we add a new read-only tool, the guidance updates automatically
+ * 
+ * Security notes:
+ * - Explicitly scoped to read-only operations only
+ * - References Priority Order (Safe > Efficient) to prevent override
+ * - Lists both allowed AND disallowed tools for clarity
+ */
+function generateParallelGuidance(): string {
+  const readOnlyList = READ_ONLY_TOOLS.join(', ');
+  const blockedList = BLOCKED_TOOLS.join(', ');
+  
+  return `
+[SETU: EFFICIENCY RULES]
+These rules enforce the *Efficient* value in Priority Order. Safety constraints always take precedence.
+
+1. **Use glob, not ls** — To find files, use the \`glob\` tool with patterns like \`**/*.ts\`.
+   - glob is faster and more efficient than spawning shell processes
+   - NEVER use \`ls -R\` or recursive bash commands for file discovery
+   - PREFER: glob("**/*.ts") → finds all TypeScript files
+   - AVOID: bash("ls -R") or bash("find . -name '*.ts'")
+
+2. **PARALLEL EXECUTION IS MANDATORY** for independent read-only operations.
+   - Applies to: ${readOnlyList}
+   - Does NOT apply to: ${blockedList}, or any side-effect tool
+   - BAD: read(A) -> wait -> read(B) -> wait -> glob(C)
+   - GOOD: read(A) & read(B) & glob(C) in ONE message
+
+3. **Search smart** — Use \`grep\` for content search, \`glob\` for file patterns.
+   - Don't iterate manually through directories
+   - Batch your context gathering
+
+4. **Minimize tokens** — Get context efficiently.
+   - Don't explore the entire codebase when you only need specific files
+   - Use glob to find, then read relevant ones in parallel
+
+Remember: Safe > Efficient. When in doubt, ask.
+`;
+}
+
+/**
+ * Parallel execution guidance for system prompt injection.
+ * 
+ * Generated at module load time from constants to ensure
+ * the tool list is always in sync with enforcement logic.
+ */
+export const PARALLEL_GUIDANCE = generateParallelGuidance();
 
 /**
  * File existence state
@@ -28,23 +86,19 @@ export interface FileAvailability {
 }
 
 /**
- * Profile display names
+ * Get style prefix for responses
+ * 
+ * Format: [Style: Ultrathink] or [Style: Quick]
+ * This aligns with the agent file instruction to acknowledge with [Style: X]
  */
-const PROFILE_DISPLAY: Record<SetuProfile, string> = {
-  ultrathink: 'Ultrathink',
-  quick: 'Quick',
-  expert: 'Expert',
-  collab: 'Collab'
+export const getStylePrefix = (style: SetuProfile, isDefault: boolean = false): string => {
+  const name = STYLE_DISPLAY[style];
+  const suffix = isDefault ? ' (Default)' : '';
+  return `[Style: ${name}${suffix}]`;
 };
 
-/**
- * Get profile prefix for responses
- */
-export const getModePrefix = (profile: SetuProfile, isDefault: boolean = false): string => {
-  const name = PROFILE_DISPLAY[profile];
-  const suffix = isDefault ? ' (Default)' : '';
-  return `[Profile: ${name}${suffix}]`;
-};
+// Backwards compatibility alias - deprecated, use getStylePrefix
+export const getModePrefix = getStylePrefix;
 
 /**
  * Get file availability message
@@ -81,10 +135,15 @@ export const getFileAvailability = (files: FileAvailability): string => {
 };
 
 /**
- * Get complete state injection for system prompt
+ * Get complete state injection for system prompt.
  * 
- * This is minimal - just profile and file availability.
- * The agent file already contains the full persona.
+ * Injects:
+ * - Profile prefix (mode indicator)
+ * - File availability (context awareness)
+ * - Parallel execution guidance (efficiency enforcement)
+ * 
+ * This is intentionally minimal — the full persona lives in the agent file.
+ * We only inject dynamic state that changes per-session.
  */
 export const getStateInjection = (
   profile: SetuProfile,
@@ -94,14 +153,8 @@ export const getStateInjection = (
   const profilePrefix = getModePrefix(profile, isDefault);
   const fileInfo = getFileAvailability(files);
   
-  return `${profilePrefix}\n${fileInfo}`;
+  // Efficiency rules are always injected — they're behavioral, not persona
+  return `${profilePrefix}\n${fileInfo}\n${PARALLEL_GUIDANCE}`;
 };
 
-// Legacy exports for backwards compatibility
-export const SETU_PERSONA = ''; // No longer used - persona is in agent file
-export const MODE_DESCRIPTIONS = {}; // No longer used - profiles described in agent file
-
-export const getInitialPrompt = (_profile: string): string => {
-  // No longer injects full persona - that's in the agent file
-  return '';
-};
+// Legacy exports removed - no consumers exist

@@ -11,6 +11,7 @@
 
 import { type ContextCollector, detectProjectInfo, type ProjectRules, loadProjectRules } from '../context';
 import { debugLog } from '../debug';
+import { type ActiveBatchesMap, disposeSessionBatch } from './tool-execute';
 
 /**
  * Create an event handler for session lifecycle events.
@@ -24,6 +25,7 @@ import { debugLog } from '../debug';
  * @param checkFilesExist - Optional callback to silently check file existence without errors
  * @param setProjectRules - Optional callback to store loaded project rules (Silent Exploration)
  * @param getProjectDir - Optional callback to get the project directory (avoids process.cwd() fallback)
+ * @param activeBatches - Optional active batches map for parallel execution tracking cleanup
  * @returns The event handler function that processes session events and updates internal state and context
  */
 export function createEventHook(
@@ -35,18 +37,23 @@ export function createEventHook(
   getContextCollector?: () => ContextCollector | null,
   checkFilesExist?: () => { active: boolean; context: boolean; agentsMd: boolean; claudeMd: boolean },
   setProjectRules?: (rules: ProjectRules | null) => void,
-  getProjectDir?: () => string
+  getProjectDir?: () => string,
+  activeBatches?: ActiveBatchesMap
 ) {
   return async ({ event }: { event: { type: string; properties?: Record<string, unknown> } }): Promise<void> => {
     switch (event.type) {
       case 'session.created': {
-        debugLog('New session started');
+        // SESSION DELIMITER: Makes debug logs readable by clearly separating sessions
+        const sessionId = (event.properties?.sessionID as string) || 'unknown';
+        debugLog('\n\n========================================');
+        debugLog(`=== NEW SESSION: ${sessionId} ===`);
+        debugLog('========================================\n');
+        
         resetVerificationState();
         resetAttemptTracker();
         setFirstSessionDone();
         
         if (resetPhase0) {
-          const sessionId = (event.properties?.sessionID as string) || '';
           resetPhase0(sessionId);
         }
         
@@ -85,6 +92,9 @@ export function createEventHook(
               if (ctx.currentTask) {
                 debugLog(`Previous task: ${ctx.currentTask.slice(0, 50)}...`);
               }
+              if (ctx.filesRead.length > 0) {
+                debugLog(`Files read: ${ctx.filesRead.length} files`);
+              }
               // Mark as confirmed so Phase 0 doesn't block unnecessarily
               // User can still update context if needed
               confirmContext();
@@ -113,13 +123,22 @@ export function createEventHook(
         break;
       }
         
-      case 'session.deleted':
-        debugLog('Session ended');
-        break;
+      case 'session.deleted': {
+        const sessionId = (event.properties?.sessionID as string) || 'unknown';
+        debugLog(`Session ended: ${sessionId}`);
         
-      case 'session.compacted':
-        debugLog('Session compacted');
+        // Clean up parallel execution tracking to prevent timer leaks
+        if (activeBatches) {
+          disposeSessionBatch(activeBatches, sessionId);
+        }
         break;
+      }
+        
+      case 'session.compacted': {
+        const sessionId = (event.properties?.sessionID as string) || 'unknown';
+        debugLog(`Session compacted: ${sessionId}`);
+        break;
+      }
     }
   };
 }

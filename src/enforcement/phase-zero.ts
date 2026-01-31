@@ -13,45 +13,32 @@
  * - Hard constraints as bright lines, soft guidance for judgment
  */
 
+/**
+ * Phase 0: Pre-emptive Context Gate
+ * 
+ * The core insight: Block side-effect tools until context is confirmed.
+ * Allow read-only tools so the agent can form smart questions.
+ * 
+ * This is pre-emptive, not reactive. We prevent wrong actions rather
+ * than fixing them after the damage is done.
+ * 
+ * Philosophy (from Anthropic's Constitution approach):
+ * - Explain "why" not just "what" - models need to understand reasoning
+ * - Prioritization: Safe → Contextual → Efficient → Helpful
+ * - Hard constraints as bright lines, soft guidance for judgment
+ * 
+ * Tool classification imported from constants.ts (single source of truth).
+ * This module provides Phase 0-specific logic: blocking decisions, bash command parsing.
+ */
+
 import { debugLog } from '../debug';
-
-/**
- * Setu's own tools - always allowed regardless of Phase 0 state
- * These are tools provided by this plugin
- */
-const SETU_TOOLS = ['setu_verify', 'setu_context', 'setu_feedback'] as const;
-
-/**
- * Read-only tools that are always allowed
- * These let the agent "look but don't touch"
- */
-const READ_ONLY_TOOLS = ['read', 'glob', 'grep', 'webfetch', 'todoread'] as const;
-
-/**
- * Bash commands that are read-only
- * Allow exploration, block modification
- */
-const READ_ONLY_BASH_COMMANDS = [
-  'glob', 'ls', 'cat', 'head', 'tail', 'grep', 'rg', 'find', 
-  'pwd', 'echo', 'which', 'env', 'printenv',
-  'git status', 'git log', 'git diff', 'git branch', 'git show',
-  'file', 'stat', 'wc', 'tree', 'less', 'more'
-] as const;
-
-/**
- * Side-effect tools that are blocked in Phase 0
- */
-const SIDE_EFFECT_TOOLS = ['write', 'edit', 'todowrite'] as const;
-
-/**
- * Git write operations that are blocked
- */
-const GIT_WRITE_COMMANDS = [
-  'git add', 'git commit', 'git push', 'git pull', 'git merge',
-  'git rebase', 'git reset', 'git checkout -b', 'git stash',
-  'git cherry-pick', 'git revert', 'git tag', 'git branch -d',
-  'git branch -D', 'git remote add', 'git remote remove'
-] as const;
+import {
+  SETU_TOOLS,
+  READ_ONLY_TOOLS,
+  READ_ONLY_BASH_COMMANDS,
+  SIDE_EFFECT_TOOLS,
+  GIT_WRITE_COMMANDS
+} from '../constants';
 
 export interface Phase0State {
   /** Whether context has been confirmed by user response */

@@ -6,11 +6,11 @@
  * IMPORTANT: This hook injects dynamic state AND loaded context.
  * The full persona is already in the agent file (.opencode/agents/setu.md).
  * 
- * When in Setu mode: Injects profile + file availability + project rules + context content
+ * When in Setu mode: Injects style + file availability + project rules + context content + read history
  * When in Build/Plan: Does nothing (Setu is off)
  */
 
-import { getStateInjection, type FileAvailability, getModePrefix } from '../prompts/persona';
+import { getStateInjection, type FileAvailability } from '../prompts/persona';
 import type { ProfileState } from '../prompts/profiles';
 import { 
   type ContextCollector, 
@@ -22,18 +22,38 @@ import {
 } from '../context';
 
 /**
+ * Format files already read for injection into system prompt
+ * 
+ * This prevents the "Loop of Stupid" - re-reading files the agent already read.
+ * Token-efficient: just paths, not content.
+ * 
+ * @param filesRead - Array of file paths that have been read
+ * @returns Formatted injection string or empty string if no files
+ */
+function formatFilesAlreadyRead(filesRead: Array<{ path: string }>): string {
+  if (filesRead.length === 0) return '';
+  
+  // Limit to last 50 files to avoid bloating system prompt
+  const recentFiles = filesRead.slice(-50);
+  const paths = recentFiles.map(f => f.path).join(', ');
+  
+  return `[FILES ALREADY READ]: ${paths}`;
+}
+
+/**
  * Creates the system transform hook
  * 
  * Injects:
- * - [Mode: Ultrathink] (or current profile)
+ * - [Style: Ultrathink] (or current style)
  * - [Context: AGENTS.md, .setu/context.json]
  * - Silent Exploration: Project rules (AGENTS.md, CLAUDE.md, active task)
  * - Loaded context content (summary, constraints, patterns)
- * - Response format requirements
+ * - [FILES ALREADY READ]: List of files already read (prevents re-reading)
  * 
  * Does NOT inject:
  * - Full persona (already in agent file)
  * - Behavioral instructions (enforced by hooks)
+ * - Response format prefix (removed - visual noise)
  */
 export function createSystemTransformHook(
   getProfileState: () => ProfileState,
@@ -42,7 +62,10 @@ export function createSystemTransformHook(
   getCurrentAgent?: () => string,
   getContextCollector?: () => ContextCollector | null,
   getProjectRules?: () => ProjectRules | null
-) {
+): (
+  _input: { sessionID: string },
+  output: { system: string[] }
+) => Promise<void> {
   return async (
     _input: { sessionID: string },
     output: { system: string[] }
@@ -61,7 +84,7 @@ export function createSystemTransformHook(
       ? getSetuFilesExist() 
       : { active: false, context: false, agentsMd: false, claudeMd: false };
     
-    // Inject minimal state - profile and file availability
+    // Inject minimal state - style and file availability
     const stateInjection = getStateInjection(profileState.current, filesExist, isDefault);
     output.system.push(stateInjection);
     
@@ -81,7 +104,14 @@ export function createSystemTransformHook(
       const collector = getContextCollector();
       if (collector) {
         const context = collector.getContext();
-        // Only inject if context has meaningful content
+        
+        // Inject FILES ALREADY READ to prevent re-reading
+        // This is always useful, even if context isn't confirmed yet
+        if (context.filesRead.length > 0) {
+          output.system.push(formatFilesAlreadyRead(context.filesRead));
+        }
+        
+        // Only inject full context if confirmed and meaningful
         if (context.confirmed && (context.summary || context.patterns.length > 0 || context.currentTask)) {
           const summary = contextToSummary(context);
           const contextBlock = formatContextForInjection(summary);
@@ -107,9 +137,8 @@ export function createSystemTransformHook(
       }
     }
     
-    // RESPONSE FORMAT: Enforce mode prefix at start of every response
-    output.system.push(`[RESPONSE FORMAT]
-You MUST start every response with exactly: ${getModePrefix(profileState.current)}
-This is non-negotiable. The mode prefix must be the first thing in your response.`);
+    // NOTE: [RESPONSE FORMAT] block removed intentionally
+    // The prefix [Profile: Ultrathink] is visual noise.
+    // The user knows the mode via Toast/UI; the agent knows via system prompt injection above.
   };
 }
