@@ -28,7 +28,7 @@ import { isReadOnlyTool, PARALLEL_BATCH_WINDOW_MS } from '../constants';
 /**
  * Verification step tracking
  */
-export type VerificationStep = 'build' | 'test' | 'lint';
+export type VerificationStep = 'build' | 'test' | 'lint' | 'typecheck' | 'visual';
 
 /**
  * Input type for tool.execute.before hook (from OpenCode API)
