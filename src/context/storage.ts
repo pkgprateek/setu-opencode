@@ -190,6 +190,8 @@ export function createContextCollector(projectDir: string): ContextCollector {
     },
     
     reset: () => {
+      // Cancel any pending debounced save to prevent stale writes
+      debouncedSaveFn.cancel();
       context = createEmptyContext();
     },
     
