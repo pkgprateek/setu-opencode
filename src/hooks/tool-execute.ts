@@ -6,6 +6,7 @@
  * - tool.execute.before: Phase 0 blocking (pre-emptive enforcement)
  *   Context injection for subagent prompts (task tool)
  *   Constraint enforcement (READ_ONLY, NO_PUSH, etc.)
+ *   Secrets detection for write/edit operations
  * - tool.execute.after: Tracks verification steps, file reads, searches
  */
 
@@ -21,6 +22,13 @@ import { type SetuProfile, getProfileEnforcementLevel } from '../prompts/profile
 import { debugLog } from '../debug';
 import { isString, getStringProp } from '../utils';
 import { isReadOnlyTool, PARALLEL_BATCH_WINDOW_MS } from '../constants';
+import { 
+  detectSecrets, 
+  validateFilePath,
+  logSecurityEvent,
+  SecurityEventType,
+  type SecretMatch
+} from '../security';
 
 // ============================================================================
 // Verification Step Tracking
@@ -103,15 +111,42 @@ const GIT_COMMIT_PATTERN = /\bgit\b(?:\s+[-\w.=\/]+)*\s+commit\b/i;
 const GIT_PUSH_PATTERN = /\bgit\b(?:\s+[-\w.=\/]+)*\s+push\b/i;
 
 /**
- * Package manifest file patterns for dependency safety
+ * Package manifest and critical config file patterns for dependency safety
  * Blocks direct edits to these files to prevent accidental corruption
+ * 
+ * Extended to cover:
+ * - Package manifests (package.json, lockfiles)
+ * - Package manager configs (.npmrc, .yarnrc) - can add malicious registries
+ * - Build configs with executable code (eslint, babel, webpack, vite)
  */
 const PACKAGE_MANIFEST_PATTERNS = [
+  // Package manifests
   /package\.json$/,
   /package-lock\.json$/,
   /yarn\.lock$/,
   /pnpm-lock\.yaml$/,
-  /bun\.lockb$/
+  /bun\.lockb$/,
+  
+  // Package manager configs (can add malicious registries)
+  /\.npmrc$/,
+  /\.yarnrc$/,
+  /\.yarnrc\.yml$/,
+  
+  // Build configs with executable code (run during build/lint)
+  // Note: Only JS/TS configs that execute code; JSON configs are safer
+  /\.eslintrc\.(js|cjs|mjs)$/,
+  /eslint\.config\.(js|cjs|mjs|ts)$/,
+  /babel\.config\.(js|cjs|mjs|ts)$/,
+  /\.babelrc\.(js|cjs|mjs)$/,
+  /webpack\.config\.(js|cjs|mjs|ts)$/,
+  /vite\.config\.(js|cjs|mjs|ts)$/,
+  /rollup\.config\.(js|cjs|mjs|ts)$/,
+  /postcss\.config\.(js|cjs|mjs)$/,
+  /tailwind\.config\.(js|cjs|mjs|ts)$/,
+  
+  // Pre/post scripts (shell injection risk)
+  /\.husky\//,
+  /\.git\/hooks\//,
 ] as const;
 
 /**
@@ -207,11 +242,21 @@ export function createToolExecuteBeforeHook(
     if ((input.tool === 'write' || input.tool === 'edit') && enforcementLevel === 'full') {
       const filePath = getStringProp(output.args, 'filePath') ?? '';
       
+      // Normalize path separators for cross-platform pattern matching (Windows uses backslash)
+      const normalizedPath = filePath.replace(/\\/g, '/');
+      
       const isPackageManifest = PACKAGE_MANIFEST_PATTERNS.some(pattern => 
-        pattern.test(filePath)
+        pattern.test(normalizedPath)
       );
       
       if (isPackageManifest) {
+        const projectDir = getProjectDir ? getProjectDir() : process.cwd();
+        logSecurityEvent(
+          projectDir,
+          SecurityEventType.DEPENDENCY_EDIT_BLOCKED,
+          `Blocked ${input.tool} to ${basename(filePath)}`,
+          { sessionId: input.sessionID, tool: input.tool }
+        );
         debugLog(`Dependency Safety BLOCKED: ${input.tool} to ${filePath}`);
         throw new Error(
           `⚠️ [Dependency Safety] Direct edits to '${basename(filePath)}' blocked.\n\n` +
@@ -220,6 +265,53 @@ export function createToolExecuteBeforeHook(
           `  • npm/pnpm/yarn/bun remove <package>\n\n` +
           `If you need to edit this file directly, explain why to the user first.`
         );
+      }
+      
+      // PATH TRAVERSAL PREVENTION
+      // Validate file paths are within project directory
+      if (getProjectDir) {
+        const projectDir = getProjectDir();
+        const pathValidation = validateFilePath(projectDir, filePath, { 
+          allowSensitive: false,
+          allowAbsoluteWithinProject: true 
+        });
+        
+        if (!pathValidation.valid) {
+          logSecurityEvent(
+            projectDir,
+            pathValidation.reason === 'traversal' 
+              ? SecurityEventType.PATH_TRAVERSAL_BLOCKED
+              : SecurityEventType.SENSITIVE_FILE_BLOCKED,
+            pathValidation.error || `Blocked ${input.tool} to ${filePath}`,
+            { sessionId: input.sessionID, tool: input.tool }
+          );
+          debugLog(`Path Security BLOCKED: ${pathValidation.error}`);
+          throw new Error(`🛡️ [Path Security] ${pathValidation.error}`);
+        }
+      }
+      
+      // SECRETS DETECTION
+      // Scan content for accidental secrets before write/edit
+      const content = getStringProp(output.args, input.tool === 'write' ? 'content' : 'newString');
+      if (content) {
+        const secrets: SecretMatch[] = detectSecrets(content);
+        const criticalSecrets = secrets.filter((s: SecretMatch) => s.severity === 'critical' || s.severity === 'high');
+        
+        if (criticalSecrets.length > 0) {
+          const projectDir = getProjectDir ? getProjectDir() : process.cwd();
+          logSecurityEvent(
+            projectDir,
+            SecurityEventType.SECRETS_DETECTED,
+            `Detected ${criticalSecrets.length} secret(s) in ${input.tool} to ${filePath}: ${criticalSecrets.map((s: SecretMatch) => s.name).join(', ')}`,
+            { sessionId: input.sessionID, tool: input.tool }
+          );
+          debugLog(`Secrets DETECTED: ${criticalSecrets.length} in ${filePath}`);
+          throw new Error(
+            `🔐 [Secrets Detected] Cannot ${input.tool} - content contains sensitive data:\n\n` +
+            criticalSecrets.map((s: SecretMatch) => `  • ${s.name} (${s.severity})${s.line ? ` at line ${s.line}` : ''}`).join('\n') +
+            `\n\nPlease remove secrets before writing. Use environment variables instead.`
+          );
+        }
       }
     }
     

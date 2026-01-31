@@ -6,7 +6,7 @@
  * which behaviors are intended vs unintended.
  */
 
-import { existsSync, mkdirSync, writeFileSync, appendFileSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, appendFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { debugLog } from '../debug';
 import { MAX_FEEDBACK_PER_SESSION } from '../constants';
@@ -143,6 +143,76 @@ export function hasFeedbackFile(projectDir: string): boolean {
 const sessionFeedbackCounts = new Map<string, number>();
 
 /**
+ * Persistent rate limit metadata stored in .setu/feedback.meta.json
+ */
+interface FeedbackRateLimitMeta {
+  dailyCount: number;
+  dailyResetDate: string;  // YYYY-MM-DD
+  totalCount: number;
+}
+
+const DAILY_FEEDBACK_LIMIT = 50;  // Across all sessions
+const FEEDBACK_META_FILE = 'feedback.meta.json';
+
+/**
+ * Load persistent rate limit metadata
+ */
+function loadFeedbackMeta(projectDir: string): FeedbackRateLimitMeta {
+  const metaPath = join(projectDir, SETU_DIR, FEEDBACK_META_FILE);
+  
+  const today = new Date().toISOString().split('T')[0];
+  const defaultMeta: FeedbackRateLimitMeta = {
+    dailyCount: 0,
+    dailyResetDate: today,
+    totalCount: 0
+  };
+  
+  if (!existsSync(metaPath)) {
+    return defaultMeta;
+  }
+  
+  try {
+    const content = readFileSync(metaPath, 'utf-8');
+    const parsed = JSON.parse(content);
+    
+    // Validate expected shape
+    if (typeof parsed.dailyCount !== 'number' ||
+        typeof parsed.dailyResetDate !== 'string' ||
+        typeof parsed.totalCount !== 'number') {
+      return defaultMeta;
+    }
+    
+    const meta = parsed as FeedbackRateLimitMeta;
+    
+    // Reset daily count if it's a new day
+    if (meta.dailyResetDate !== today) {
+      return {
+        ...meta,
+        dailyCount: 0,
+        dailyResetDate: today
+      };
+    }
+    
+    return meta;
+  } catch {
+    return defaultMeta;
+  }
+}
+
+/**
+ * Save persistent rate limit metadata
+ */
+function saveFeedbackMeta(projectDir: string, meta: FeedbackRateLimitMeta): void {
+  try {
+    const setuDir = ensureSetuDir(projectDir);
+    const metaPath = join(setuDir, FEEDBACK_META_FILE);
+    writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf-8');
+  } catch {
+    // Silent fail - rate limiting is defense-in-depth
+  }
+}
+
+/**
  * Result of a rate limit check
  */
 export interface RateLimitResult {
@@ -152,31 +222,57 @@ export interface RateLimitResult {
   remaining: number;
   /** Current count (after increment if allowed) */
   current: number;
+  /** Reason if not allowed */
+  reason?: 'session_limit' | 'daily_limit';
 }
 
 /**
  * Check rate limit and increment counter if allowed.
  * 
+ * Checks both session-level and daily (persistent) limits.
+ * 
  * @param sessionID - The session identifier from ToolContext
+ * @param projectDir - Optional project directory for persistent rate limiting
  * @returns Rate limit check result with allowed status and counts
  */
-export function incrementFeedbackCount(sessionID: string): RateLimitResult {
-  const current = sessionFeedbackCounts.get(sessionID) || 0;
+export function incrementFeedbackCount(sessionID: string, projectDir?: string): RateLimitResult {
+  // Check session-level limit first
+  const sessionCount = sessionFeedbackCounts.get(sessionID) || 0;
   
-  if (current >= MAX_FEEDBACK_PER_SESSION) {
-    debugLog(`Feedback rate limit reached for session ${sessionID} (${current}/${MAX_FEEDBACK_PER_SESSION})`);
-    return { allowed: false, remaining: 0, current };
+  if (sessionCount >= MAX_FEEDBACK_PER_SESSION) {
+    debugLog(`Feedback session rate limit reached for session ${sessionID} (${sessionCount}/${MAX_FEEDBACK_PER_SESSION})`);
+    return { allowed: false, remaining: 0, current: sessionCount, reason: 'session_limit' };
   }
   
-  const newCount = current + 1;
-  sessionFeedbackCounts.set(sessionID, newCount);
+  // Load persistent metadata once (if projectDir available)
+  let meta: FeedbackRateLimitMeta | null = null;
+  if (projectDir) {
+    meta = loadFeedbackMeta(projectDir);
+    
+    // Check persistent daily limit
+    if (meta.dailyCount >= DAILY_FEEDBACK_LIMIT) {
+      debugLog(`Feedback daily rate limit reached (${meta.dailyCount}/${DAILY_FEEDBACK_LIMIT})`);
+      return { allowed: false, remaining: 0, current: sessionCount, reason: 'daily_limit' };
+    }
+  }
   
-  debugLog(`Feedback submitted (${newCount}/${MAX_FEEDBACK_PER_SESSION}) for session ${sessionID}`);
+  // Increment session counter first
+  const newSessionCount = sessionCount + 1;
+  sessionFeedbackCounts.set(sessionID, newSessionCount);
+  
+  // Persist daily counter after session counter is successfully updated
+  if (projectDir && meta) {
+    meta.dailyCount++;
+    meta.totalCount++;
+    saveFeedbackMeta(projectDir, meta);
+  }
+  
+  debugLog(`Feedback submitted (session: ${newSessionCount}/${MAX_FEEDBACK_PER_SESSION}) for session ${sessionID}`);
   
   return { 
     allowed: true, 
-    remaining: MAX_FEEDBACK_PER_SESSION - newCount,
-    current: newCount
+    remaining: MAX_FEEDBACK_PER_SESSION - newSessionCount,
+    current: newSessionCount
   };
 }
 
