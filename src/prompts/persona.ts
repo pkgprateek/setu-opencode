@@ -23,7 +23,7 @@ import { READ_ONLY_TOOLS, BLOCKED_TOOLS, STYLE_DISPLAY } from '../constants';
 // ============================================================================
 
 /**
- * Generates parallel execution guidance for system prompt injection.
+ * Generates efficiency guidance for system prompt injection.
  * 
  * Why this is a function, not a constant:
  * - Derives tool list from constants.ts (single source of truth)
@@ -41,17 +41,27 @@ function generateParallelGuidance(): string {
   
   return `
 [SETU: EFFICIENCY RULES]
-These rules apply ONLY to read-only operations. Safety constraints always take precedence.
+These rules enforce the *Efficient* value in Priority Order. Safety constraints always take precedence.
 
-1. PARALLEL EXECUTION IS MANDATORY for independent read-only operations.
+1. **Use glob, not ls** — To find files, use the \`glob\` tool with patterns like \`**/*.ts\`.
+   - glob is faster and more efficient than spawning shell processes
+   - NEVER use \`ls -R\` or recursive bash commands for file discovery
+   - PREFER: glob("**/*.ts") → finds all TypeScript files
+   - AVOID: bash("ls -R") or bash("find . -name '*.ts'")
+
+2. **PARALLEL EXECUTION IS MANDATORY** for independent read-only operations.
    - Applies to: ${readOnlyList}
    - Does NOT apply to: ${blockedList}, or any side-effect tool
    - BAD: read(A) -> wait -> read(B) -> wait -> glob(C)
    - GOOD: read(A) & read(B) & glob(C) in ONE message
 
-2. Batch your context gathering. Do not "explore" one file at a time.
+3. **Search smart** — Use \`grep\` for content search, \`glob\` for file patterns.
+   - Don't iterate manually through directories
+   - Batch your context gathering
 
-3. Use 'glob' to find files, then 'read' relevant ones in parallel.
+4. **Minimize tokens** — Get context efficiently.
+   - Don't explore the entire codebase when you only need specific files
+   - Use glob to find, then read relevant ones in parallel
 
 Remember: Safe > Efficient. When in doubt, ask.
 `;

@@ -39,12 +39,16 @@ export const BLOCKED_TOOLS = [...SIDE_EFFECT_TOOLS, 'bash'] as const;
 
 /**
  * Bash commands that are read-only (exploration allowed).
+ * 
+ * Strictly matches the Phase 0 allowlist from AGENTS.md:
+ * - Basic file exploration: ls, cat, head, tail, grep, find
+ * - Environment info: pwd, echo, which, env
+ * - Git read-only: git status, git log, git diff, git branch, git show
  */
 export const READ_ONLY_BASH_COMMANDS = [
-  'glob', 'ls', 'cat', 'head', 'tail', 'grep', 'rg', 'find',
-  'pwd', 'echo', 'which', 'env', 'printenv',
-  'git status', 'git log', 'git diff', 'git branch', 'git show',
-  'file', 'stat', 'wc', 'tree', 'less', 'more'
+  'ls', 'cat', 'head', 'tail', 'grep', 'find',
+  'pwd', 'echo', 'which', 'env',
+  'git status', 'git log', 'git diff', 'git branch', 'git show'
 ] as const;
 
 /**

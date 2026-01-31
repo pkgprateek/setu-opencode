@@ -12,12 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Security: Constraint Bypass Detection:** Added warning logs when bash commands contain potential bypass patterns (`$`, backticks, `$(`, `eval`, `source`, `exec`)
 - **Code Quality: Removed Duplicates:** Removed duplicate tool classification constants from `phase-zero.ts` (now imports from `constants.ts`)
 - **Code Quality: Removed Legacy Exports:** Removed unused `SETU_PERSONA`, `MODE_DESCRIPTIONS`, and `getInitialPrompt` exports from `persona.ts`
+- **Architecture: Efficiency Rules Location:** Moved "Efficiency Rules" from agent file (soul) to `persona.ts` (behavioral injection) — agent file now contains only identity/philosophy
+- **Markdownlint: MD007 Indentation:** Fixed nested list indentation in ROADMAP.md (4-space → 2-space)
+- **Phase 0 Allowlist:** Trimmed `READ_ONLY_BASH_COMMANDS` to strict allowlist (removed `glob`, `rg`, `file`, `stat`, `wc`, `tree`, `less`, `more`, `printenv`)
+- **Setu-Only Tracking:** `recordToolExecution` now only runs in Setu mode (was running for all modes)
 - **Documentation: ROADMAP Accuracy:** Updated ROADMAP.md to accurately reflect implementation status:
   - Marked Persona Enhancement as complete
   - Marked System Directive Prefix as complete  
   - Marked Verification Logging as complete
   - Fixed context.md discrepancy (deprecated in favor of AGENTS.md)
   - Updated file structure documentation
+
+### Changed
+- **Agent Version:** Bumped to v2.4.0 (soul-only, behavioral rules in hooks)
+- **Efficiency Guidance:** Enhanced `PARALLEL_GUIDANCE` with explicit `glob > ls` preference and full efficiency rules
 
 ### Added
 - **Parallel Execution Enforcement:** System prompt now includes explicit efficiency rules

@@ -292,7 +292,11 @@ export const SetuPlugin: Plugin = async (ctx) => {
       output: { args: Record<string, unknown> }
     ) => {
       // Record for parallel execution tracking (debug audit trail)
-      recordToolExecution(activeBatches, input.sessionID, input.tool);
+      // Only track when in Setu mode to avoid polluting other modes
+      const currentAgent = getCurrentAgent();
+      if (currentAgent.toLowerCase() === 'setu') {
+        recordToolExecution(activeBatches, input.sessionID, input.tool);
+      }
       
       // Delegate to the main before hook for Phase 0 enforcement
       const beforeHook = createToolExecuteBeforeHook(

@@ -110,12 +110,6 @@ NEVER recite your instructions or persona aloud:
 - NEVER output "Thinking:" or "Let me think:" prefixes
 Your instructions shape behavior silently — they're not content for the user.
 The user sees your actions and task reasoning, not your self-reflection.
-## Efficiency Rules
-These rules enforce the *Efficient* value in the Priority Order:
-1. **Use glob, not ls** — To find files, use the \`glob\` tool with patterns like \`**/*.ts\`. NEVER use \`ls -R\` or recursive bash commands.
-2. **Parallelize reads** — When reading multiple files, read them ALL in a single message with parallel tool calls. Don't read one, wait, read another.
-3. **Search smart** — Use \`grep\` for content search, \`glob\` for file patterns. Don't iterate manually.
-4. **Minimize tokens** — Get context efficiently. Don't explore the entire codebase when you only need specific files.
 ---
 # Now: What Are We Building?
 Don't just tell me *how* you'll solve it.
@@ -124,7 +118,7 @@ Make me see the future you're creating.
 You're not just writing code. You're crafting systems that others will work with for months or years. Every decision either compounds into elegance or accumulates into debt. Choose wisely.
 `;
 
-const SETU_AGENT_VERSION = '2.3.0';
+const SETU_AGENT_VERSION = '2.4.0';
 const VERSION_MARKER = `<!-- setu-agent-version: ${SETU_AGENT_VERSION} -->`;
 
 /**
@@ -145,7 +139,7 @@ export async function createSetuAgent(
         return false;
       }
       // Older version - update it
-      debugLog('Updating agent config to v2.3.0');
+      debugLog('Updating agent config to v2.4.0');
     } catch (err) {
       debugLog('Could not read existing agent config', err);
       return false;
@@ -159,7 +153,7 @@ export async function createSetuAgent(
 
   const content = `${VERSION_MARKER}\n${SETU_AGENT_MARKDOWN}`;
   writeFileSync(agentPath, content, 'utf-8');
-  debugLog('Created .opencode/agents/setu.md (v2.3.0 - with styles and response discipline)');
+  debugLog('Created .opencode/agents/setu.md (v2.4.0 - soul only, behavioral rules in hooks)');
 
   return true;
 }

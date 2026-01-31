@@ -248,41 +248,41 @@ Three movements to production-ready.
 > **Why:** Context should survive sessions and flow to subagents without re-reading.
 
 - [x] **Directory Structure**
-    - **Path:** `.setu/` at project root
-    - **Files:**
-      ```
-      .setu/
-      ├── context.json      # Machine-parseable for injection
-      ├── active.json       # Current task, mode, constraints
-      ├── feedback.md       # User feedback on Setu behavior
-      └── verification.log  # Build/test/lint results (append-only)
-      ```
-    - **Note:** `context.md` was deprecated — AGENTS.md serves as human-readable rules
-    - **How:** Created on first `setu_context` call
-    - **Implementation:** `src/context/storage.ts`
+  - **Path:** `.setu/` at project root
+  - **Files:**
+    ```
+    .setu/
+    ├── context.json      # Machine-parseable for injection
+    ├── active.json       # Current task, mode, constraints
+    ├── feedback.md       # User feedback on Setu behavior
+    └── verification.log  # Build/test/lint results (append-only)
+    ```
+  - **Note:** `context.md` was deprecated — AGENTS.md serves as human-readable rules
+  - **How:** Created on first `setu_context` call
+  - **Implementation:** `src/context/storage.ts`
 
 - [x] **Context Collection During Phase 0**
-    - **Why:** Track what files were read, patterns found
-    - **What:** Build context incrementally as agent explores
-    - **How:** Track reads/greps in `tool.execute.after`
-    - **Implementation:** `src/hooks/tool-execute.ts` - `createToolExecuteAfterHook`
-    - **Data:**
-      ```json
-      {
-        "version": "1.0",
-        "project": { "type": "typescript", "runtime": "bun" },
-        "filesRead": [{ "path": "src/index.ts", "readAt": "..." }],
-        "searchesPerformed": [{ "pattern": "...", "tool": "grep" }],
-        "patterns": [{ "name": "hook-based", "description": "..." }],
-        "confirmed": true,
-        "confirmedAt": "2025-01-20T10:30:00Z"
-      }
-      ```
+  - **Why:** Track what files were read, patterns found
+  - **What:** Build context incrementally as agent explores
+  - **How:** Track reads/greps in `tool.execute.after`
+  - **Implementation:** `src/hooks/tool-execute.ts` - `createToolExecuteAfterHook`
+  - **Data:**
+    ```json
+    {
+      "version": "1.0",
+      "project": { "type": "typescript", "runtime": "bun" },
+      "filesRead": [{ "path": "src/index.ts", "readAt": "..." }],
+      "searchesPerformed": [{ "pattern": "...", "tool": "grep" }],
+      "patterns": [{ "name": "hook-based", "description": "..." }],
+      "confirmed": true,
+      "confirmedAt": "2025-01-20T10:30:00Z"
+    }
+    ```
 
 - [x] **Context Persistence on Confirmation**
-    - **Why:** Understanding shouldn't be lost
-    - **What:** Write `.setu/context.json` when confirmed (human-readable rules in AGENTS.md)
-    - **How:** Enhanced `setu_context` tool to persist
+  - **Why:** Understanding shouldn't be lost
+  - **What:** Write `.setu/context.json` when confirmed (human-readable rules in AGENTS.md)
+  - **How:** Enhanced `setu_context` tool to persist
     - **Implementation:** `src/tools/setu-context.ts`, `src/context/storage.ts`
 
 - [x] **Context Injection to Subagents**
@@ -353,21 +353,21 @@ Three movements to production-ready.
 > **Why:** Senior devs and startup founders need speed. Serial reads waste time.
 
 - [x] **Parallel Execution Audit Trail**
-    - **Why:** Observability into whether agents are actually parallelizing
-    - **What:** Log parallel execution batches in debug mode
-    - **Implementation:** `src/hooks/tool-execute.ts` - `recordToolExecution()`
-    - **Output:** `Parallel execution: 3 tools in batch [read, read, glob]`
+  - **Why:** Observability into whether agents are actually parallelizing
+  - **What:** Log parallel execution batches in debug mode
+  - **Implementation:** `src/hooks/tool-execute.ts` - `recordToolExecution()`
+  - **Output:** `Parallel execution: 3 tools in batch [read, read, glob]`
 
 - [x] **Persona Enhancement**
-    - **Why:** Models need explicit guidance to use parallel tools
-    - **What:** Add parallel execution section to persona
-    - **Implementation:** `src/prompts/persona.ts` - `PARALLEL_GUIDANCE` constant
-    - **Result:** System prompt includes efficiency rules with tool lists
+  - **Why:** Models need explicit guidance to use parallel tools
+  - **What:** Add parallel execution section to persona
+  - **Implementation:** `src/prompts/persona.ts` - `PARALLEL_GUIDANCE` constant
+  - **Result:** System prompt includes efficiency rules with tool lists
 
 - [x] **System Directive Prefix**
-    - **Why:** Clear separation of Setu injections from user content
-    - **What:** Prefix all Setu prompts with `[Style:]`
-    - **Implementation:** `src/prompts/persona.ts` - `getStylePrefix()`
+  - **Why:** Clear separation of Setu injections from user content
+  - **What:** Prefix all Setu prompts with `[Style:]`
+  - **Implementation:** `src/prompts/persona.ts` - `getStylePrefix()`
 
 #### Pre-emptive Enforcement (Phase 0)
 
@@ -522,9 +522,9 @@ Example configuration:
 > **Why:** "Done" should mean "verified working." Audit trails and regression tests prevent bugs from returning.
 
 - [x] **Verification Log** (moved from v1.1 — already implemented)
-    - **Why:** Audit trail of build/test/lint results
-    - **What:** Append to `.setu/verification.log`
-    - **Implementation:** `src/context/storage.ts` - `logVerification()`
+  - **Why:** Audit trail of build/test/lint results
+  - **What:** Append to `.setu/verification.log`
+  - **Implementation:** `src/context/storage.ts` - `logVerification()`
 
 - [ ] **Gold Test Generation (Opt-in)**
     - **Why:** When a bug is fixed, that scenario becomes a valuable regression test. Capturing it prevents the same bug from returning. ("Freeze state" for reproducible benchmarks.)
