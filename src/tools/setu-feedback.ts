@@ -51,13 +51,18 @@ Feedback is saved to .setu/feedback.md for review.`,
       const sessionID = context.sessionID || 'unknown';
       
       // Check rate limit BEFORE doing any work
-      const rateCheck = incrementFeedbackCount(sessionID);
+      // Pass projectDir for persistent daily rate limiting
+      const rateCheck = incrementFeedbackCount(sessionID, projectDir);
       
       if (!rateCheck.allowed) {
-        return `**Feedback limit reached** (${MAX_FEEDBACK_PER_SESSION} per session)
+        const limitType = rateCheck.reason === 'daily_limit' 
+          ? 'Daily limit reached (50/day across all sessions)'
+          : `Session limit reached (${MAX_FEEDBACK_PER_SESSION} per session)`;
+        
+        return `**Feedback limit reached** - ${limitType}
 
 Your feedback matters! To submit more:
-- Start a new session, or
+${rateCheck.reason === 'daily_limit' ? '- Wait until tomorrow, or' : '- Start a new session, or'}
 - Open an issue at https://github.com/pkgprateek/setu-opencode/issues`;
       }
       

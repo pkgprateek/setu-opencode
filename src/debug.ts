@@ -14,10 +14,16 @@
  * Usage:
  *   SETU_DEBUG=true opencode   # Enable debug mode
  *   opencode                    # Production mode (debug off)
+ * 
+ * Security:
+ * - debugLog and errorLog output is redacted to prevent leaking secrets
+ * - alwaysLog intentionally bypasses redaction (use only for non-sensitive messages)
+ * - See src/security/redaction.ts for redaction patterns
  */
 
 import { existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join } from 'path';
+import { redactSensitive } from './security/redaction';
 
 const SETU_DIR = '.setu';
 const DEBUG_LOG = 'debug.log';
@@ -72,6 +78,8 @@ function ensureSetuDir(): string {
 
 /**
  * Write a log line to the debug file
+ * 
+ * Note: Assumes args are already redacted by debugLog
  */
 function writeToLogFile(message: string, args: unknown[]): void {
   try {
@@ -82,6 +90,7 @@ function writeToLogFile(message: string, args: unknown[]): void {
           try {
             return typeof a === 'string' ? a : JSON.stringify(a);
           } catch {
+            // Fallback for non-serializable objects
             return String(a);
           }
         }).join(' ')
@@ -97,6 +106,7 @@ function writeToLogFile(message: string, args: unknown[]): void {
  * Debug logger - only logs when debug mode is enabled
  * 
  * Logs to both console and .setu/debug.log file.
+ * All output is redacted to prevent leaking secrets.
  * 
  * @param message - The message to log
  * @param args - Additional arguments to log
@@ -104,11 +114,27 @@ function writeToLogFile(message: string, args: unknown[]): void {
 export function debugLog(message: string, ...args: unknown[]): void {
   if (!isDebugMode()) return;
   
+  // Redact sensitive data from message
+  const redactedMessage = redactSensitive(message);
+  
+  // Redact sensitive data from args
+  const redactedArgs = args.map(arg => {
+    if (typeof arg === 'string') {
+      return redactSensitive(arg);
+    }
+    try {
+      return redactSensitive(JSON.stringify(arg));
+    } catch {
+      // Fallback for non-serializable objects - must also be redacted
+      return redactSensitive(String(arg));
+    }
+  });
+  
   // Write to console
-  console.log(`[Setu] ${message}`, ...args);
+  console.log(`[Setu] ${redactedMessage}`, ...redactedArgs);
   
   // Write to file
-  writeToLogFile(message, args);
+  writeToLogFile(redactedMessage, redactedArgs);
 }
 
 /**
@@ -125,18 +151,22 @@ export function alwaysLog(message: string, ...args: unknown[]): void {
 }
 
 /**
- * Error logger - always logs errors
+ * Error logger - always logs errors with redaction
  * 
- * Writes to both console and debug.log (if debug enabled)
+ * Writes to both console and debug.log (if debug enabled).
+ * SECURITY: Redacts sensitive data from error messages and objects.
  * 
  * @param message - The error message
  * @param error - The error object
  */
 export function errorLog(message: string, error?: unknown): void {
-  console.error(`[Setu] ${message}`, error || '');
+  const redactedMessage = redactSensitive(message);
+  const redactedError = error ? redactSensitive(String(error)) : '';
+  
+  console.error(`[Setu] ${redactedMessage}`, redactedError);
   
   // Also write to log file if debug is enabled
   if (isDebugMode()) {
-    writeToLogFile(`ERROR: ${message}`, error ? [error] : []);
+    writeToLogFile(`ERROR: ${redactedMessage}`, redactedError ? [redactedError] : []);
   }
 }
