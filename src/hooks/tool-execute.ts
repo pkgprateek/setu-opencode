@@ -18,7 +18,7 @@ import {
 } from '../enforcement';
 import { type ContextCollector, formatContextForInjection, contextToSummary } from '../context';
 import { loadActiveTask, shouldBlockDueToConstraint } from '../context/active';
-import { type SetuProfile, getProfileEnforcementLevel } from '../prompts/profiles';
+import { type SetuStyle, getStyleEnforcementLevel } from '../prompts/styles';
 import { debugLog } from '../debug';
 import { isString, getStringProp } from '../utils';
 import { isReadOnlyTool, PARALLEL_BATCH_WINDOW_MS } from '../constants';
@@ -56,21 +56,21 @@ export interface ToolExecuteBeforeOutput {
 }
 
 /**
- * Enforcement level based on Setu profile
+ * Enforcement level based on Setu style
  */
 export type EnforcementLevel = 'full' | 'light' | 'none';
 
 /**
- * Determines enforcement level based on Setu profile.
+ * Determines enforcement level based on Setu style.
  * Only used when in Setu agent mode.
  *
- * @param setuProfile - The Setu profile (ultrathink/quick/expert/collab)
+ * @param setuStyle - The Setu style (ultrathink/quick/collab)
  * @returns The enforcement level for Phase 0
  */
-export function getSetuEnforcementLevel(setuProfile: SetuProfile): EnforcementLevel {
-  const profileLevel = getProfileEnforcementLevel(setuProfile);
+export function getSetuEnforcementLevel(setuStyle: SetuStyle): EnforcementLevel {
+  const styleLevel = getStyleEnforcementLevel(setuStyle);
   
-  switch (profileLevel) {
+  switch (styleLevel) {
     case 'strict':
       return 'full';    // Ultrathink: full blocking
     case 'none':
@@ -85,7 +85,7 @@ export function getSetuEnforcementLevel(setuProfile: SetuProfile): EnforcementLe
 /**
  * Determines enforcement level based on the current agent.
  * 
- * @deprecated Use getSetuEnforcementLevel with a SetuProfile instead.
+ * @deprecated Use getSetuEnforcementLevel with a SetuStyle instead.
  * This function returns hardcoded 'full' for 'setu' agent and 'none' otherwise.
  * Kept for backwards compatibility only.
  */
@@ -154,14 +154,14 @@ const PACKAGE_MANIFEST_PATTERNS = [
  *
  * Setu plugin operates exclusively within Setu agent mode.
  * When not in Setu agent, this hook remains silent.
- * When in Setu agent, enforces Phase 0 based on the current profile.
+ * When in Setu agent, enforces Phase 0 based on the current style.
  * Also enforces active task constraints (READ_ONLY, NO_PUSH, etc.)
  * Also enforces Git Discipline: requires verification before commit/push.
  *
  * @param getPhase0State - Accessor that returns the current Phase 0 state
  * @param getCurrentAgent - Optional accessor for the current agent identifier; defaults to "setu" when omitted
  * @param getContextCollector - Optional accessor for a ContextCollector used to obtain and format confirmed context for injection
- * @param getSetuProfile - Optional accessor for the current Setu profile (used for profile-level enforcement when in Setu mode)
+ * @param getSetuStyle - Optional accessor for the current Setu style (used for style-level enforcement when in Setu mode)
  * @param getProjectDir - Optional accessor for project directory (used for constraint loading)
  * @param getVerificationState - Optional accessor for verification state (used for git discipline enforcement)
  * @returns A hook function invoked before tool execution that enforces Phase 0 rules and may throw an Error when a tool is blocked under full enforcement
@@ -170,7 +170,7 @@ export function createToolExecuteBeforeHook(
   getPhase0State: () => Phase0State,
   getCurrentAgent?: () => string,
   getContextCollector?: () => ContextCollector | null,
-  getSetuProfile?: () => SetuProfile,
+  getSetuStyle?: () => SetuStyle,
   getProjectDir?: () => string,
   getVerificationState?: () => VerificationState
 ): (input: ToolExecuteBeforeInput, output: ToolExecuteBeforeOutput) => Promise<void> {
@@ -186,8 +186,8 @@ export function createToolExecuteBeforeHook(
     }
     
     const state = getPhase0State();
-    const setuProfile = getSetuProfile ? getSetuProfile() : 'ultrathink';
-    const enforcementLevel = getSetuEnforcementLevel(setuProfile);
+    const setuStyle = getSetuStyle ? getSetuStyle() : 'ultrathink';
+    const enforcementLevel = getSetuEnforcementLevel(setuStyle);
     
     // Context injection for task tool (subagent prompts)
     if (input.tool === 'task' && getContextCollector) {

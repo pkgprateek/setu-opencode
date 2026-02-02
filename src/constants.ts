@@ -157,7 +157,7 @@ export const COMMAND_PREFIX = ':' as const;
 /**
  * Valid style names for magic commands
  */
-export const VALID_STYLES = ['ultrathink', 'quick', 'expert', 'collab'] as const;
+export const VALID_STYLES = ['ultrathink', 'quick', 'collab'] as const;
 
 /**
  * Style display names for user-facing feedback
@@ -165,7 +165,6 @@ export const VALID_STYLES = ['ultrathink', 'quick', 'expert', 'collab'] as const
 export const STYLE_DISPLAY: Record<typeof VALID_STYLES[number], string> = {
   ultrathink: 'Ultrathink',
   quick: 'Quick',
-  expert: 'Expert',
   collab: 'Collab'
 } as const;
 
@@ -182,13 +181,12 @@ export const STYLE_ALIASES: Record<string, typeof VALID_STYLES[number]> = {
   'fast': 'quick',
   'q': 'quick',
   
-  // Expert aliases
-  'trust': 'expert',
-  'x': 'expert',
-  
-  // Collab aliases
+  // Collab aliases (absorbs expert's use cases)
   'discuss': 'collab',
   'collaborate': 'collab',
+  'trust': 'collab',
+  'x': 'collab',
+  'expert': 'collab'
 } as const;
 
 /**

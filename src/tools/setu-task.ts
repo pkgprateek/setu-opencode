@@ -34,7 +34,7 @@ const VALID_CONSTRAINTS = Object.values(CONSTRAINT_TYPES);
 /**
  * Valid modes for input validation
  */
-const VALID_MODES: SetuMode[] = ['ultrathink', 'quick', 'expert', 'collab'];
+const VALID_MODES: SetuMode[] = ['ultrathink', 'quick', 'collab'];
 
 /**
  * Valid statuses for input validation
@@ -128,7 +128,7 @@ Active tasks persist to \`.setu/active.json\` and survive:
         'Task description (required for create)'
       ),
       mode: tool.schema.string().optional().describe(
-        'Operational mode: ultrathink, quick, expert, collab (default: ultrathink)'
+        'Operational mode: ultrathink, quick, collab (default: ultrathink)'
       ),
       constraints: tool.schema.array(tool.schema.string()).optional().describe(
         'Constraints to apply: READ_ONLY, NO_PUSH, NO_DELETE, SANDBOX'
