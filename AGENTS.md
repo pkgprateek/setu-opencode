@@ -83,7 +83,8 @@ skills/               # Bundled skills (loaded on-demand)
 | Term | Meaning | Examples |
 |------|---------|----------|
 | **Mode** (OpenCode) | IDE-level agent via Tab | Plan, Build, Setu |
-| **Style** (Setu) | Operational preset within Setu | ultrathink, quick, expert, collab |
+| **Style** (Setu) | Operational preset within Setu | ultrathink, quick, collab |
+| **Gear** (Setu v1.1+) | State determined by artifact existence | scout, architect, builder |
 
 ## Code Style
 
@@ -153,8 +154,7 @@ This lets the agent "look but don't touch" until context is confirmed.
 |-------|-------------------|----------|
 | `ultrathink` | Full (build/test/lint) | Features, refactoring |
 | `quick` | Minimal | Typos, comments |
-| `expert` | User reviews | Trusted changes |
-| `collab` | Discuss first | Architecture |
+| `collab` | Discuss first + review | Architecture, trusted changes |
 
 ### Context Persistence
 
@@ -162,9 +162,10 @@ Setu saves understanding to `.setu/`:
 
 ```
 .setu/
-├── context.md     # Human-readable (for review)
-├── context.json   # Machine-parseable (for injection)
-└── verification.log  # Audit trail
+├── context.json            # Machine-parseable for injection
+├── active.json             # Current task, mode, constraints (survives compaction)
+├── feedback.md             # User feedback on Setu behavior
+└── verification.log        # Build/test/lint audit trail
 ```
 
 Context is:
@@ -178,7 +179,7 @@ Context is:
 - Operational profile persists for session until changed
 - Context persists across sessions (`.setu/` directory)
 - Attempt counter resets on success or user guidance
-- After 2 failed attempts → ask for guidance, don't retry
+- After 3 failed attempts (configurable) → suggest gear shift to update RESEARCH.md or PLAN.md
 
 ### Parallel Execution
 
@@ -345,12 +346,6 @@ export function writeContext(projectDir: string, context: SetuContext): void {
   writeFileSync(
     join(setuDir, 'context.json'),
     JSON.stringify(context, null, 2)
-  );
-  
-  // Write Markdown (human-readable)
-  writeFileSync(
-    join(setuDir, 'context.md'),
-    generateContextMarkdown(context)
   );
 }
 

@@ -122,8 +122,9 @@ Setu persists context to `.setu/` directory:
 
 ```
 .setu/
-├── context.md     # Human-readable understanding
 ├── context.json   # Machine-parseable for injection
+├── active.json    # Current task, mode, constraints
+├── feedback.md    # User feedback
 └── verification.log  # Build/test/lint results
 ```
 

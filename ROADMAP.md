@@ -2,6 +2,10 @@
 
 > Pre-emptive discipline protocol for [OpenCode](https://opencode.ai) — think first, verify always.
 
+**Updated:** 2026-02-02
+
+---
+
 ## Vision
 
 **Why Setu exists:** AI coding agents are reactive — they run first, fix later. This wastes tokens, produces broken code, and frustrates developers.
@@ -14,69 +18,25 @@
 
 ---
 
-## Current State (v1.0 - Release Candidate)
+## Version Overview
 
-### Implemented
+| Version | Codename | Theme | Key Deliverable |
+|---------|----------|-------|-----------------|
+| **v1.0** | Foundation | Ship Core | Working plugin, npm publish |
+| **v1.1** | Gearbox | Artifact-Driven State | RESEARCH.md/PLAN.md enforcement |
+| **v1.2** | Swarm | DAG-Based Execution | Parallel execution, Context Cleanse |
+| **v2.0** | Synthesis | Goal-Backward Verification | Verify outcomes, not tasks |
+| **v3.0** | Expansion | Multi-Platform | Setu Lite, MCP integration |
 
-**Core Infrastructure:**
-- [x] Package structure (`src/`, `skills/`)
-- [x] TypeScript configuration
-- [x] Plugin entry point with state management
+---
 
-**Hooks:**
-- [x] `config` hook — Sets Setu as default agent
-- [x] `system-transform` hook — Injects lean persona (~500 tokens)
-- [x] `chat.message` hook — Operational profile detection, agent tracking
-- [x] `tool.execute.before` hook — Phase 0 blocking, context injection to subagents
-- [x] `tool.execute.after` hook — Verification tracking, context collection
-- [x] `event` hook — Session lifecycle, context loading on start
+## Terminology
 
-**Tools:**
-- [x] `setu_verify` tool — Run verification protocol
-- [x] `setu_context` tool — Confirm context, persist to `.setu/`
-- [x] `setu_feedback` tool — Record user feedback
-
-**Setu as Primary Agent (Movement 1):**
-- [x] Agent registration (`.opencode/agents/setu.md` created on init)
-- [x] Default on startup (`default_agent: "setu"` in config)
-- [x] Mode-aware enforcement (Setu/Build/Plan awareness)
-- [x] Agent file contains ONLY soul (identity, covenant, philosophy)
-- [x] Plugin hooks enforce behavior (Phase 0, verification)
-
-**Context Persistence (Movement 2):**
-- [x] `.setu/` directory structure
-- [x] `context.json` — Machine-parseable context
-- [x] `active.json` — Current task, mode, constraints
-- [x] `feedback.md` — User feedback mechanism
-- [x] `verification.log` — Audit trail of build/test/lint results
-- [x] Context collector (tracks reads/searches during Phase 0)
-- [x] Context injection to subagent prompts
-- [x] Lazy context loading (performance optimization)
-- [x] File existence caching (5-second cache)
-
-**Anthropic Alignment:**
-- [x] Enhanced "why" reasoning in Phase 0 block messages
-- [x] Priority hierarchy (Safe → Contextual → Efficient → Helpful)
-- [x] Transparency/feedback mechanism
-
-**Skills:**
-- [x] 7 bundled skills (bootstrap, verification, rules-creation, code-quality, refine-code, commit-helper, pr-review)
-
-**Safety Fixes:**
-- [x] Removed `setu_mode` tool (agent cannot bypass Phase 0)
-- [x] Graceful handling of missing `.setu/` files
-- [x] Clear Phase 0 exit path (one-line block message)
-- [x] Renamed "mode" → "Style" terminology
-
-### Known Limitations
-
-- **First-run restart required:** Setu appears in Tab cycle only after restarting OpenCode. This is because OpenCode scans agent files before plugins initialize. (Fix planned for v1.2)
-
-### Not Yet Implemented
-
-**Future Enhancements:**
-- [ ] `session.idle` hook — Verification enforcement (waiting for API)
-- [ ] Subagent tool interception — Defense in depth for child sessions
+| Term | Scope | Meaning | Examples |
+|------|-------|---------|----------|
+| **Mode** | OpenCode | IDE-level agent selection via Tab | Plan, Build, Setu |
+| **Style** | Setu | Operational preset within Setu | ultrathink, quick, collab |
+| **Gear** | Setu v1.1+ | State determined by artifact existence | scout, architect, builder |
 
 ---
 
@@ -85,822 +45,445 @@
 | Principle | Why It Matters | Implementation |
 |-----------|----------------|----------------|
 | **Pre-emptive, not reactive** | Fixing mistakes costs more than preventing them | Phase 0 blocks tools until context confirmed |
-| **Zero-config by default** | Friction kills adoption | Works out of box, config is optional override |
-| **Thoughtful colleague, not gatekeeper** | Users should feel helped, not blocked | Clear messaging, smart questions, fast parallel reads |
+| **Zero-config by default** | Friction kills adoption | Works out of box, config is optional |
+| **Thoughtful colleague, not gatekeeper** | Users should feel helped, not blocked | Clear messaging, smart questions |
 | **Permission > Hooks** | CANNOT is stronger than DOES NOT | Setu agent uses permission system + hooks |
 | **Context once, share everywhere** | Re-gathering wastes tokens | Persist context, inject into subagents |
 
 ---
 
-## Terminology
+## Current State (v1.0 - Release Candidate)
 
-To avoid confusion with OpenCode's Plan/Build modes:
+### Implemented
 
-| Term | Meaning | Examples |
-| ------ | --------- | ---------- |
-| **Mode** (OpenCode) | IDE-level agent selection via Tab | Plan, Build, Setu |
-| **Style** (Setu) | Operational preset within Setu | ultrathink, quick, expert, collab |
+**Core Infrastructure:**
+- [x] Package structure (`src/`, `skills/`)
+- [x] TypeScript configuration with strict mode
+- [x] Plugin entry point with state management
 
----
+**Hooks:**
+- [x] `config` hook — Sets Setu as default agent
+- [x] `system-transform` hook — Injects lean persona (~500 tokens)
+- [x] `chat.message` hook — Style detection, agent tracking
+- [x] `tool.execute.before` hook — Phase 0 blocking, context injection
+- [x] `tool.execute.after` hook — Verification tracking, context collection
+- [x] `event` hook — Session lifecycle, context loading
+- [x] `session.compacting` hook — Injects active task on compaction
 
-## v1.0 Release Checklist
+**Tools:**
+- [x] `setu_verify` — Run verification protocol
+- [x] `setu_context` — Confirm context, persist to `.setu/`
+- [x] `setu_feedback` — Record user feedback
+- [x] `setu_task` — Create active task with constraints
 
-Before publishing:
+**Primary Agent:**
+- [x] Agent registration (`.opencode/agents/setu.md` created on init)
+- [x] Default on startup (`default_agent: "setu"` in config)
+- [x] Mode-aware enforcement (Setu/Build/Plan awareness)
+- [x] Agent file contains ONLY soul (identity, covenant, philosophy)
+- [x] Plugin hooks enforce behavior (Phase 0, verification)
+
+**Context Persistence:**
+- [x] `.setu/` directory structure
+- [x] `context.json` — Machine-parseable context
+- [x] `active.json` — Current task, mode, constraints
+- [x] `feedback.md` — User feedback mechanism
+- [x] `verification.log` — Audit trail of build/test/lint results
+- [x] Context collector (tracks reads/searches during Phase 0)
+- [x] Context injection to subagent prompts
+- [x] Lazy context loading (performance optimization)
+
+**Security:**
+- [x] Path traversal prevention with robust validation
+- [x] Secrets detection (15 patterns, severity levels)
+- [x] Constraint bypass detection with warnings
+- [x] Rate limiting on `setu_feedback` tool
+- [x] Audit logging for security events
+
+**Skills:**
+- [x] 7 bundled skills (bootstrap, verification, rules-creation, code-quality, refine-code, commit-helper, pr-review)
+
+### Known Limitations
+
+- **First-run restart required:** Setu appears in Tab cycle only after restarting OpenCode. This is because OpenCode scans agent files before plugins initialize. (Fix planned for v1.2)
+
+### v1.0 Release Checklist
+
 - [x] Setu as primary agent (appears in Tab cycle, default on startup)
 - [x] Context persistence (`.setu/context.json`, `.setu/active.json`)
 - [x] Verification logging (`.setu/verification.log`)
-- [x] Parallel execution guidance in persona
+- [x] DAG execution guidance in persona
 - [x] System directive prefix (`[Style: X]`)
 - [x] Mode-aware enforcement (don't conflict with Plan mode)
-- [x] Agent file contains ONLY soul (identity, covenant, philosophy)
-- [x] Plugin hooks enforce behavior (no behavioral instructions in agent file)
+- [x] Agent file contains ONLY soul (no behavioral instructions)
+- [x] Plugin hooks enforce behavior
 - [x] Removed `setu_mode` tool (agent cannot bypass Phase 0)
 - [x] Performance optimizations (lazy loading, file cache)
 - [x] Security: Constraint bypass detection with warnings
 - [ ] Build and test plugin end-to-end
 - [ ] Publish to npm as `setu-opencode`
-- [ ] Test all 4 operational styles
+- [ ] Test all 3 styles (ultrathink, quick, collab)
 - [ ] Documentation (usage examples, configuration options)
-
-### Anthropic Alignment Enhancements (Completed)
-- [x] Enhanced "why" reasoning in Phase 0 block messages
-- [x] Priority hierarchy (Safe → Contextual → Efficient → Helpful)
-- [x] Character evaluation guidance in metrics
-- [x] Transparency/feedback mechanism (`.setu/feedback.md`)
-
-### Native Tools to Leverage (2026-01-31)
-
-> **Why:** OpenCode provides native tools that are faster and more reliable than bash equivalents. Setu should prefer these for efficiency and consistency.
-
-| Native Tool | Where to Use | Current State | Improvement |
-| ----------- | ------------ | ------------- | ----------- |
-| `list` | Phase 0 file discovery | ✅ Guidance added | Persona explicitly prefers `list` over `bash ls` |
-| `read` | File reading | ✅ Guidance added | Persona explicitly prefers `read` over `bash cat` |
-| `glob` | Pattern matching | ✅ Guidance added | Persona explicitly prefers `glob` over `bash find` |
-| `lsp` | Pre-build diagnostics | Placeholder tools ("not available") | Call `lsp.hover`/`lsp.diagnostics` before build to catch errors early |
-| `question` | Interactive prompts | Not using | Could enhance Phase 0 clarification with structured questions |
-
-**Implementation Notes:**
-- Native tool guidance added to `src/prompts/persona.ts` ✓
-- `list` is already in `READ_ONLY_TOOLS` in `src/constants.ts` ✓
-- `lsp` integration requires checking if LSP is available (graceful fallback)
-- `question` tool could replace text-based "Reply X to confirm" patterns
-
-### Security Enhancements (Required for v1.0)
-
-> **Why:** Defense in depth. Catch tools that could bypass Phase 0 enforcement.
-
-- [x] **Rate Limit `setu_feedback` Tool**
-  - **Why:** Prevent abuse (filling disk with feedback entries)
-  - **What:** Limit to N feedback entries per session (e.g., 10)
-  - **How:** Track feedback count in session state; reject after limit
-  - **Implementation:** `src/tools/setu-feedback.ts`
-  - **Status:** Implemented with session-scoped tracking and cleanup on session.deleted ✓
-
-- [x] **Add `patch` to SIDE_EFFECT_TOOLS**
-  - **Why:** OpenCode has a `patch` tool that modifies files; was not blocked
-  - **What:** Add to blocked tools list
-  - **Status:** Already added in `src/constants.ts` ✓
-
-- [x] **Add `multiedit` to SIDE_EFFECT_TOOLS**
-  - **Why:** OpenCode has `multiedit` for batch edits; was not blocked
-  - **What:** Add to blocked tools list
-  - **Status:** Already added in `src/constants.ts` ✓
-
-### Phase 0 Silent Reconnaissance (Required for v1.0)
-
-> **Why:** Asking questions that `AGENTS.md` or `.setu/` already answers wastes tokens and frustrates users. Setu should "know" project context before speaking.
-
-- [x] **Automatic Context Injection on Session Start**
-    - **Why:** setu.md mandates parallel reads of context files before any user interaction. This ensures Setu starts informed, not ignorant. Hooks are reliable — the model cannot skip or forget.
-    - **What:** On `session.created`, automatically read and inject project context.
-    - **How:**
-      1. In `src/hooks/event.ts`, on session start:
-         - Read files synchronously: `.setu/active.json`, `.setu/context.json`, `AGENTS.md`, `CLAUDE.md`
-         - If `.setu/active.json` has `status: "in_progress"`, prepare resume prompt
-         - Store in ProjectRules state
-      2. In `src/hooks/system-transform.ts`, inject project rules into system prompt
-      3. In `src/context/project-rules.ts`, format rules for injection
-    - **Trigger:** `session.created` event
-    - **Implementation:** `src/hooks/event.ts`, `src/hooks/system-transform.ts`, `src/context/project-rules.ts`
-    - **Reference:** setu.md lines 42-57
-
-### Git Discipline (Required for v1.0)
-
-> **Why:** The repository is sacred ground. Careless commits create chaos. Agents should never commit without explicit approval.
-
-> **Improvement (2026-01-31):** Use `tool.execute.before` hook to intercept git commands rather than relying solely on persona guidance. Hook-based enforcement is more reliable than trusting the agent to follow instructions.
-
-- [x] **Git Repo Detection**
-  - **Why:** Non-git projects shouldn't be nagged about commits. Ask once, remember forever.
-  - **What:** Detect if current directory is a git repo on session start.
-  - **How:**
-    1. On session start, check if `.git/` exists
-    2. If not initialized, inject suggestion into system prompt
-    3. Store state in `ProjectRules.git` (not persisted — checked each session)
-  - **Trigger:** Session start (part of Silent Exploration)
-  - **Implementation:** `src/context/project-rules.ts` - `detectGitState()`
-
-- [x] **Commit/Push Verification Enforcement (Hook-Based)**
-  - **Why:** Agents commit without verifying, pushing broken code. Hook enforcement is more reliable than persona guidance.
-  - **What:** Block `git commit` and `git push` if verification is incomplete.
-  - **How:**
-    1. In `tool.execute.before` hook, detect bash commands containing `git commit` or `git push`
-    2. Check if verification state is complete (build + test passed)
-    3. If not complete: throw error with clear message showing verification status
-  - **Implementation:** `src/hooks/tool-execute.ts` - `createToolExecuteBeforeHook()`
-  - **Message Format:**
-    ```text
-    🚫 [Git Discipline] Verification required before commit.
-    
-    Run verification first:
-      • Use `setu_verify` tool, OR
-      • Run build + test manually
-    
-    Current status: Completed: build, test (or: No verification steps run)
-    ```
-
-- [x] **Dependency Safety Hook**
-  - **Why:** Direct edits to package.json can corrupt manifests or add unapproved dependencies.
-  - **What:** Block `write`/`edit` to package manifests (package.json, lockfiles).
-  - **How:**
-    1. In `tool.execute.before`, detect write/edit targeting package manifest files
-    2. Block with error explaining why and suggesting package manager commands
-  - **Implementation:** `src/hooks/tool-execute.ts` - `PACKAGE_MANIFEST_PATTERNS`
-
-- [x] **Branch Safety Warnings (Context-Injected)**
-  - **Why:** Accidental commits to main on complex tasks cause problems.
-  - **What:** Detect branch in Phase 0 and inject warning into context if on main/master.
-  - **How:**
-    1. During Silent Exploration (session start), run `git branch --show-current`
-    2. If branch is `main` or `master`, add warning to `ProjectRules`
-    3. Warning is injected into system prompt: `[WARNING: On protected branch 'main'. Consider creating a feature branch for non-trivial changes.]`
-    4. Agent sees warning before making any changes
-  - **Trigger:** Session start (part of Silent Exploration)
-  - **Implementation:** `src/context/project-rules.ts` - `formatRulesForInjection()`
-
-### Skill Updates (Required for v1.0)
-
-The bundled skills and local development skills need updates to reflect recent changes:
-
-> **Improvement (2026-01-31):** Skills can leverage OpenCode's native tools for better performance and reliability.
-
-- [ ] **Update `project-patterns` skill** (`.claude/skills/`)
-    - Add: config hook pattern
-    - Add: context collector pattern  
-    - Add: agent tracking pattern
-    - Add: feedback mechanism pattern
-    - Add: compaction hook pattern (new)
-
-- [ ] **Update `setu-bootstrap` skill** (`skills/`)
-  - Add: `.setu/` directory creation
-  - Add: `active.json` initialization
-  - Add: Check for existing context on new project
-  - **Native Tool Opportunity:** Use OpenCode's `list` tool instead of suggesting `ls` commands
-    - `list` is faster (no shell spawn) and returns structured data
-    - Example: `list({ path: "src", depth: 2 })` instead of `bash ls -la src`
-
-- [ ] **Update `setu-verification` skill** (`skills/`)
-  - Add: Logging to `.setu/verification.log`
-  - Add: Stack-specific verification commands
-  - **Native Tool Opportunity:** Use OpenCode's `lsp` tool for pre-build diagnostics
-    - Call `lsp.hover` or `lsp.diagnostics` before running build
-    - Catch type errors early without spawning full build
-    - Falls back gracefully if LSP not available
+- [ ] Update README with quick start guide
 
 ---
 
-## The Path to v1.0
+## v1.1: Gearbox — Artifact-Driven State
 
-Three movements to production-ready.
+> **Theme:** Replace binary Phase 0 with artifact-existence Gearbox. State is determined by which files exist.
 
-### Movement 1: Setu as Primary Agent
-*Goal: Make Setu a first-class mode, not just a layer.*
+### Gearbox Architecture
 
-#### Setu Agent Registration
+The Gearbox is a state machine where transitions are triggered by artifact creation:
 
-> **Why:** Users should start in Setu mode by default. Tab key lets them switch if needed.
+| Gear | Goal | Trigger | Permissions | Blocked |
+|------|------|---------|-------------|---------|
+| **Scout** | "Compress Truth" | `!exists(RESEARCH.md)` | Read-only | write, edit, bash (non-read) |
+| **Architect** | "Compress Intent" | `exists(RESEARCH.md)` AND `!exists(PLAN.md)` | Meta-write (.setu/ only) | Source writes |
+| **Builder** | "Execute & Verify" | `exists(PLAN.md)` | Full (with verification gate) | None |
 
-- [x] **Create Setu Primary Agent**
-    - **Why:** Setu as a layer conflicts with OpenCode's Plan mode. Setu as a mode is cleaner.
-    - **What:** Create `.opencode/agents/setu.md` at plugin initialization
-    - **How:** Use config hook to set `default_agent: "setu"`
-    - **Implementation:** `src/agent/setu-agent.ts`
-
-- [x] **Default on Startup**
-    - **Why:** Users forget to switch, don't get benefits
-    - **What:** Set Setu as default agent when plugin loads
-    - **How:** In config hook: `config.default_agent = "setu"`
-    - **Implementation:** `src/index.ts` config hook
-
-- [x] **Mode-Aware Enforcement**
-    - **Why:** When user Tabs to Plan/Build, Setu hooks shouldn't conflict
-    - **What:** Detect current agent, adjust enforcement
-    - **How:**
-      - In Setu mode: Full Phase 0 + verification enforcement
-      - In Plan mode: Defer to OpenCode (track context only)
-      - In Build mode: Light enforcement (verification reminders)
-    - **Implementation:** `src/hooks/tool-execute.ts` with `getEnforcementLevel()`
-
-### Movement 2: Context Persistence
-*Goal: Gather context once, use everywhere.*
-
-#### The `.setu/` Directory
-
-> **Why:** Context should survive sessions and flow to subagents without re-reading.
-
-- [x] **Directory Structure**
-  - **Path:** `.setu/` at project root
-  - **Files:**
-    ```
-    .setu/
-    ├── context.json      # Machine-parseable for injection
-    ├── active.json       # Current task, mode, constraints
-    ├── feedback.md       # User feedback on Setu behavior
-    └── verification.log  # Build/test/lint results (append-only)
-    ```
-  - **Note:** `context.md` was deprecated — AGENTS.md serves as human-readable rules
-  - **How:** Created on first `setu_context` call
-  - **Implementation:** `src/context/storage.ts`
-
-- [x] **Context Collection During Phase 0**
-  - **Why:** Track what files were read, patterns found
-  - **What:** Build context incrementally as agent explores
-  - **How:** Track reads/greps in `tool.execute.after`
-  - **Implementation:** `src/hooks/tool-execute.ts` - `createToolExecuteAfterHook`
-  - **Data:**
-    ```json
-    {
-      "version": "1.0",
-      "project": { "type": "typescript", "runtime": "bun" },
-      "filesRead": [{ "path": "src/index.ts", "readAt": "..." }],
-      "searchesPerformed": [{ "pattern": "...", "tool": "grep" }],
-      "patterns": [{ "name": "hook-based", "description": "..." }],
-      "confirmed": true,
-      "confirmedAt": "2025-01-20T10:30:00Z"
-    }
-    ```
-
-- [x] **Context Persistence on Confirmation**
-  - **Why:** Understanding shouldn't be lost
-  - **What:** Write `.setu/context.json` when confirmed (human-readable rules in AGENTS.md)
-  - **How:** Enhanced `setu_context` tool to persist
-    - **Implementation:** `src/tools/setu-context.ts`, `src/context/storage.ts`
-
-- [x] **Context Injection to Subagents**
-    - **Why:** Subagents shouldn't re-read files
-    - **What:** Inject context summary into subagent prompts
-    - **How:** In `tool.execute.before` for `task` tool
-    - **Implementation:** `src/hooks/tool-execute.ts` - `createToolExecuteBeforeHook`
-    - **Format:**
-      ```
-      [SETU CONTEXT]
-      Project: typescript, runtime: bun
-      Files already read: src/index.ts, package.json (+5 more)
-      Patterns: hook-based, state-isolation
-      Task: Implement context persistence
-      [/SETU CONTEXT]
-      
-      [TASK]
-      <original prompt>
-      ```
-
-- [x] Context Continuity Across Sessions
-    - **Why:** New session shouldn't start from scratch
-    - **What:** Load existing context on session start
-    - **How:** In `event` hook for `session.created`, load `.setu/context.json`
-    - **Implementation:** `src/hooks/event.ts`
-
-- [x] **Active Task Persistence**
-    - **Why:** Context loss during compaction causes agents to "go rogue" — forgetting what user asked and executing unrelated or unwanted actions. This is a critical safety issue.
-    - **What:** Track current task, mode, and constraints in `.setu/active.json`
-    - **How:** 
-      - Create on task start (when user provides task)
-      - Update on status change
-      - Check on session start (resume or new task?)
-      - Inject into compaction summary
-    - **Implementation:** `src/context/active.ts`, `src/hooks/event.ts`
-    - **Format:**
-      ```json
-      {
-        "task": "Upgrade ~/Nandaka/prompts/setu.md",
-        "mode": "plan",
-        "constraints": ["READ_ONLY"],
-        "references": ["https://anthropic.com/news/claude-new-constitution"],
-        "startedAt": "2025-01-24T...",
-        "status": "in_progress"
-      }
-      ```
-
-- [x] **Compaction Recovery Protocol**
-    - **Why:** OpenCode's compaction summarizes conversation, potentially losing critical constraints and task details. This caused a session to "go rogue" during setu-opencode development.
-    - **What:** Use `experimental.session.compacting` hook to inject active task into compaction summary
-    - **How:** Plugin hook reads `.setu/active.json` and injects content into compaction prompt
-    - **Implementation:** `src/hooks/compaction.ts`
-    - **Reference:** [OpenCode Compaction Hooks](https://opencode.ai/docs/plugins#compaction-hooks)
-
-- [x] **Pre-Action Alignment Check**
-    - **Why:** Prevent executing actions that don't align with active task (especially after context loss/compaction)
-    - **What:** Before side-effect tools, verify action matches `.setu/active.json` task
-    - **How:** In `tool.execute.before`:
-      - If active.json exists and has constraints (e.g., "READ_ONLY"), block side-effect tools
-      - Supports: READ_ONLY, NO_PUSH, NO_DELETE, SANDBOX
-    - **Implementation:** `src/hooks/tool-execute.ts`
-
-### Movement 3: Parallel Execution & Efficiency
-*Goal: Fast and efficient, not slow and wasteful.*
-
-#### Parallel Execution Support
-
-> **Why:** Senior devs and startup founders need speed. Serial reads waste time.
-
-- [x] **Parallel Execution Audit Trail**
-  - **Why:** Observability into whether agents are actually parallelizing
-  - **What:** Log parallel execution batches in debug mode
-  - **Implementation:** `src/hooks/tool-execute.ts` - `recordToolExecution()`
-  - **Output:** `Parallel execution: 3 tools in batch [read, read, glob]`
-
-- [x] **Persona Enhancement**
-  - **Why:** Models need explicit guidance to use parallel tools
-  - **What:** Add parallel execution section to persona
-  - **Implementation:** `src/prompts/persona.ts` - `PARALLEL_GUIDANCE` constant
-  - **Result:** System prompt includes efficiency rules with tool lists
-
-- [x] **System Directive Prefix**
-  - **Why:** Clear separation of Setu injections from user content
-  - **What:** Prefix all Setu prompts with `[Style:]`
-  - **Implementation:** `src/prompts/persona.ts` - `getStylePrefix()`
-
-#### Pre-emptive Enforcement (Phase 0)
-
-> **Why:** Block wrong actions before they happen.
-
-- [x] **Phase 0 Hard Enforcement**
-    - **Why:** Models ignore soft "wait" instructions
-    - **What:** Block SIDE-EFFECT tools until context confirmed
-    - **Allow:** `read`, `glob`, `grep`, `webfetch`, `todoread`
-    - **Allow bash:** `ls`, `cat`, `head`, `tail`, `grep`, `find`, `pwd`, `echo`, `which`, `env`, `git status`, `git log`, `git diff`, `git branch`, `git show`
-    - **Block:** `write`, `edit`, `todowrite`, `bash` (other), `git` (write)
-    - **Unlock:** Agent calls `setu_context` tool
-
-- [ ] **Subagent Tool Interception**
-    - **Why:** Subagents in child sessions might bypass hooks
-    - **What:** Both hook-based AND permission-based blocking
-    - **How:** Setu agent has permission rules, hooks provide defense in depth
-
-#### Verification Before "Done"
-
-> **Why:** "Done" should mean "verified working."
-
-- [ ] **Session Idle Enforcement** ⚠️ BLOCKED ON OPENCODE API
-  - **Why:** Agents claim "Done!" without running tests
-  - **What:** Intercept before yield; force verification if incomplete
-  - **How:** Use `session.idle` hook (when available)
-  - **Status (2026-01-31):** The `session.idle` hook does not exist in OpenCode yet. This feature is blocked until OpenCode adds the API.
-  - **Workaround:** Rely on persona guidance ("verify before claiming done") and `setu_verify` tool
-
-- [ ] **Verification Logging**
-  - **Why:** Audit trail of what was verified
-  - **What:** Append to `.setu/verification.log`
-  - **Format:** Markdown with timestamps
-  - **Priority:** v1.1
-
-#### Attempt Limits
-
-> **Why:** When the approach is wrong, ask for help instead of retrying forever.
-
-- [ ] **2-Tries-Then-Ask Pattern**
-    - **Why:** Agents retry same failing approach forever
-    - **What:** After 2 failures, stop and ask for guidance
-    - **How:** Track in `tool.execute.after`, enforce in next tool call
-
----
-
-## v1.1: Polish & Configuration
-
-### Verbosity Toggle
-
-> **Why:** Engineers want to see task reasoning, not meta-reasoning about Setu's instructions.
-
-- [ ] **Verbosity Levels**
-  - **Config:** `opencode.json` → `setu.verbosity: "minimal" | "standard" | "verbose"`
-  - **Minimal:** Actions only, no reasoning shown
-  - **Standard:** Actions + key task reasoning (default)
-  - **Verbose:** Everything including meta-reasoning (for debugging Setu itself)
-  - **Implementation:** Inject verbosity level into agent persona dynamically
-
-### Parallel Subagents
-
-> **Why:** Offload work to keep main context clean, run tasks in parallel.
-
-- [ ] **Subagent Configuration**
-  - **Config:** `opencode.json` → Define subagents with dedicated models
-  - **Default Model:** `google/antigravity-gemini-3-flash` for all subagents
-  - **Example subagents:** setu-explorer (read-only), setu-doc-writer
-  - **Usage:** Setu spawns subagents via Task tool in parallel
-
-Example configuration:
-```json
-{
-  "agent": {
-    "setu-explorer": {
-      "description": "Context exploration and file discovery",
-      "mode": "subagent",
-      "model": "google/antigravity-gemini-3-flash",
-      "tools": { "write": false, "edit": false }
-    }
-  }
-}
+```
+Session Start
+     │
+     ▼
+Check: Does .setu/RESEARCH.md exist?
+     │
+  NO ────────────────────────────────────────┐
+     │                                        │
+     ▼                                        ▼
+  SCOUT Gear                            Check: PLAN.md?
+  • Block: write, edit, bash                  │
+  • Allow: read, glob, grep, task        NO ──┘    YES
+  • Goal: Research, write RESEARCH.md         │      │
+                                              ▼      ▼
+                                         ARCHITECT  BUILDER
+                                         • Write .setu/  • Full access
+                                         • Create PLAN   • Verify gate
 ```
 
-### Setu Configuration File (`setu.json`)
+### Core Features
 
-> **Why:** OpenCode's `opencode.json` has strict schema validation that rejects unknown keys. Other plugins (e.g., `antigravity.json`, `sisyphus.json`) use separate config files with custom schemas.
+- [ ] **Gear Type System** — `src/enforcement/gears.ts`
+  - Type-safe gear definitions (scout, architect, builder)
+  - `determineGear()` function based on artifact existence
+  - `shouldBlock()` function for permission enforcement
 
-- [ ] **Create `setu.json` Config File**
-  - **Location:** Project root, alongside `opencode.json`
-  - **Schema:** Publish `setu.schema.json` for validation
-  - **Content:**
-    ```json
-    {
-      "$schema": "https://raw.githubusercontent.com/pkgprateek/setu-opencode/main/assets/setu.schema.json",
-      "debug": true,
-      "verbosity": "standard",
-      "subagent_model": "google/antigravity-gemini-3-flash"
-    }
-    ```
-  - **Loading:** Plugin reads `setu.json` at init, merges with defaults
-  - **Priority:** `setu.json` > env vars > defaults
-  - **Implementation:** `src/config/setu-config.ts`
+- [ ] **Artifact Templates** — `src/templates/research.ts`
+  - RESEARCH.md template with sections: Findings, Constraints, Patterns, Next Steps
+  - PLAN.md template with YAML frontmatter for task metadata
 
-- [ ] **Publish JSON Schema**
-    - Create `assets/setu.schema.json` with all config options
-    - Host on GitHub raw URL for IDE autocompletion
+- [ ] **Artifact Tools**
+  - `setu_research` — Save research findings, transition scout → architect
+  - `setu_plan` — Create execution plan, transition architect → builder
 
-### Session Resilience
+- [ ] **Hook Integration** — Update `src/hooks/tool-execute.ts`
+  - Replace `getPhase0State()` with `determineGear()`
+  - Gear-aware blocking messages
+  - Constraint enforcement orthogonal to gears
 
-- [ ] **Session Recovery**
-    - **Why:** Thinking block errors and empty messages crash sessions
-    - **What:** Auto-recover by extracting last user message
-    - **How:** Catch specific error types, replay last prompt
+### Attempt Limits with Gear Shifting
 
-- [ ] **Preemptive Compaction**
-    - **Why:** Hitting hard token limits causes session failure
-    - **What:** Compact proactively at 85% context usage
-    - **How:** Monitor context depth, trigger compaction before limit
+> **Why:** When an approach fails repeatedly, the agent should learn and adapt, not retry blindly.
+
+- [ ] **Smart Retry System** — `src/enforcement/attempts.ts`
+  - Track attempts per task (default: 3, configurable via `setu.json`)
+  - After N failures, suggest gear shift to update PLAN.md or RESEARCH.md
+  - Persist learnings (what worked, what didn't) to avoid repeating mistakes
+  - Configuration hierarchy: `.setu/setu.json` (project) > `~/.config/opencode/setu.json` (global)
+
+### Pre-Commit Checklist
+
+> **Why:** Prevent "Hail Mary" commits where neither user nor agent understands the change.
+
+- [ ] **Verification Prompt** — Before git commit:
+  - "Do you understand what was changed?"
+  - "Has the change been verified (build/test)?"
+  - "Is this the right branch?"
+  - If any concern, pause and discuss
 
 ### Environment Health
 
-> **Why:** Agents get stuck in "Ghost Loops" trying to fix code when the environment is broken. This wastes tokens and frustrates users.
+- [ ] **Environment Doctor Tool** — `src/tools/setu-doctor.ts`
+  - Check git status (uncommitted changes)
+  - Check dependencies (node_modules exists, lockfile sync)
+  - Check runtime versions (Node/Python match engines)
+  - Check port conflicts (dev server already running)
+  - Check disk space (low disk causes cryptic failures)
+  - Leverage OpenCode's LSP integration for diagnostics
 
-- [ ] **Create `setu-environment-doctor` skill** (`skills/`)
-  - **Why:** When build/test fails, the error might be environment (missing deps, wrong node version) not code. Setu should diagnose the root cause before attempting code fixes.
-  - **What:** Diagnostic skill that checks runtime, dependencies, and config health.
-  - **How:**
-    - Check runtime versions (`node -v`, `bun -v`) against `package.json` engines
-    - Compare `package.json` dependencies vs lockfile (missing installs?)
-    - Validate `tsconfig.json` paths and references
-    - Check for missing `node_modules` directory
-    - Check for common env issues: wrong CWD, missing env vars
-  - **Native Tool Opportunity (2026-01-31):** Use OpenCode's `lsp` tool to check if LSP servers are running
-    - Call `lsp.diagnostics` to verify language server health
-    - If LSP is down, that's an environment issue, not code
-  - **Trigger:** Called by `setu-verification` ONLY when verification fails with environment-specific errors
-  - **Error Classification:**
-    | Pattern | Classification |
-    | ------- | -------------- |
-    | `ENOENT`, `command not found`, exit 127 | Environment |
-    | `MODULE_NOT_FOUND`, `Cannot find module` | Environment |
-    | `node: command not found`, `bun: command not found` | Environment |
-    | `SyntaxError`, `TypeError`, test failures | Code |
-  - **Implementation:** `skills/setu-environment-doctor/SKILL.md`
+### Security Enhancements
 
-- [ ] **Update `setu-verification` skill for env-doctor routing**
-  - **Why:** Verification skill needs to classify errors and route to env-doctor when appropriate.
-  - **What:** Add error classification logic and conditional skill loading.
-  - **How:**
-    - Parse error output for environment patterns (see table above)
-    - If environment error detected: `use_skill("setu-environment-doctor")`
-    - If code error: proceed with normal fix flow
-  - **Implementation:** `skills/setu-verification/SKILL.md`
+- [ ] **Context Size Limits**
+  - Cap `context.json` at 50KB
+  - Cap context injection to subagents at 8000 chars (~2000 tokens)
+  - Truncate gracefully with `[TRUNCATED]` marker
 
-### Verification & Regression
+- [ ] **Input Sanitization**
+  - Validate `output.args` before use in hooks
+  - Prevent injection via tool arguments
 
-> **Why:** "Done" should mean "verified working." Audit trails and regression tests prevent bugs from returning.
+- [ ] **Bypass Detection Solution**
+  - Log unknown tools at WARNING level (not just debug)
+  - Consider fail-closed with whitelist for new tools
 
-- [x] **Verification Log** (moved from v1.1 — already implemented)
-  - **Why:** Audit trail of build/test/lint results
-  - **What:** Append to `.setu/verification.log`
-  - **Implementation:** `src/context/storage.ts` - `logVerification()`
+- [ ] **Audit Log Rotation**
+  - Rotate `.setu/verification.log` at 1MB
+  - Keep last 3 log files
 
-- [ ] **Gold Test Generation (Opt-in)**
-    - **Why:** When a bug is fixed, that scenario becomes a valuable regression test. Capturing it prevents the same bug from returning. ("Freeze state" for reproducible benchmarks.)
-    - **What:** After successful verification, offer to generate a regression test.
-    - **How:**
-      1. After `setu_verify` returns success, add follow-up prompt:
-         > "✅ Verification passed. Would you like me to create a regression test for this fix?"
-      2. If user agrees:
-         - Capture: files changed, error that was fixed, expected behavior
-         - Generate test case appropriate to project's test framework
-         - Save to appropriate test directory
-      3. This creates "gold" benchmarks for future model evaluation
-    - **Trigger:** User opt-in after `setu_verify` success
-    - **Implementation:** `src/tools/setu-verify.ts` (add follow-up prompt)
-    - **Reference:** Report 1 "Creating Gold Tests"
+### Configuration
 
-### Pre-Commit Checklist (Hail Mary Prevention)
+- [ ] **Setu Configuration File** — `setu.json`
+  - Schema: `assets/setu.schema.json`
+  - Locations: `.setu/setu.json` (project) or `~/.config/opencode/setu.json` (global)
+  - Options: `maxAttempts`, `verbosity`, `contextSizeLimit`, feature flags
+  
+- [ ] **Verbosity Toggle**
+  - `verbosity: "minimal" | "standard" | "verbose"`
+  - Minimal: Actions only
+  - Standard: Actions + key reasoning (default)
+  - Verbose: Everything including meta-reasoning
 
-> **Why:** Users sometimes ask agents to fix problems they don't understand ("Hail Mary"). This leads to blind fixes. A checklist forces reflection.
+### v1.1 Success Criteria
 
-- [ ] **Pre-Commit Verification Prompt**
-    - **Why:** Ensures both user and agent understand what's being committed.
-    - **What:** Before committing, verify understanding.
-    - **How:**
-      - Before `git commit`, prompt with checklist:
-        > "Before committing, let's verify:
-        > 1. Do you understand what was changed? [Y/N]
-        > 2. Has the change been verified (build/test)? [Y/N]
-        > 3. Is this the right branch? [branch name]"
-      - If any N, pause and discuss
-    - **Trigger:** Before any commit (part of Git Discipline)
-    - **Implementation:** `src/prompts/persona.ts` (guidance), `src/hooks/tool-execute.ts` (enforcement)
-
-### TOON Evaluation
-
-- [ ] **Token-Oriented Object Notation**
-    - **Why:** More compact than JSON, human-readable
-    - **What:** Evaluate TOON for context.json replacement
-    - **How:** Test with current models, measure token savings
-    - **Decision:** Adopt if models handle well, defer if issues
+- [ ] Gearbox determines gear from artifacts in <10ms
+- [ ] Gear transitions happen atomically (no race conditions)
+- [ ] Attempt limits prevent infinite retry loops
+- [ ] Pre-commit checklist catches blind commits
+- [ ] Environment Doctor prevents Ghost Loops
+- [ ] README updated with v1.1 features
 
 ---
 
-## v1.2: Extended Context
+## v1.2: Swarm — DAG-Based Execution
+
+> **Theme:** Enable true parallel execution. Independent tasks run simultaneously.
+
+### DAG Execution Model
+
+**Why DAG over Wave-based:**
+- Wave-based: Tasks grouped into waves, parallel only within wave
+- DAG-based: Any independent nodes can execute in parallel
+- DAG provides true parallelism, waves are artificially sequential
+
+```
+       ┌─── Task A ───┐
+       │              │
+Start ─┼─── Task B ───┼─── End
+       │              │
+       └─── Task C ───┘
+
+A, B, C have no dependencies → execute in parallel
+```
+
+### Core Features
+
+- [ ] **Task Swarm Tool** — `src/tools/setu-swarm.ts`
+  - Execute multiple tasks in parallel using subagents
+  - Aggregate results from all tasks
+  - Error isolation (one failure doesn't crash others)
+  - Dependency analysis for wave ordering when needed
+
+### Context Cleanse Protocol (JIT Loading)
+
+**The Problem with Full Context Loading:**
+1. **Token Waste:** Paying for "Step 10" details while executing "Step 1"
+2. **Distraction:** Model sees future steps, may hallucinate needing them now
+3. **Scalability Cap:** A 1,000-step plan breaks context window; JIT is infinite
+
+**The Solution: Just-In-Time Context**
+
+- [ ] **Context Cleanse Tool** — `src/context/cleanse.ts`
+  - Prepare minimal, focused context for subagents
+  - Extract summary from RESEARCH.md (not full content)
+  - Extract current objective from PLAN.md
+  - Provide `setu_consult_research(query)` for on-demand lookups
+
+- [ ] **Context Size Warning**
+  - Monitor `.setu/context.json` size
+  - Warn at 50KB threshold
+  - Suggest manual cleanup if needed
+
+### Multi-Session Artifact Management
+
+> **Why:** Users may have multiple sessions working on different aspects of a project.
+
+- [ ] **Session-Aware Artifacts** — `.setu/artifacts/` structure
+  ```
+  .setu/
+  ├── setu.json              # Per-project config
+  ├── context.json           # Project-level context (shared)
+  ├── verification.log       # Audit trail
+  ├── feedback.md
+  ├── active.json            # Now includes session_id, task_id
+  ├── RESEARCH.md            # Current session's research
+  ├── PLAN.md                # Current session's plan
+  └── archive/               # Completed session artifacts
+      └── {timestamp}-{task-slug}/
+          ├── RESEARCH.md
+          ├── PLAN.md
+          └── summary.md
+  ```
 
 ### First-Run Agent Registration
 
-> **Why:** Currently Setu requires a restart on first run because OpenCode scans agent files before plugins initialize.
-
 - [ ] **Solve first-run issue**
-    - **Problem:** OpenCode scans `.opencode/agents/` during `Config.get()` BEFORE `Plugin.init()` runs. Our plugin creates `setu.md` during init, but it's already too late.
-    - **Options:**
-      1. CLI init command: `npx setu-opencode init` (user runs before first use)
-      2. Postinstall script: npm postinstall creates the agent file
-      3. OpenCode API: Request a plugin hook for programmatic agent registration
-    - **Implementation:** TBD based on feasibility analysis
+  - Options: CLI init command, postinstall script, or OpenCode API request
+  - Goal: Setu appears in Tab cycle without restart
 
-### Context Auto-Injection
+### Gold Test Generation (Opt-in)
 
-- [ ] **Auto-Inject AGENTS.md**
-    - **Why:** Project rules should be known immediately
-    - **What:** Inject AGENTS.md into system prompt
-    - **How:** Enhance system-transform with project context
+> **Why:** When a bug is fixed, that scenario becomes a valuable regression test.
 
-- [ ] **Auto-Inject README Summary**
-    - **Why:** Project overview helps understanding
-    - **What:** Inject README.md summary (first 50 lines or ## sections)
+- [ ] **Post-Verification Test Capture**
+  - After `setu_verify` returns success, offer to generate regression test
+  - Capture: files changed, error that was fixed, expected behavior
+  - Generate test case appropriate to project's test framework
+  - Save to appropriate test directory
 
-- [ ] **AGENTS.md Walker**
-    - **Why:** Directory-specific rules matter
-    - **What:** Walk upward from file, collect ALL AGENTS.md
-    - **How:** Inject in order: root → src → components
+### Visual Enhancements (Luxury)
 
-### Git Safety
+- [ ] **Colored Terminal Output** — `src/utils/terminal.ts`
+  - 🔴 Red: Phase 0 blocks, verification failures
+  - 🟢 Green: Verification passed, context confirmed
+  - 🟡 Yellow: Warnings, suggestions, asking for guidance
+  - 🔵 Blue: Information, progress updates
 
-- [ ] **Git Smart Branching**
-    - **Why:** Accidental commits to main on complex tasks
-    - **What:** Warn if on main + complex task
-    - **How:** Check branch + task complexity in bootstrap
+### v1.2 Success Criteria
 
-### Scratchpad Profile
-
-> **Why:** "Vibe coding" and disposable scripts shouldn't be blocked by strict verification. Sometimes users want to write one-off scripts without friction.
-
-- [ ] **Add `scratchpad` style**
-    - **Why:** Report 2 identifies "Disposable Software" as a valid use case. Setu's strictness is counterproductive for throwaway scripts.
-    - **What:** 5th operational style that bypasses Setu's enforcement.
-    - **How:**
-      - `phase0: "bypass"` — No blocking, allow all tools immediately
-      - `verification: "none"` — No build/test enforcement
-      - `context: "persist"` — Still save to `.setu/` for future reference
-    - **Behavior:**
-      - Disables Phase 0 blocking completely
-      - Disables verification prompts
-      - Allows rapid iteration without ceremony
-      - Still tracks files read and patterns found (in case script graduates to "real" software)
-    - **Trigger:** User says "style: scratchpad", "vibe", "quick and dirty", "throwaway"
-    - **Implementation:** `src/prompts/profiles.ts` (add scratchpad style)
-
-### Context Hygiene (The Ralph Loop)
-
-> **Why:** "Context Rot" makes agents dumber over time. Long chat histories pollute next-token prediction. Users dumping lots of info, agents trying to fix things — overall quality degrades. The most reliable workflow is: Task → Verify → Wipe Memory → Next Task.
-
-- [ ] **Context Loop Protocol**
-    - **Why:** Manually restarting sessions to clear context is high friction. Setu should manage its own memory hygiene proactively.
-    - **What:** Automate the "Wipe & Reload" cycle while preserving project understanding in `.setu/`.
-    - **How:**
-      1. **Stash Good Context:** Before any reset, save critical info to `.setu/context.json`:
-         - Files read and their summaries
-         - Decisions made during the task
-         - Patterns discovered
-         - AGENTS.md rules applied
-      2. **Trigger Reset:** After task completion + verification success:
-         - Prompt: "Task complete. Verification passed. Shall I clear my short-term memory and reload project context for the next task?"
-      3. **Execute Reset:** If user agrees:
-         - Update `.setu/context.md` with task summary (append)
-         - Clear `.setu/active.json` (task complete)
-         - Trigger session compaction (aggressive summary) or session reset
-         - Reload `.setu/context.json` for fresh start
-      4. **Fresh Start:** Agent has full project context but zero conversation pollution
-    - **Implementation:**
-      - `src/hooks/compaction.ts` (enhanced compaction logic)
-      - `src/tools/setu-verify.ts` (post-verification prompt)
-      - `src/context/storage.ts` (context stashing helpers)
-    - **Reference:** Report 2 "Ralph Loop" concept
-
-- [ ] **Context Size Warning**
-    - **Why:** If context is becoming too large despite hygiene, warn user.
-    - **What:** Detect context bloat; suggest manual restart if needed.
-    - **How:**
-      - Monitor `.setu/context.json` size
-      - If exceeding threshold (e.g., 50KB), prompt: "Context is getting large. Would you like to clean the rot and refresh?"
-    - **Implementation:** `src/context/storage.ts`
+- [ ] DAG-based parallel execution working (measure time savings)
+- [ ] Independent tasks run simultaneously
+- [ ] Context Cleanse (JIT reload) working
+- [ ] Subagents get fresh, focused context
+- [ ] Results aggregated correctly
+- [ ] Multi-session artifacts managed correctly
+- [ ] README updated with v1.2 features
 
 ---
 
-## v1.3: Disciplined Delegation
+## v2.0: Synthesis — Goal-Backward Verification
 
-### Fine-Grained Model Routing
+> **Theme:** Verify outcomes, not just task completion.
 
-> **Why:** Different tasks need different models. Research tasks can use cheaper models, implementation needs powerful ones.
+### Goal-Backward Verification
 
-- [ ] **Per-Subagent Model Configuration**
-    - **What:** Each subagent type can have a dedicated model
-    - **Example:**
-      - `setu-explorer` → cheap/fast model (Gemini Flash)
-      - `setu-implementer` → powerful model (Claude Sonnet)
-    - **Config:** Via `opencode.json` agent definitions
-
-- [ ] **Orchestration Layer**
-    - **Why:** Central routing is more reliable than prompt-based model selection
-    - **What:** Setu main agent delegates to orchestrator that routes to appropriate subagent/model
-    - **Benefit:** Consistent model selection without relying on agent self-awareness
-    - **Implementation:** `src/orchestration/router.ts`
-
-### Batch Mode (Auto-Ralph at Scale)
-
-> **Why:** For large tasks (refactoring 50 files, migrations), running the Context Loop automatically is more efficient than manual resets.
-
-- [ ] **Batch Mode Orchestration**
-    - **Why:** Users shouldn't have to manually trigger reset after each subtask.
-    - **What:** High-level plan → Break into N tasks → Execute each with auto-reset between.
-    - **How:**
-      1. User provides high-level plan (or Setu generates from request)
-      2. Setu breaks into discrete tasks (like roadmap or detailed spec)
-      3. Execute Task 1 → Verify → Stash context → Auto-reset
-      4. Reload `.setu/` → Execute Task 2 → ...
-      5. Repeat until all tasks complete
-    - **Value:** Virtually infinite context window for large projects
-    - **Flow:**
-      ```
-      User Plan → [Task 1] → Verify → Stash → Reset
-                         ↓
-                  [Task 2] → Verify → Stash → Reset
-                         ↓
-                  [Task N] → Verify → Complete
-      ```
-    - **Implementation:** `src/orchestration/batch.ts` (new module)
-
-### Communication & Visual Feedback
-
-> **Why:** Setu (as the "Governor" for agents) should feel active and alive. Visual feedback makes blocking and success states clear.
-
-- [ ] **Colored Terminal Output**
-    - **Why:** Red for blocks, green for success, yellow for warnings makes Setu's state immediately visible.
-    - **What:** Use ANSI colors in CLI output for key events.
-    - **How:**
-      - 🔴 Red: Phase 0 blocks, verification failures
-      - 🟢 Green: Verification passed, context confirmed
-      - 🟡 Yellow: Warnings, suggestions, asking for guidance
-      - 🔵 Blue: Information, progress updates
-    - **Implementation:** `src/utils/terminal.ts` (new utility)
-
-- [ ] **Strict Edit Blocking**
-    - **Why:** Agents should NEVER edit a file they haven't read recently.
-    - **What:** Block edits to files not read in last N tool calls (unless user explicitly requested).
-    - **How:**
-      - Track files read in session state
-      - Before `edit` tool, check if file was read recently
-      - If not: Block with red message: "Cannot edit [file] — you haven't read it. Read first, then edit."
-    - **Implementation:** `src/hooks/tool-execute.ts`
-
-### Setu Subagents
-
-> **Why:** Offload work to keep main context clean, run tasks in parallel.
-
-- [ ] **setu-researcher Subagent**
-    - **Purpose:** Deep research, returns summary
-    - **Permissions:** Read-only (no edit, no write)
-    - **Invocation:** By Setu main agent via `task` tool
-    - **Returns:** Concise findings, not raw data
-    - **Cost Optimization (Arbitrage Strategy):**
-      - **Why:** Using expensive models for simple research wastes money. Report 2 identifies this as a key opportunity.
-      - **What:** Simulate "cheap model" tier by restricting subagent capabilities.
-      - **How:**
-        - Shorter system prompt (reduce input tokens)
-        - Limited tool access (read-only subset)
-        - Lower output token limits
-        - Focused task scope (one question at a time)
-      - **Effect:** Tiered work distribution without requiring model routing control
-    - **Reference:** Report 2 "Cost Arbitrage"
-
-- [ ] **setu-reviewer Subagent**
-    - **Purpose:** Code review, returns findings
-    - **Permissions:** Read-only
-    - **Invocation:** By Setu main agent
-    - **Returns:** Issues found, suggestions
-
-- [ ] **Parallel Subagent Execution**
-    - **What:** Run multiple subagents simultaneously
-    - **How:** Multiple `task` calls in single message
-    - **Pattern:** `delegate_task(background=true)` equivalent
-
-### Skills vs Subagents Architecture
-
-| Component | Purpose | When to Use |
-|-----------|---------|-------------|
-| **Skills** | Behavior guidance | Always (loaded on-demand) |
-| **Subagents** | Offload work | Large tasks, parallel research |
-| **Main Agent** | Orchestration | User interaction, decisions |
-
----
-
-## v1.4: Visual Verification
-
-### Agent Browser Integration
-
-- [ ] **CLI + Skill Detection**
-    - **What:** Detect if `agent-browser` is installed
-    - **How:** Check `which agent-browser` and skill file
-
-- [ ] **Visual-Verify Subagent**
-    - **Purpose:** Take screenshots, analyze accessibility
-    - **Permissions:** Bash (agent-browser only), no edit
-    - **Returns:** PASS/FAIL + findings
-
-- [ ] **E2E Testing (Opt-in)**
-    - **What:** Visual verification for web projects
-    - **When:** User requests or collab mode
-
----
-
-## v2.0: Advanced Features
-
-### LSP Integration
-
-- [ ] **LSP Symbol Search** — Precision reading via code structure
-- [ ] **Smart Context Extraction** — Use LSP for function signatures
-- [ ] **Stack-Aware Verification** — Optimized error extraction
-
-### Cross-Session Memory
-
-- [ ] **Project Pattern Memory** — Remember patterns across sessions
-- [ ] **RLM Integration** — Recursive context decomposition
-
----
-
-## Interoperability
-
-### Priority: OpenCode Compatibility (HIGH)
-
-Setu as a primary agent means:
-- User can Tab away if Setu causes issues
-- OpenCode features (Plan/Build) remain accessible
-- No breaking changes to OpenCode behavior
-
-### Priority: Other Plugin Compatibility (v3.0 - Deferred)
-
-> **Note:** No other discipline plugins currently exist for OpenCode. This section describes future interoperability that will be implemented if/when needed.
-
-When other discipline plugins are detected (future):
-- Setu enters "minimal mode" (reduced functionality to avoid conflicts)
-- Defers context injection (other plugin handles it)
-- Focuses on Phase 0 and verification only
-- Avoids conflicting with other plugin directories
-
-### Detection Strategy (v3.0 - Deferred)
-
-> This is speculative architecture for when other discipline plugins exist.
+**The insight:** "I completed the task" is not the same as "the feature works."
 
 ```typescript
-// At plugin init - detect other plugins (FUTURE)
-const hasOtherPlugin = detectOtherPlugins(projectDir);
-if (hasOtherPlugin) {
-  console.log('[Setu] Other plugin detected - minimal mode');
-  // Disable: context injection, auto-inject
-  // Enable: Phase 0, verification, attempt limits
+interface MustHaves {
+  truths: string[];           // Observable behaviors ("User can see messages")
+  artifacts: ArtifactSpec[];  // Files that must exist
+  key_links: KeyLink[];       // Critical connections between components
 }
 ```
+
+### Core Features
+
+- [ ] **Goal-Backward Verification** — `src/verification/goal-backward.ts`
+  - Verify truths (observable behaviors)
+  - Verify artifacts exist with minimum content
+  - Verify key links (component wiring)
+
+- [ ] **Workflow Commands**
+  - `/setu-new-project` — Initialize project structure
+  - `/setu-plan-phase` — Create phase plans
+  - `/setu-execute-phase` — Run DAG-based parallel execution
+  - `/setu-verify-work` — Goal-backward verification
+
+### Verification Proof Requirement
+
+```typescript
+interface VerificationProof {
+  step: 'build' | 'test' | 'lint' | 'typecheck';
+  command: string;
+  exitCode: number;
+  output: string;
+  timestamp: string;
+}
+```
+
+- Never trust "I fixed it!" — demand proof (exit code 0)
+
+### Architecture Improvements
+
+- [ ] **Plugin Metrics** — `src/utils/metrics.ts`
+  - Track: blocks issued, verifications completed, gear transitions
+  - Expose via debug mode for troubleshooting
+  - No external telemetry (privacy-first)
+
+- [ ] **Health Check Endpoint**
+  - Verify plugin is functioning correctly
+  - Check hook registration, tool availability
+
+- [ ] **Error Handling Layer**
+  - Graceful degradation when hooks fail
+  - Clear error messages for users
+
+### v2.0 Success Criteria
+
+- [ ] Goal-backward verification working
+- [ ] Workflow commands available
+- [ ] Verification proof required before "done" claims
+- [ ] Metrics available in debug mode
+- [ ] README updated with v2.0 features
+
+---
+
+## v3.0: Expansion — Multi-Platform
+
+> **Theme:** Extend Setu to other platforms and tools.
+
+### Setu Lite for Claude Code
+
+- [ ] **Claude Code Version** — `setu-lite-claude/`
+  - Port Setu persona as `.claude/agents/setu.md`
+  - Port workflow templates (no enforcement, just guidance)
+  - Port commands as `.claude/commands/setu/`
+  - Clear documentation of "Lite" vs "Full" differences
+
+**Limitation:** Claude Code lacks `tool.execute.before` hook, so no blocking. Setu Lite is prompt-ware only.
+
+### MCP Tool Integration
+
+- [ ] **MCP Integration** — `src/mcp/integration.ts`
+  - Detect available MCP tools (browser, database, etc.)
+  - Enhance verification when tools available
+  - Graceful degradation when tools missing
+
+### Cross-Session Memory (Deferred)
+
+> **Note:** This is complex and requires prerequisites (v1.2 artifacts, v2.0 verification). Deferred until foundations are solid.
+
+- [ ] **Pattern Memory Across Sessions**
+  - Use diff/Wasserstein distance for context similarity
+  - Identify reusable patterns from past sessions
+  - Suggest relevant past learnings for current task
+
+### Deferred Features
+
+- [ ] **Visual Verification** (requires `agent-browser`)
+  - Take screenshots, analyze accessibility
+  - E2E testing for web projects
+
+- [ ] **Scratchpad Style**
+  - Bypass all enforcement for disposable scripts
+  - Still tracks context for future reference
+
+- [ ] **Other Plugin Detection**
+  - Detect conflicting discipline plugins
+  - Enter minimal mode to avoid conflicts
+
+### v3.0 Success Criteria
+
+- [ ] Setu Lite works in Claude Code
+- [ ] MCP tools enhance verification
+- [ ] Plugin conflicts handled gracefully
+- [ ] README updated with v3.0 features
+
+---
+
+## Deprecation Policy
+
+Features may be deprecated with one minor version warning before removal. Deprecated features will be documented in release notes.
 
 ---
 
@@ -915,44 +498,27 @@ if (hasOtherPlugin) {
 - [ ] Test: Session where agent claims "done" with broken build
 - [ ] Record: Setu blocking completion, forcing verification
 
-### Parallel Execution
+### DAG Execution
 - [ ] Test: Context gathering with serial vs parallel reads
-- [ ] Record: Time savings with parallel
-
-### Character Evaluation (Anthropic Alignment)
-
-> *"Rigid rules might negatively affect a model's character more generally."* — Anthropic Constitution
-
-Setu should feel like a "thoughtful colleague, not a gatekeeper." Evaluate:
-
-- [ ] **Helpfulness vs Blocking**: Does Phase 0 feel helpful or frustrating?
-  - Metric: User satisfaction after Phase 0 interactions
-  - Test: Compare "blocked" messages vs "guided" messages
-  
-- [ ] **Explanation Quality**: Do "why" explanations improve compliance?
-  - Metric: Fewer repeated blocking attempts after enhanced messages
-  - Test: A/B test old vs new block message format
-  
-- [ ] **Priority Adherence**: Does the priority order (Safe → Contextual → Efficient → Helpful) lead to better outcomes?
-  - Metric: Successful task completion rate
-  - Test: Edge cases where priorities conflict
-  
-- [ ] **User Agency**: Does Setu respect user expertise?
-  - Metric: Expert mode usage and satisfaction
-  - Test: Senior developers' perception of Setu
+- [ ] Record: Time savings with parallel execution
 
 ---
 
-## Target Audience Impact
+## Interoperability
 
-| Persona | Risk Without Fix | v1.0 Solution |
-|---------|------------------|---------------|
-| Junior Dev | Feels blocked | Clear messaging, smart questions |
-| Senior Dev | Feels slow | Parallel execution support |
-| Startup Founder | Wastes time | Fast context, efficient reads |
-| AI Engineer | Bypassed enforcement | Permission-based blocking |
-| Tech Lead | Inconsistent behavior | Setu as default mode |
-| PM | Features don't work | Verification before done |
+### Priority: OpenCode Compatibility (HIGH)
+
+Setu as a primary agent means:
+- User can Tab away if Setu causes issues
+- OpenCode features (Plan/Build) remain accessible
+- No breaking changes to OpenCode behavior
+
+### Priority: Other Plugin Compatibility (v3.0)
+
+When other discipline plugins are detected:
+- Setu enters "minimal mode" (reduced functionality)
+- Defers context injection to other plugin
+- Focuses on Phase 0 and verification only
 
 ---
 
