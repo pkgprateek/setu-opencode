@@ -3,13 +3,13 @@
  * 
  * Uses: chat.message
  * 
- * Detects magic commands like `:quick`, `style: quick`, or `mode: expert` 
+ * Detects magic commands like `:quick`, `style: quick`, or `mode: collab` 
  * and updates the plugin state accordingly.
  * 
  * Magic Command Patterns (in order of precedence):
- * 1. Prefix: `:quick`, `:expert`, `:ultrathink`, `:collab`
+ * 1. Prefix: `:quick`, `:ultrathink`, `:collab`
  * 2. Key-Value: `style: quick`, `mode: quick`, `preset: quick`
- * 3. Aliases: `:fast` → quick, `:trust` → expert
+ * 3. Aliases: `:fast` → quick, `:trust` → collab
  * 
  * Also tracks the current agent for style-aware enforcement.
  */

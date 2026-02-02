@@ -3,12 +3,11 @@
  * 
  * Terminology:
  * - "Mode" = OpenCode's IDE-level agents (Plan, Build, Setu)
- * - "Style" = Setu's operational presets (ultrathink, quick, expert, collab)
+ * - "Style" = Setu's operational presets (ultrathink, quick, collab)
  * 
  * Magic Command Patterns (in order of precedence):
- * 1. Prefix: `:quick`, `:expert`, `:ultrathink`, `:collab`
- * 2. Key-Value: `style: quick`, `mode: quick`, `preset: quick`
- * 3. Aliases: `:fast` → quick, `:trust` → expert
+ * 1. Prefix: `:quick`, `:ultrathink`, `:collab`
+ * 3. Aliases: `:fast` → quick, `:trust` → collab
  */
 
 import {
@@ -18,7 +17,7 @@ import {
   KEY_VALUE_PREFIXES
 } from '../constants';
 
-export type SetuStyle = 'ultrathink' | 'quick' | 'expert' | 'collab';
+export type SetuStyle = 'ultrathink' | 'quick' | 'collab';
 
 // Backwards compatibility alias
 export type SetuProfile = SetuStyle;
@@ -66,7 +65,7 @@ function resolveStyle(name: string): SetuStyle | null {
  * 
  * Supports three patterns (checked in order):
  * 1. Prefix pattern: Message starts with `:stylename` (e.g., `:quick`, `:fast`)
- * 2. Key-value pattern: `style: quick`, `mode: expert`, `preset: collab`
+ * 2. Key-value pattern: `style: quick`, `mode: collab`, `preset: collab`
  * 3. Aliases are resolved automatically (e.g., `:fast` → quick)
  * 
  * @param prompt - The user's message content
@@ -90,7 +89,7 @@ export function detectStyle(prompt: string): { style: SetuStyle; isPersistent: b
     }
   }
   
-  // Pattern 2: Key-value pattern (`style: quick`, `mode: expert`, `preset: collab`)
+  // Pattern 2: Key-value pattern (`style: quick`, `mode: collab`, `preset: collab`)
   // Can appear anywhere in the message, but typically at the start
   for (const prefix of KEY_VALUE_PREFIXES) {
     // Match "prefix:" followed by optional whitespace and a word
@@ -121,21 +120,19 @@ export function detectProfile(prompt: string): { profile: SetuStyle; isPersisten
 /**
  * Get verification requirements for a style
  */
-export function getStyleVerificationLevel(style: SetuStyle): 'full' | 'minimal' | 'user-driven' | 'discuss' {
+export function getStyleVerificationLevel(style: SetuStyle): 'full' | 'minimal' | 'discuss' {
   switch (style) {
     case 'ultrathink':
       return 'full';      // Build, test, lint, visual, edge cases
     case 'quick':
       return 'minimal';   // Only if risky changes
-    case 'expert':
-      return 'user-driven'; // Suggest but don't enforce
     case 'collab':
-      return 'discuss';   // Discuss what to verify
+      return 'discuss';   // Discuss what to verify, trust user decision
   }
 }
 
 // Backwards compatibility alias
-export function getProfileVerificationLevel(profile: SetuStyle): 'full' | 'minimal' | 'user-driven' | 'discuss' {
+export function getProfileVerificationLevel(profile: SetuStyle): 'full' | 'minimal' | 'discuss' {
   return getStyleVerificationLevel(profile);
 }
 
@@ -148,10 +145,8 @@ export function getStyleEnforcementLevel(style: SetuStyle): 'strict' | 'light' |
       return 'strict';    // Enforce todo completion, verification
     case 'quick':
       return 'none';      // No enforcement
-    case 'expert':
-      return 'light';     // Suggest but don't block
     case 'collab':
-      return 'light';     // Discuss before enforcing
+      return 'light';     // Discuss before enforcing, trust user
   }
 }
 

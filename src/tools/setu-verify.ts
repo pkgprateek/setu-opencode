@@ -203,7 +203,6 @@ Automatically detects project build tool (npm/yarn/pnpm/bun for JS/TS, cargo for
         case 'minimal':
           stepsToRun = allSteps.filter(s => s.name === 'build');
           break;
-        case 'user-driven':
         case 'discuss':
           stepsToRun = [];
           break;
@@ -243,9 +242,7 @@ ${stepsList}
 **Principle:** Extract only what's needed. One root error often causes many downstream failures — find the root, ignore the noise.`;
       } else {
         let guidance = '';
-        if (verificationLevel === 'user-driven') {
-          guidance = 'Suggest steps to user, let them decide.';
-        } else if (verificationLevel === 'discuss') {
+        if (verificationLevel === 'discuss') {
           guidance = 'Discuss with user what verification is needed.';
         }
         

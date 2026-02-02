@@ -56,7 +56,7 @@ const MAX_TASK_LENGTH = 500;       // Prevent bloated task descriptions
 const MAX_REFERENCE_LENGTH = 200;  // Prevent long URLs
 const MAX_REFERENCES = 10;         // Reasonable limit
 
-const VALID_MODES: SetuMode[] = ['ultrathink', 'quick', 'expert', 'collab'];
+const VALID_MODES: SetuMode[] = ['ultrathink', 'quick', 'collab'];
 const DEFAULT_MODE: SetuMode = 'ultrathink';
 
 /**
@@ -231,7 +231,7 @@ export function saveActiveTask(projectDir: string, task: ActiveTask): void {
  * Create a new active task with defaults.
  * 
  * @param taskDescription - What the user wants to do
- * @param mode - Operational mode (ultrathink, quick, expert, collab)
+ * @param mode - Operational mode (ultrathink, quick, collab)
  * @param constraints - Optional constraints to apply
  * @returns New ActiveTask ready to save
  */

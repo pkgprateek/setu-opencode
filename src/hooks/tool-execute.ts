@@ -64,7 +64,7 @@ export type EnforcementLevel = 'full' | 'light' | 'none';
  * Determines enforcement level based on Setu profile.
  * Only used when in Setu agent mode.
  *
- * @param setuProfile - The Setu profile (ultrathink/quick/expert/collab)
+ * @param setuProfile - The Setu profile (ultrathink/quick/collab)
  * @returns The enforcement level for Phase 0
  */
 export function getSetuEnforcementLevel(setuProfile: SetuProfile): EnforcementLevel {
