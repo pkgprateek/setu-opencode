@@ -7,7 +7,7 @@
  * 
  * Magic Command Patterns (in order of precedence):
  * 1. Prefix: `:quick`, `:ultrathink`, `:collab`
- * 3. Aliases: `:fast` → quick, `:trust` → collab
+ * 2. Aliases: `:fast` → quick, `:trust` → collab
  */
 
 import {
