@@ -6,7 +6,7 @@
  */
 
 import { tool } from '@opencode-ai/plugin';
-import { getProfileVerificationLevel, type SetuProfile } from '../prompts/profiles';
+import { getStyleVerificationLevel, type SetuStyle } from '../prompts/styles';
 import { detectProjectInfo } from '../context/storage';
 
 /**
@@ -142,22 +142,21 @@ function generateVerificationSteps(buildTool: string): VerificationStep[] {
 /**
  * Creates the setu_verify tool definition
  * 
- * @param getProfileState - Accessor for current profile state
+ * @param getStyleState - Accessor for current style state
  * @param markVerificationComplete - Callback to mark verification complete
  * @param getProjectDir - Accessor for project directory (for build tool detection)
  */
 export function createSetuVerifyTool(
-  getProfileState: () => { current: SetuProfile },
+  getStyleState: () => { current: SetuStyle },
   markVerificationComplete: () => void,
   getProjectDir?: () => string
 ): ReturnType<typeof tool> {
   return tool({
     description: `Run Setu's verification protocol before completing a task.
-Checks build, tests, lint based on current mode.
+Checks build, tests, lint based on current style.
 Automatically detects project build tool (npm/yarn/pnpm/bun for JS/TS, cargo for Rust, go for Go, uv/pip for Python).
 - Ultrathink: Full verification (all steps)
 - Quick: Minimal (build only if risky)
-- Expert: User-driven (suggest, don't enforce)
 - Collab: Discuss what to verify`,
     
     args: {
@@ -170,8 +169,8 @@ Automatically detects project build tool (npm/yarn/pnpm/bun for JS/TS, cargo for
     },
     
     async execute(args, _context): Promise<string> {
-      const style = getProfileState().current;
-      const verificationLevel = getProfileVerificationLevel(style);
+      const style = getStyleState().current;
+      const verificationLevel = getStyleVerificationLevel(style);
       
       // Detect project build tool
       const projectDir = getProjectDir ? getProjectDir() : process.cwd();

@@ -19,16 +19,10 @@ import {
 
 export type SetuStyle = 'ultrathink' | 'quick' | 'collab';
 
-// Backwards compatibility alias
-export type SetuProfile = SetuStyle;
-
 export interface StyleState {
   current: SetuStyle;
   isPersistent: boolean;  // true if set via "style: x", false if temporary
 }
-
-// Backwards compatibility alias
-export type ProfileState = StyleState;
 
 /**
  * Check if a string is a valid SetuStyle
@@ -108,15 +102,6 @@ export function detectStyle(prompt: string): { style: SetuStyle; isPersistent: b
   return null;
 }
 
-// Backwards compatibility alias
-export function detectProfile(prompt: string): { profile: SetuStyle; isPersistent: boolean } | null {
-  const result = detectStyle(prompt);
-  if (result) {
-    return { profile: result.style, isPersistent: result.isPersistent };
-  }
-  return null;
-}
-
 /**
  * Get verification requirements for a style
  */
@@ -131,11 +116,6 @@ export function getStyleVerificationLevel(style: SetuStyle): 'full' | 'minimal' 
   }
 }
 
-// Backwards compatibility alias
-export function getProfileVerificationLevel(profile: SetuStyle): 'full' | 'minimal' | 'discuss' {
-  return getStyleVerificationLevel(profile);
-}
-
 /**
  * Get enforcement level for a style
  */
@@ -148,9 +128,4 @@ export function getStyleEnforcementLevel(style: SetuStyle): 'strict' | 'light' |
     case 'collab':
       return 'light';     // Discuss before enforcing, trust user
   }
-}
-
-// Backwards compatibility alias
-export function getProfileEnforcementLevel(profile: SetuStyle): 'strict' | 'light' | 'none' {
-  return getStyleEnforcementLevel(profile);
 }

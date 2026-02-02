@@ -35,7 +35,7 @@ Tab → Setu (default) → Build → Plan → (cycle)
 src/
 ├── index.ts          # Plugin entry point, hook registration, agent creation
 ├── agent/            # Setu agent configuration
-│   └── setu-agent.ts       # Creates .opencode/agent/setu.md
+│   └── setu-agent.ts       # Creates .opencode/agents/setu.md
 ├── hooks/            # OpenCode hook implementations
 │   ├── system-transform.ts   # Injects Setu persona
 │   ├── chat-message.ts       # Agent/profile detection
@@ -277,7 +277,7 @@ If you're starting a new session to implement Setu features, follow this order:
 
 | Step | File to Create/Modify | What to Do |
 |------|----------------------|------------|
-| 1.1 | `src/agent/setu-agent.ts` | Create function to generate `.opencode/agent/setu.md` at plugin init |
+| 1.1 | `src/agent/setu-agent.ts` | Create function to generate `.opencode/agents/setu.md` at plugin init |
 | 1.2 | `src/index.ts` | Add `config` hook to set `default_agent: "setu"` |
 | 1.3 | `src/hooks/chat-message.ts` | Add agent tracking (store current agent per session) |
 | 1.4 | `src/hooks/tool-execute.ts` | Add mode-aware enforcement (check agent before blocking) |
@@ -312,7 +312,7 @@ export async function createSetuAgent(projectDir: string): Promise<void> {
   
   if (!existsSync(agentPath)) {
     writeFileSync(agentPath, SETU_AGENT_CONFIG);
-    console.log('[Setu] Created .opencode/agent/setu.md');
+    console.log('[Setu] Created .opencode/agents/setu.md');
   }
 }
 ```

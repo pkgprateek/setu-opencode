@@ -11,14 +11,15 @@
  */
 
 import { getStateInjection, type FileAvailability } from '../prompts/persona';
-import type { ProfileState } from '../prompts/profiles';
+import { detectStyle, type StyleState } from '../prompts/styles';
+import { STYLE_DISPLAY } from '../constants';
 import { 
   type ContextCollector, 
   contextToSummary, 
   formatContextForInjection,
   type ProjectRules,
   formatRulesForInjection,
-  hasProjectRules
+  hasProjectRules,
 } from '../context';
 
 /**
@@ -53,21 +54,17 @@ function formatFilesAlreadyRead(filesRead: Array<{ path: string }>): string {
  * Does NOT inject:
  * - Full persona (already in agent file)
  * - Behavioral instructions (enforced by hooks)
- * - Response format prefix (removed - visual noise)
  */
 export function createSystemTransformHook(
-  getProfileState: () => ProfileState,
+  getStyleState: () => StyleState,
   getVerificationState: () => { complete: boolean; stepsRun: Set<string> },
   getSetuFilesExist?: () => FileAvailability,
   getCurrentAgent?: () => string,
   getContextCollector?: () => ContextCollector | null,
   getProjectRules?: () => ProjectRules | null
-): (
-  _input: { sessionID: string },
-  output: { system: string[] }
-) => Promise<void> {
+) {
   return async (
-    _input: { sessionID: string },
+    input: { sessionID: string; message?: { content?: string } },
     output: { system: string[] }
   ): Promise<void> => {
     // Only inject when in Setu agent mode
@@ -76,8 +73,19 @@ export function createSystemTransformHook(
       return;
     }
     
-    const profileState = getProfileState();
-    const isDefault = profileState.current === 'ultrathink';
+    const styleState = getStyleState();
+    
+    // CRITICAL: Detect style from user message before building system prompt
+    // This runs BEFORE chat.message hook updates persistent state
+    let effectiveStyle = styleState.current;
+    if (input.message?.content) {
+      const detected = detectStyle(input.message.content);
+      if (detected) {
+        effectiveStyle = detected.style;
+      }
+    }
+    
+    const isDefault = effectiveStyle === 'ultrathink';
     
     // Get file availability for context injection
     const filesExist: FileAvailability = getSetuFilesExist 
@@ -85,7 +93,7 @@ export function createSystemTransformHook(
       : { active: false, context: false, agentsMd: false, claudeMd: false };
     
     // Inject minimal state - style and file availability
-    const stateInjection = getStateInjection(profileState.current, filesExist, isDefault);
+    const stateInjection = getStateInjection(effectiveStyle, filesExist, isDefault);
     output.system.push(stateInjection);
     
     // SILENT EXPLORATION: Inject project rules (AGENTS.md, CLAUDE.md, active task)
@@ -116,17 +124,13 @@ export function createSystemTransformHook(
           const summary = contextToSummary(context);
           const contextBlock = formatContextForInjection(summary);
           output.system.push(contextBlock);
-          
-          // NOTE: We no longer inject context.summary separately.
-          // formatContextForInjection() already includes the task via summary.task.
-          // The previous "[Previous Understanding]" block was redundant and wasted tokens.
         }
       }
     }
     
-    // Add verification reminder for ultrathink profile when needed
+    // Add verification reminder for ultrathink style when needed
     const verificationState = getVerificationState();
-    if (profileState.current === 'ultrathink' && !verificationState.complete) {
+    if (effectiveStyle === 'ultrathink' && !verificationState.complete) {
       const stepsNeeded = ['build', 'test', 'lint'].filter(
         s => !verificationState.stepsRun.has(s)
       );
@@ -136,8 +140,11 @@ export function createSystemTransformHook(
       }
     }
     
-    // NOTE: [RESPONSE FORMAT] block removed intentionally
-    // The prefix [Profile: Ultrathink] is visual noise.
-    // The user knows the mode via Toast/UI; the agent knows via system prompt injection above.
+    // [Verified Fix] Enforce response format
+    // This explicitly instructs the agent to announce the current style
+    const styleName = STYLE_DISPLAY[effectiveStyle];
+    output.system.push(
+      `ALWAYS start your response with "[Style: ${styleName}]".`
+    );
   };
 }

@@ -1,4 +1,4 @@
-import type { SetuProfile } from './profiles';
+import type { SetuStyle } from './styles';
 import { STYLE_DISPLAY } from '../constants';
 
 // ============================================================================
@@ -21,7 +21,7 @@ export interface FileAvailability {
  * Format: [Style: Ultrathink] or [Style: Quick]
  * This aligns with the agent file instruction to acknowledge with [Style: X]
  */
-export const getStylePrefix = (style: SetuProfile, isDefault: boolean = false): string => {
+export const getStylePrefix = (style: SetuStyle, isDefault: boolean = false): string => {
   const name = STYLE_DISPLAY[style];
   const suffix = isDefault ? ' (Default)' : '';
   return `[Style: ${name}${suffix}]`;
@@ -65,22 +65,22 @@ export const getFileAvailability = (files: FileAvailability): string => {
  * Get complete state injection for system prompt.
  * 
  * Injects:
- * - Profile prefix (mode indicator)
+ * - Style prefix (mode indicator)
  * - File availability (context awareness)
  * 
  * This is intentionally minimal — the full persona lives in the agent file.
  * We only inject dynamic state that changes per-session.
  */
 export const getStateInjection = (
-  profile: SetuProfile,
+  style: SetuStyle,
   files: FileAvailability,
   isDefault: boolean = false
 ): string => {
-  const profilePrefix = getStylePrefix(profile, isDefault);
+  const stylePrefix = getStylePrefix(style, isDefault);
   const fileInfo = getFileAvailability(files);
   
   // Only inject dynamic state - efficiency is enforced by hooks, not suggested
-  return `${profilePrefix}\n${fileInfo}`;
+  return `${stylePrefix}\n${fileInfo}`;
 };
 
 // Legacy exports removed - no consumers exist

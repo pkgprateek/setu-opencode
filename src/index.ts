@@ -15,7 +15,7 @@
 import type { Plugin } from '@opencode-ai/plugin';
 import { existsSync } from 'fs';
 import { join } from 'path';
-import { type ProfileState } from './prompts/profiles';
+import { type StyleState } from './prompts/styles';
 import {
   createSystemTransformHook,
   createChatMessageHook,
@@ -45,7 +45,7 @@ import { type FileAvailability } from './prompts/persona';
 
 // Plugin state
 interface SetuState {
-  profile: ProfileState;
+  style: StyleState;
   currentAgent: string;
   isFirstSession: boolean;
   verificationSteps: Set<VerificationStep>;
@@ -72,7 +72,7 @@ interface SetuState {
  * Uses available hooks from the OpenCode Plugin API:
  * - config: Set default_agent to "setu"
  * - experimental.chat.system.transform: Inject persona into system prompt
- * - chat.message: Detect profile keywords in user messages, track current agent
+ * - chat.message: Detect style keywords in user messages, track current agent
  * - tool.execute.before: Phase 0 enforcement (block side-effects until context confirmed)
  * - tool.execute.after: Track verification steps, file reads, searches
  * - event: Handle session lifecycle, load context on start
@@ -114,7 +114,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
   
   // Initialize state
   const state: SetuState = {
-    profile: {
+    style: {
       current: 'ultrathink',
       isPersistent: true
     },
@@ -149,9 +149,9 @@ export const SetuPlugin: Plugin = async (ctx) => {
   const activeBatches = createActiveBatchesMap();
   
   // State accessors
-  const getProfileState = () => state.profile;
-  const setProfileState = (newState: ProfileState) => { state.profile = newState; };
-  const getSetuProfile = () => state.profile.current;
+  const getStyleState = () => state.style;
+  const setStyleState = (newState: StyleState) => { state.style = newState; };
+  const getSetuStyle = () => state.style.current;
   
   // Cached file existence checker (silent, no errors)
   // Cache lasts 5 seconds to avoid repeated fs.existsSync calls
@@ -244,7 +244,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
   
   // Log plugin initialization (only in debug mode)
   debugLog('Plugin initialized');
-  debugLog('Default profile:', state.profile.current);
+  debugLog('Default style:', state.style.current);
   debugLog('Phase 0 enforcement: ACTIVE');
   debugLog('Context persistence: .setu/ directory');
   debugLog('Tools: setu_verify, setu_context, setu_feedback, setu_task');
@@ -268,7 +268,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
     // Now also injects loaded context content (summary, constraints)
     // AND Silent Exploration project rules (AGENTS.md, CLAUDE.md, active task)
     'experimental.chat.system.transform': createSystemTransformHook(
-      getProfileState,
+      getStyleState,
       getVerificationState,
       () => state.setuFilesExist, // Pass file existence for lazy loading
       getCurrentAgent,
@@ -276,15 +276,15 @@ export const SetuPlugin: Plugin = async (ctx) => {
       getProjectRules      // Pass project rules for Silent Exploration injection
     ),
     
-    // Detect profile keywords in user messages and track current agent
+    // Detect style keywords in user messages and track current agent
     'chat.message': createChatMessageHook(
-      getProfileState,
-      setProfileState,
+      getStyleState,
+      setStyleState,
       setCurrentAgent
     ),
     
     // Phase 0: Block side-effect tools until context is confirmed
-    // Consolidated enforcement (agent + profile level)
+    // Consolidated enforcement (agent + style level)
     // Also enforces active task constraints (READ_ONLY, NO_PUSH, etc.)
     // Also enforces Git Discipline (verification before commit/push)
     // Also records tool execution for parallel tracking (audit trail)
@@ -304,7 +304,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
         getPhase0State, 
         getCurrentAgent,
         getContextCollector,
-        getSetuProfile,
+        getSetuStyle,
         getProjectDir,
         getVerificationState  // Git Discipline: verification enforcement
       );
@@ -342,7 +342,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
     
     // Custom tools
     tool: {
-      setu_verify: createSetuVerifyTool(getProfileState, markVerificationComplete, getProjectDir),
+      setu_verify: createSetuVerifyTool(getStyleState, markVerificationComplete, getProjectDir),
       setu_context: createSetuContextTool(getPhase0State, confirmContext, getContextCollector, getProjectDir),
       setu_feedback: createSetuFeedbackTool(getProjectDir),
       setu_task: createSetuTaskTool(getProjectDir, resetVerificationState)

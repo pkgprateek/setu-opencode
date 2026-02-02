@@ -184,8 +184,9 @@ export const STYLE_ALIASES: Record<string, typeof VALID_STYLES[number]> = {
   // Collab aliases (absorbs expert's use cases)
   'discuss': 'collab',
   'collaborate': 'collab',
-  'trust': 'collab',  // Was expert, now collab
-  'x': 'collab',      // Was expert, now collab
+  'trust': 'collab',
+  'x': 'collab',
+  'expert': 'collab'
 } as const;
 
 /**
