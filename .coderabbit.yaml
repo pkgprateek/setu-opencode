@@ -18,7 +18,9 @@ reviews:
       - main
   
   path_filters:
-    - "!**/*.md"
+    - "!**/*.md"              # Exclude all markdown files by default
+    - "README.md"             # Include root README.md
+    - "skills/**/*.md"        # Include skills markdown files
     - "!docs/**"
     - "!**/*.txt"
     - "!**/.gitignore"
@@ -149,6 +151,40 @@ reviews:
         - `noImplicitAny: true` (no exceptions)
         - `strictNullChecks: true` (prevent null errors)
         - Target is appropriate for Node.js version
+        
+    - path: "src/security/**/*.ts"
+      instructions: |
+        SECURITY LAYER — DEFENSE IN DEPTH. Verify with extreme rigor:
+        
+        - Path validation must prevent directory traversal attacks (no `../` sequences)
+        - Secrets detection patterns must catch API keys, tokens, passwords
+        - Input sanitization must remove null bytes and control characters
+        - Audit logging must capture all security-relevant actions with timestamps
+        - Redaction must handle sensitive data in logs/errors
+        - Prompt sanitization must prevent injection attacks
+        - All security functions must have test coverage
+        - Never expose internal paths or implementation details in error messages
+        
+    - path: "src/utils/**/*.ts"
+      instructions: |
+        UTILITY FUNCTIONS — FOUNDATION FOR RELIABILITY. Verify:
+        
+        - Functions must be pure when possible (no side effects)
+        - Error handling must be explicit (no silent failures)
+        - Type safety must be maintained (generics used correctly)
+        - Debounce/throttle must handle edge cases (leading/trailing calls)
+        - Guards must have comprehensive type narrowing
+        - All utilities must have clear, single responsibility
+        
+    - path: "eslint.config.js"
+      instructions: |
+        LINTING CONFIGURATION — CODE QUALITY GATE. Verify:
+        
+        - Rules align with TypeScript strict mode
+        - Security-related rules are enabled
+        - No rules are disabled without justification
+        - Config extends recommended presets appropriately
+        - Rules match the project's coding standards from AGENTS.md
 
 # Knowledge base: Repo-specific learnings only since each repo has unique rules
 knowledge_base:
