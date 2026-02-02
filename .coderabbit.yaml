@@ -1,0 +1,73 @@
+# CodeRabbit Configuration
+# Focus reviews on code, skip documentation
+
+# Language and tone
+language: en-US
+tone_instructions: "Be concise, technical, and focus on code quality. Skip pleasantries."
+
+# Review settings
+reviews:
+  # Request changes for critical issues
+  request_changes_workflow: true
+  
+  # High-level summary at PR level
+  high_level_summary: true
+  
+  # Detailed review comments
+  poem: false
+  review_status: true
+  
+  # Auto-review configuration
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+      - master
+  
+  # Files and paths to exclude from reviews
+  path_filters:
+    - "!**/*.md"           # Skip all markdown files
+    - "!**/README.md"      # Skip README files
+    - "!**/CHANGELOG.md"   # Skip changelog
+    - "!**/CONTRIBUTING.md"
+    - "!**/LICENSE.md"
+    - "!docs/**"           # Skip docs directory
+    - "!**/*.txt"          # Skip text files
+    - "!**/.gitignore"     # Skip gitignore
+    - "!**/.env.example"   # Skip env examples
+    - "!**/package-lock.json"  # Skip lock files
+    - "!**/bun.lockb"      # Skip bun lock
+    - "!**/yarn.lock"
+    - "!**/pnpm-lock.yaml"
+  
+  # Path-specific instructions
+  path_instructions:
+    - path: "src/**/*.ts"
+      instructions: |
+        Focus on:
+        - Type safety and null checks
+        - Error handling
+        - Security (input validation, path traversal)
+        - Performance (avoid blocking operations)
+        - Code clarity and maintainability
+    
+    - path: "**/*.json"
+      instructions: |
+        Verify:
+        - Valid JSON syntax
+        - Schema compliance
+        - No sensitive data
+
+# Chat settings
+chat:
+  auto_reply: false
+
+# Knowledge base
+knowledge_base:
+  learnings:
+    - "This is an OpenCode plugin for AI coding discipline"
+    - "Follow AGENTS.md conventions and project architecture"
+    - "TypeScript strict mode enabled"
+    - "Prefer explicit types over 'any'"
+    - "Use camelCase for variables, PascalCase for types"
