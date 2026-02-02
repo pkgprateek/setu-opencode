@@ -141,10 +141,15 @@ This means:
 
 ### Phase 0 Rule
 
-**Allow (read-only):** `read`, `glob`, `grep`, `webfetch`, `todoread`
-**Allow (bash read-only):** `ls`, `cat`, `head`, `tail`, `grep`, `find`, `pwd`, `echo`, `which`, `env`
+**Allow (native read-only tools):** `read`, `glob`, `grep`, `list`, `webfetch`, `todoread`
+**Allow (bash read-only):** `cat`, `head`, `tail`, `grep`, `find`, `pwd`, `echo`, `which`, `env`
 **Allow (git read-only):** `git status`, `git log`, `git diff`, `git branch`, `git show`
 **Block (side-effects):** `write`, `edit`, `bash` (other commands), `git` (write operations)
+
+**Tool Preference:** Use native tools over bash commands:
+- `list` over `bash ls` — structured output, faster, cross-platform
+- `glob` over `bash find` — native pattern matching, no shell spawn
+- `grep` over `bash grep` — integrated search with better formatting
 
 This lets the agent "look but don't touch" until context is confirmed.
 
