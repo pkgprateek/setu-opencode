@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Agent Persona v2.5.0** - Major token optimization
+  - Reduced persona from ~800 to ~400 tokens (50% savings)
+  - Removed behavioral instructions (now enforced by hooks)
+  - Removed styles table and switching ceremony
+  - Added "Your Standards" section for craftsmanship principles
+  - Removed `PARALLEL_GUIDANCE` from dynamic injection (~300 tokens)
+  - Total overhead reduction: **64%** (~700 tokens/message)
+
+- **Three-Style System** - Consolidated from 4 to 3 operational styles
+  - Removed `expert` style, merged into `collab`
+  - **ultrathink**: Full analysis, verification (default)
+  - **quick**: Minimal ceremony, fast execution
+  - **collab**: Discussion first, trust user decisions
+  - Backward compatibility: `:trust` and `:x` now map to `collab`
+
+- **Testing Infrastructure** - Professional unit test organization
+  - Moved unit tests to `src/hooks/__tests__/` (Jest/Vitest convention)
+  - 10 passing tests for parallel execution tracking
+  - Manual test suite in local `tests/` directory (gitignored)
+
+- **CodeRabbit Configuration** - Auto-review for PRs to main
+  - Skip markdown and documentation files
+  - Focus on TypeScript code quality
+  - Review priorities: type safety, security, performance
+
 ### Added
 
 - **Complete Security Infrastructure** (`src/security/`)
