@@ -41,7 +41,7 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
       await writeFile(join(projectDir, '.setu', 'PLAN.md'), content);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      return `Failed to save plan: ${msg}. Check .setu/ directory permissions.`;
+      throw new Error(`Failed to save plan: ${msg}. Check .setu/ directory permissions.`);
     }
     
     // CRITICAL: Reset progress to step 0 — new plan means fresh start

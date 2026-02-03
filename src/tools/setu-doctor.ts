@@ -96,8 +96,8 @@ async function checkGitStatus(projectDir: string): Promise<HealthCheck[]> {
     }
     
     // Check for detached HEAD
-    const headResult = await execCommand('git symbolic-ref --short HEAD 2>/dev/null || echo "DETACHED"', projectDir);
-    if (headResult.stdout.trim() === 'DETACHED') {
+    const headResult = await execCommand('git symbolic-ref --short HEAD', projectDir);
+    if (headResult.exitCode !== 0) {
       checks.push({
         name: 'git-head',
         status: 'warning',
@@ -212,7 +212,7 @@ async function checkRuntime(projectDir: string): Promise<HealthCheck[]> {
   
   // Check TypeScript if tsconfig.json exists
   if (existsSync(join(projectDir, 'tsconfig.json'))) {
-    const tscResult = await execCommand('npx tsc --version 2>/dev/null', projectDir);
+    const tscResult = await execCommand('npx tsc --version', projectDir);
     if (tscResult.exitCode === 0) {
       checks.push({
         name: 'typescript',
@@ -345,13 +345,13 @@ Run this before starting complex tasks to ensure a clean environment.`,
     async execute(args: { verbose?: boolean }): Promise<string> {
       const projectDir = getProjectDir();
       const result = await runDoctorChecks(projectDir);
-      
+
       // If not verbose, filter to only issues
-      if (!args.verbose) {
-        result.checks = result.checks.filter(c => c.status !== 'healthy');
-      }
-      
-      return formatDoctorResult(result);
+      const checks = args.verbose
+        ? result.checks
+        : result.checks.filter(c => c.status !== 'healthy');
+
+      return formatDoctorResult({ ...result, checks });
     }
   });
 }

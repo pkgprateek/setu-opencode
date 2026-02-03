@@ -8,6 +8,8 @@
  * - Loaded on session start for continuity
  */
 
+import { MAX_INJECTION_SIZE } from './storage';
+
 // ============================================================================
 // Constraint Types (Active Task Persistence)
 // ============================================================================
@@ -239,8 +241,6 @@ export function contextToSummary(context: SetuContext): SetuContextSummary {
   };
 }
 
-import { MAX_INJECTION_SIZE } from './storage';
-
 /**
  * Format a SetuContextSummary into a multi-line block suitable for prompt injection.
  * 
@@ -273,7 +273,7 @@ export function formatContextForInjection(summary: SetuContextSummary): string {
   
   // Enforce injection size limit (PLAN.md 2.9.1)
   if (injection.length > MAX_INJECTION_SIZE) {
-    injection = injection.slice(0, MAX_INJECTION_SIZE - 20) + '\n[TRUNCATED]';
+    injection = injection.slice(0, MAX_INJECTION_SIZE - 12) + '\n[TRUNCATED]';
   }
   
   return injection;

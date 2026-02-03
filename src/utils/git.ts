@@ -8,11 +8,7 @@ import { execSync } from 'child_process';
 import { statSync } from 'fs';
 import { resolve } from 'path';
 import { debugLog } from '../debug';
-
-/**
- * Protected branch names that warrant extra caution
- */
-export const PROTECTED_BRANCHES = ['main', 'master', 'production', 'prod'] as const;
+import { isProtectedBranch } from '../constants';
 
 /**
  * Validate a directory path for security
@@ -58,32 +54,28 @@ function validateProjectDir(dirPath: string): string | null {
  * @returns Branch name or 'unknown' if detection fails
  */
 export function getCurrentBranch(projectDir: string): string {
-  // Validate projectDir before use
-  const validatedDir = validateProjectDir(projectDir);
-  if (!validatedDir) {
-    return 'unknown';
-  }
-  
-  try {
-    const branch = execSync('git rev-parse --abbrev-ref HEAD', {
-      cwd: validatedDir,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe']
-    }).trim();
-    
-    return branch || 'unknown';
-  } catch (error) {
-    debugLog('Failed to get current branch:', error);
-    return 'unknown';
-  }
+  const tryGetBranch = (dir: string): string | null => {
+    const validatedDir = validateProjectDir(dir);
+    if (!validatedDir) {
+      return null;
+    }
+
+    try {
+      const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+        cwd: validatedDir,
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 5000
+      }).trim();
+
+      return branch || null;
+    } catch (error) {
+      debugLog(`Failed to get current branch in ${validatedDir}:`, error);
+      return null;
+    }
+  };
+
+  return tryGetBranch(projectDir) || tryGetBranch(process.cwd()) || 'unknown';
 }
 
-/**
- * Check if the current branch is a protected branch
- * 
- * @param branch - Branch name to check
- * @returns true if branch is protected
- */
-export function isProtectedBranch(branch: string): boolean {
-  return PROTECTED_BRANCHES.includes(branch.toLowerCase() as typeof PROTECTED_BRANCHES[number]);
-}
+export { isProtectedBranch };

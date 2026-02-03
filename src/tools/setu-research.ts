@@ -38,6 +38,8 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
   }
 });
 
+// NOTE: This is a populated template, not the empty RESEARCH_TEMPLATE.
+// We keep it inline to avoid mixing placeholder comments with live content.
 function formatResearch(args: {
   summary: string;
   constraints?: string;

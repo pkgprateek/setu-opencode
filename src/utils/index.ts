@@ -34,6 +34,7 @@ export {
 // Git utilities (PLAN.md Section 2.6)
 export {
   getCurrentBranch,
-  isProtectedBranch,
-  PROTECTED_BRANCHES
+  isProtectedBranch
 } from './git';
+
+export { PROTECTED_BRANCHES } from '../constants';

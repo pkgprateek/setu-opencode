@@ -219,7 +219,7 @@ export function createToolExecuteBeforeHook(
     // GIT DISCIPLINE ENFORCEMENT (Pre-Commit Checklist)
     // Block git commit/push if verification is not complete
     // This applies in Setu mode regardless of gear state
-    if (input.tool === 'bash' && getVerificationState && enforcementLevel === 'full') {
+    if (input.tool === 'bash' && getVerificationState) {
       const command = getStringProp(output.args, 'command') ?? '';
       const verificationState = getVerificationState();
       
@@ -278,7 +278,7 @@ export function createToolExecuteBeforeHook(
     // Block direct edits to package manifests to prevent accidental corruption
     // Applies to: package.json, lockfiles
     // Reason: Direct edits can corrupt manifests; use package managers instead
-    if ((input.tool === 'write' || input.tool === 'edit') && enforcementLevel === 'full') {
+    if (input.tool === 'write' || input.tool === 'edit') {
       const filePath = getStringProp(output.args, 'filePath') ?? '';
       
       // Normalize path separators for cross-platform pattern matching (Windows uses backslash)
@@ -375,7 +375,7 @@ export function createToolExecuteBeforeHook(
       }
     }
     
-    // Quick profile bypasses Gearbox enforcement (but NOT constraint enforcement above)
+    // Quick profile bypasses Gearbox enforcement (but NOT constraints or safety checks above)
     if (enforcementLevel === 'none') {
       return;
     }
@@ -393,6 +393,12 @@ export function createToolExecuteBeforeHook(
       if (gearBlockResult.blocked) {
         if (enforcementLevel === 'full') {
           debugLog(`Gearbox BLOCKED: ${input.tool} in ${gearState.current} gear`);
+          logSecurityEvent(
+            projectDir,
+            SecurityEventType.GEAR_BLOCKED,
+            `Blocked ${input.tool} in ${gearState.current} gear (${gearBlockResult.reason || 'no reason'})`,
+            { sessionId: input.sessionID, tool: input.tool }
+          );
           throw new Error(createGearBlockMessage(gearBlockResult));
         } else {
           // Light enforcement: warn but don't block

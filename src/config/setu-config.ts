@@ -220,25 +220,43 @@ export function getConfigValue<K extends keyof SetuConfig>(
  */
 export function validateConfig(config: SetuConfig): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
-  
-  if (config.maxAttempts < 1 || config.maxAttempts > 10) {
-    errors.push('maxAttempts must be between 1 and 10');
+
+  const ensureFiniteNumber = (value: unknown, label: string): value is number => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      errors.push(`${label} must be a finite number`);
+      return false;
+    }
+    return true;
+  };
+
+  if (ensureFiniteNumber(config.maxAttempts, 'maxAttempts')) {
+    if (config.maxAttempts < 1 || config.maxAttempts > 10) {
+      errors.push('maxAttempts must be between 1 and 10');
+    }
   }
   
-  if (config.contextSizeLimit < 1024 || config.contextSizeLimit > 1024 * 1024) {
-    errors.push('contextSizeLimit must be between 1KB and 1MB');
+  if (ensureFiniteNumber(config.contextSizeLimit, 'contextSizeLimit')) {
+    if (config.contextSizeLimit < 1024 || config.contextSizeLimit > 1024 * 1024) {
+      errors.push('contextSizeLimit must be between 1KB and 1MB');
+    }
   }
   
-  if (config.injectionSizeLimit < 1000 || config.injectionSizeLimit > 50000) {
-    errors.push('injectionSizeLimit must be between 1000 and 50000 characters');
+  if (ensureFiniteNumber(config.injectionSizeLimit, 'injectionSizeLimit')) {
+    if (config.injectionSizeLimit < 1000 || config.injectionSizeLimit > 50000) {
+      errors.push('injectionSizeLimit must be between 1000 and 50000 characters');
+    }
   }
   
-  if (config.security.maxLogSize < 10240) {
-    errors.push('security.maxLogSize must be at least 10KB');
+  if (ensureFiniteNumber(config.security.maxLogSize, 'security.maxLogSize')) {
+    if (config.security.maxLogSize < 10240) {
+      errors.push('security.maxLogSize must be at least 10KB');
+    }
   }
   
-  if (config.security.maxLogFiles < 1 || config.security.maxLogFiles > 10) {
-    errors.push('security.maxLogFiles must be between 1 and 10');
+  if (ensureFiniteNumber(config.security.maxLogFiles, 'security.maxLogFiles')) {
+    if (config.security.maxLogFiles < 1 || config.security.maxLogFiles > 10) {
+      errors.push('security.maxLogFiles must be between 1 and 10');
+    }
   }
   
   return { valid: errors.length === 0, errors };

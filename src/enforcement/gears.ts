@@ -1,5 +1,5 @@
 import { existsSync } from 'fs';
-import { join, normalize, isAbsolute, resolve } from 'path';
+import { join, normalize, isAbsolute, resolve, sep } from 'path';
 import { 
   isSideEffectTool, 
   isSetuTool,
@@ -59,7 +59,7 @@ function isSetuPath(args: unknown): boolean {
   if (typeof pathArg !== 'string') return false;
 
   // SECURITY: Reject control characters and null bytes
-  if (/[\x00-\x1F\x7F]/.test(pathArg)) {
+  if (/\p{Cc}/u.test(pathArg)) {
     return false;
   }
   
@@ -111,7 +111,8 @@ function isSetuPath(args: unknown): boolean {
     const setuRoot = normalizedInput.substring(0, setuIndex + setuMarker.length);
     const resolvedInput = resolve(pathArg);
     const resolvedSetuDir = resolve(setuRoot);
-    if (!resolvedInput.startsWith(resolvedSetuDir)) {
+    const setuBoundary = resolvedSetuDir.endsWith(sep) ? resolvedSetuDir : `${resolvedSetuDir}${sep}`;
+    if (resolvedInput !== resolvedSetuDir && !resolvedInput.startsWith(setuBoundary)) {
       return false;
     }
 
@@ -141,8 +142,10 @@ export interface GearBlockResult {
 export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockResult {
   switch (gear) {
     case 'scout':
-      // Only read-only tools allowed
-      if (!isReadOnlyTool(tool) && !isSetuTool(tool)) {
+      // Only read-only tools or approved Setu tools allowed
+      const scoutAllowedSetuTools = new Set(['setu_research', 'setu_doctor']);
+      const isScoutAllowedSetuTool = isSetuTool(tool) && scoutAllowedSetuTools.has(tool);
+      if (!isReadOnlyTool(tool) && !isScoutAllowedSetuTool) {
         return {
           blocked: true,
           reason: 'scout_blocked',
@@ -154,6 +157,14 @@ export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockR
     case 'architect':
       // Read + write to .setu/ only
       // If it's a side effect tool, it MUST be targeting .setu/ path
+      if (!isReadOnlyTool(tool) && !isSetuTool(tool)) {
+        return {
+          blocked: true,
+          reason: 'architect_blocked',
+          details: `Tool '${tool}' blocked in Architect gear. Only Setu or read-only tools are allowed.`,
+          gear
+        };
+      }
       if (isSideEffectTool(tool) && !isSetuPath(args)) {
         return {
           blocked: true,

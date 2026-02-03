@@ -24,6 +24,7 @@ export enum SecurityEventType {
   PHASE0_BLOCKED = 'PHASE0_BLOCKED',
   GIT_DISCIPLINE_BLOCKED = 'GIT_DISCIPLINE_BLOCKED',
   DEPENDENCY_EDIT_BLOCKED = 'DEPENDENCY_EDIT_BLOCKED',
+  GEAR_BLOCKED = 'GEAR_BLOCKED',
   
   // Warning events
   BYPASS_ATTEMPT_DETECTED = 'BYPASS_ATTEMPT_DETECTED',
@@ -57,6 +58,7 @@ const EVENT_SEVERITY: Record<SecurityEventType, SecurityEvent['severity']> = {
   [SecurityEventType.PHASE0_BLOCKED]: 'low',
   [SecurityEventType.GIT_DISCIPLINE_BLOCKED]: 'medium',
   [SecurityEventType.DEPENDENCY_EDIT_BLOCKED]: 'medium',
+  [SecurityEventType.GEAR_BLOCKED]: 'medium',
   [SecurityEventType.BYPASS_ATTEMPT_DETECTED]: 'high',
   [SecurityEventType.SECRETS_DETECTED]: 'critical',
   [SecurityEventType.PROMPT_INJECTION_SANITIZED]: 'medium',

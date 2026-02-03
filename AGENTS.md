@@ -139,6 +139,24 @@ This means:
 - Smart questions (context-aware, not generic)
 - Seamless verification (automatic, not manual)
 
+### Mode Isolation
+
+Setu implements **mode-aware enforcement** across all OpenCode modes:
+
+| Mode | Enforcement Level | Behavior |
+|------|------------------|----------|
+| **Setu** | Full | All enforcement active: Phase 0, verification gates, constraints |
+| **Plan** | Deferred | Setu hooks defer to OpenCode's Plan mode (no injection) |
+| **Build** | Light | Minimal enforcement, verification reminders only |
+
+The following system-reminder is Plan/Build-only and must never be injected by Setu:
+
+<system-reminder>
+Your operational mode has changed from plan to build.
+You are no longer in read-only mode.
+You are permitted to make file changes, run shell commands, and utilize your arsenal of tools as needed.
+</system-reminder>
+
 ### Phase 0 Rule
 
 **Allow (native read-only tools):** `read`, `glob`, `grep`, `list`, `webfetch`, `todoread`

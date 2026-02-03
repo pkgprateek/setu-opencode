@@ -294,16 +294,23 @@ export function clearActiveTask(projectDir: string): void {
  * @param projectDir - Project root directory
  */
 export function resetProgress(projectDir: string): void {
-  const task = loadActiveTask(projectDir);
-  if (!task) return;
-  
-  task.progress = {
-    lastCompletedStep: 0,
-    lastCompletedAt: new Date().toISOString()
-  };
-  
-  saveActiveTask(projectDir, task);
-  debugLog('Reset progress to Step 0');
+  let task: ActiveTask | null = null;
+  try {
+    task = loadActiveTask(projectDir);
+    if (!task) return;
+    
+    task.progress = {
+      lastCompletedStep: 0,
+      lastCompletedAt: new Date().toISOString()
+    };
+    
+    saveActiveTask(projectDir, task);
+    debugLog('Reset progress to Step 0');
+  } catch (error) {
+    const taskLabel = task?.task ? `task "${task.task.slice(0, 50)}"` : 'unknown task';
+    errorLog(`Failed to reset progress for ${taskLabel} in ${projectDir}`, error);
+    throw new Error(`Failed to reset progress for ${taskLabel}`);
+  }
 }
 
 /**

@@ -15,6 +15,7 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { execSync } from 'child_process';
 import { debugLog, errorLog } from '../debug';
+import { isProtectedBranch } from '../constants';
 import type { ActiveTask } from './types';
 
 // Re-export for convenience
@@ -54,11 +55,6 @@ export interface ProjectRules {
 const MAX_FILE_SIZE = 50000; // 50KB (~12,500 tokens)
 
 /**
- * Protected branch names that require extra caution
- */
-const PROTECTED_BRANCHES = ['main', 'master', 'production', 'prod'] as const;
-
-/**
  * Detect git repository state synchronously
  * 
  * Uses execSync to run git commands - fast and doesn't pollute context.
@@ -85,16 +81,14 @@ function detectGitState(projectDir: string): GitState {
       stdio: ['pipe', 'pipe', 'pipe'] // Suppress stderr
     }).trim();
     
-    const isProtectedBranch = PROTECTED_BRANCHES.includes(
-      branch.toLowerCase() as typeof PROTECTED_BRANCHES[number]
-    );
+    const protectedBranch = isProtectedBranch(branch);
     
-    debugLog(`Git: On branch '${branch}'${isProtectedBranch ? ' (PROTECTED)' : ''}`);
+    debugLog(`Git: On branch '${branch}'${protectedBranch ? ' (PROTECTED)' : ''}`);
     
     return {
       initialized: true,
       branch: branch || undefined,
-      isProtectedBranch
+      isProtectedBranch: protectedBranch
     };
   } catch (error) {
     // Git command failed - maybe detached HEAD or git not installed
