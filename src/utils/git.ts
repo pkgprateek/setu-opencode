@@ -50,32 +50,33 @@ function validateProjectDir(dirPath: string): string | null {
 /**
  * Get the current git branch name
  * 
+ * SECURITY: Fail-closed design - if projectDir is invalid, return 'unknown'
+ * rather than silently falling back to process.cwd().
+ * 
  * @param projectDir - Project directory to run git command in
  * @returns Branch name or 'unknown' if detection fails
  */
 export function getCurrentBranch(projectDir: string): string {
-  const tryGetBranch = (dir: string): string | null => {
-    const validatedDir = validateProjectDir(dir);
-    if (!validatedDir) {
-      return null;
-    }
+  // Validate projectDir first - fail closed if invalid
+  const validatedDir = validateProjectDir(projectDir);
+  if (!validatedDir) {
+    debugLog(`getCurrentBranch: Invalid projectDir "${projectDir}", returning unknown (fail-closed)`);
+    return 'unknown';
+  }
 
-    try {
-      const branch = execSync('git rev-parse --abbrev-ref HEAD', {
-        cwd: validatedDir,
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-        timeout: 5000
-      }).trim();
+  try {
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+      cwd: validatedDir,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 5000
+    }).trim();
 
-      return branch || null;
-    } catch (error) {
-      debugLog(`Failed to get current branch in ${validatedDir}:`, error);
-      return null;
-    }
-  };
-
-  return tryGetBranch(projectDir) || tryGetBranch(process.cwd()) || 'unknown';
+    return branch || 'unknown';
+  } catch (error) {
+    debugLog(`Failed to get current branch in ${validatedDir}:`, error);
+    return 'unknown';
+  }
 }
 
 export { isProtectedBranch };
