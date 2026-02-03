@@ -1,5 +1,63 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Gearbox State Machine**: Artifact-driven state transitions (Scout/Architect/Builder)
+  - Scout gear: read-only until RESEARCH.md created
+  - Architect gear: can write to `.setu/` only until PLAN.md created
+  - Builder gear: full access with verification enforcement
+- `setu_research` tool for saving research findings to `.setu/RESEARCH.md`
+- `setu_plan` tool for creating execution plans in `.setu/PLAN.md`
+- `setu_reset` tool for resetting step progress
+- `setu_doctor` tool for environment health checks (git, deps, runtime)
+- Progress tracking fields in `active.json` schema (`progress.lastCompletedStep`)
+- Learning persistence fields (`learnings.worked/failed`) for ghost loop prevention
+- `MAX_LEARNINGS` constant (20) for capping approach history
+- Configuration system with `setu.json` (project and global config support)
+- JSON schema for config validation (`assets/setu.schema.json`)
+- Atomic write pattern (temp file + fsync + rename) in context storage
+- Control character rejection in config validation and prompt sanitization
+- Enhanced attempt tracking with persistent failure counter
+- Config validation at each merge step (global and project)
+- Pre-commit checklist with branch detection
+
+### Fixed
+- **Context size limit**: Reduced from 512KB to 50KB per policy (prevents token bloat)
+- **Step validation**: Added `Number.isInteger()` check for progress steps
+- **setu-doctor indentation**: Fixed try-catch alignment in lockfile check
+- **setu-doctor nullish coalescing**: Use `??` instead of `||` for exit code fallback
+- **setu-doctor git-head**: Added healthy state reporting for consistent coverage
+- **setu-doctor TypeScript check**: Wrapped in try-catch for parity with Node.js check
+- **Key collision logging**: Added debug warning when sanitization causes key collision
+- Serialization fallback tracking prevents re-stringifying broken objects
+- Pretty-print now parses from safe JSON string, not raw context object
+- Atomic writes prevent corruption under concurrent saves
+- Input sanitization rejects all control characters (0x00-0x1F, 0x7F)
+- Compaction hook validates constraints array before use
+- Environment doctor handles non-zero exit codes from git/node commands
+- Type safety: `wrapHook` return type includes undefined for error cases
+- Empty catch blocks now discriminate ENOENT from other errors
+- SetuError prototype chain fixed for post-transpilation instanceof checks
+- Style detection regex escapes properly (`\\s`, `\\w`)
+
+### Changed
+- **Persona optimization**: Reduced token overhead from ~1,100 to ~400 tokens (64% reduction)
+- Agent version updated to 2.7.0
+- Removed `expert` style, merged into `collab` (now 3 styles: ultrathink, quick, collab)
+- Style guidance changed to descriptive-only (removed behavioral directives)
+- Removed parallel execution guidance from persona (enforcement via hooks instead)
+
+### Security
+- Context size enforcement at 50KB (down from 512KB)
+- Fail-closed unknown tool handling with whitelist
+- Log rotation at 1MB with 3-file retention
+- Path traversal prevention in gear checks and config loading
+- Defense-in-depth: sanitization + validation + atomic writes
+- Double-encoding attack prevention in path validation
+
+---
+
 ## [1.0.0] - 2025-02-03
 
 ### Fixed

@@ -166,6 +166,7 @@ export function loadActiveTask(projectDir: string): ActiveTask | null {
       if (
         typeof lastCompletedStep === 'number' && 
         Number.isFinite(lastCompletedStep) &&
+        Number.isInteger(lastCompletedStep) &&
         lastCompletedStep >= 0 &&
         typeof lastCompletedAt === 'string' &&
         isValidISOTimestamp(lastCompletedAt)

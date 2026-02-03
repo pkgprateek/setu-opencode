@@ -53,7 +53,7 @@ async function execCommand(
     return {
       stdout: execError.stdout || '',
       stderr: execError.stderr || '',
-      exitCode: execError.code || 1
+      exitCode: execError.code ?? 1
     };
   }
 }
@@ -111,6 +111,12 @@ async function checkGitStatus(projectDir: string): Promise<HealthCheck[]> {
         status: 'warning',
         message: 'HEAD is detached',
         fix: 'git checkout main'
+      });
+    } else {
+      checks.push({
+        name: 'git-head',
+        status: 'healthy',
+        message: `On branch ${headResult.stdout.trim()}`
       });
     }
     
@@ -180,10 +186,10 @@ async function checkDependencies(projectDir: string): Promise<HealthCheck[]> {
             message: 'Dependencies appear to be in sync'
           });
         }
-        } catch (error) {
-          // Stat errors are non-critical but useful for debugging
-          debugLog('Failed to stat lockfile or node_modules:', error);
-        }
+      } catch (error) {
+        // Stat errors are non-critical but useful for debugging
+        debugLog('Failed to stat lockfile or node_modules:', error);
+      }
       break;  // Only check first found lockfile
     }
   }
@@ -230,18 +236,28 @@ async function checkRuntime(projectDir: string): Promise<HealthCheck[]> {
   
   // Check TypeScript if tsconfig.json exists
   if (existsSync(join(projectDir, 'tsconfig.json'))) {
-    const tscResult = await execCommand('npx tsc --version', projectDir);
-    if (tscResult.exitCode === 0) {
-      checks.push({
-        name: 'typescript',
-        status: 'healthy',
-        message: `TypeScript ${tscResult.stdout.trim().replace('Version ', '')}`
-      });
-    } else {
+    try {
+      const tscResult = await execCommand('npx tsc --version', projectDir);
+      if (tscResult.exitCode === 0) {
+        checks.push({
+          name: 'typescript',
+          status: 'healthy',
+          message: `TypeScript ${tscResult.stdout.trim().replace('Version ', '')}`
+        });
+      } else {
+        checks.push({
+          name: 'typescript',
+          status: 'warning',
+          message: 'TypeScript not available',
+          fix: 'npm install -D typescript'
+        });
+      }
+    } catch (error) {
+      debugLog('Failed to check TypeScript version:', error);
       checks.push({
         name: 'typescript',
         status: 'warning',
-        message: 'TypeScript not available',
+        message: 'TypeScript check failed',
         fix: 'npm install -D typescript'
       });
     }

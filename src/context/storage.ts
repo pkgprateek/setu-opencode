@@ -66,7 +66,7 @@ export function loadContext(projectDir: string): SetuContext | null {
  * Save a SetuContext to `.setu/context.json`.
  * 
  * Security features (PLAN.md Section 2.9.1):
- * - Enforces MAX_CONTEXT_SIZE (512KB) to prevent token bloat
+ * - Enforces MAX_CONTEXT_SIZE (50KB) to prevent token bloat
  * - Validates arrays before truncation
  * - Truncates filesRead and searchesPerformed arrays if too large
  * - Uses compact JSON by default

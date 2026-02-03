@@ -7,8 +7,8 @@
  * @see PLAN.md Section 2.9.1 (Context Size Limits)
  */
 
-/** Maximum size of context.json in bytes (512KB - supports monorepos) */
-export const MAX_CONTEXT_SIZE = 524288;
+/** Maximum size of context.json in bytes (50KB - prevents token bloat) */
+export const MAX_CONTEXT_SIZE = 51200;
 
 /** Maximum size of injected context in chars (~2000 tokens) */
 export const MAX_INJECTION_SIZE = 8000;

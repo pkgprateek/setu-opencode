@@ -214,7 +214,12 @@ export function sanitizeInput(value: unknown): unknown {
   if (value !== null && typeof value === 'object') {
     const sanitized: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(value)) {
-      sanitized[sanitizeInput(key) as string] = sanitizeInput(val);
+      const sanitizedKey = sanitizeInput(key) as string;
+      // Warn on key collision (theoretical but worth logging for debugging)
+      if (Object.hasOwn(sanitized, sanitizedKey)) {
+        debugLog(`sanitizeInput: Key collision detected - "${key}" sanitized to existing key "${sanitizedKey}"`);
+      }
+      sanitized[sanitizedKey] = sanitizeInput(val);
     }
     return sanitized;
   }
