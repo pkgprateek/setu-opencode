@@ -1,5 +1,5 @@
 import { existsSync } from 'fs';
-import { join, normalize, isAbsolute } from 'path';
+import { join, normalize, isAbsolute, resolve } from 'path';
 import { 
   isSideEffectTool, 
   isSetuTool,
@@ -57,6 +57,11 @@ function isSetuPath(args: unknown): boolean {
                (args as Record<string, unknown>).file_path;
                
   if (typeof pathArg !== 'string') return false;
+
+  // SECURITY: Reject control characters and null bytes
+  if (/[\x00-\x1F\x7F]/.test(pathArg)) {
+    return false;
+  }
   
   // Normalize path separators for consistent checking (handle Windows backslashes)
   const normalizedInput = pathArg.replace(/\\/g, '/');
@@ -83,12 +88,33 @@ function isSetuPath(args: unknown): boolean {
     
     // Normalize and check for traversal out of .setu
     const normalizedAfter = normalize(afterSetu).replace(/\\/g, '/');
-    
+
+    // Inspect raw segments after .setu for traversal
+    const rawAfter = normalizedInput
+      .substring(setuIndex + setuMarker.length)
+      .replace(/^\//, '');
+    const rawSegments = rawAfter.split('/').filter(Boolean);
+
+    const hasRawTraversal = rawSegments.some((segment) => segment === '..');
+    const hasEncodedTraversal = rawSegments.some((segment) => /%2e|%2f|%5c/i.test(segment));
+
+    if (hasRawTraversal || hasEncodedTraversal) {
+      return false;
+    }
+
     // Reject if traversal detected (.. anywhere after normalization)
     if (normalizedAfter.includes('..')) {
       return false;
     }
-    
+
+    // Resolve and ensure path remains within .setu directory
+    const setuRoot = normalizedInput.substring(0, setuIndex + setuMarker.length);
+    const resolvedInput = resolve(pathArg);
+    const resolvedSetuDir = resolve(setuRoot);
+    if (!resolvedInput.startsWith(resolvedSetuDir)) {
+      return false;
+    }
+
     return true;
   }
   
