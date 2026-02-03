@@ -18,14 +18,36 @@ reviews:
       - main
   
   path_filters:
-    - "!**/*.md"              # Exclude all markdown files by default
-    - "README.md"             # Include root README.md
-    - "skills/**/*.md"        # Include skills markdown files
+    # INCLUDE: Config files that matter
+    - "package.json"
+    - "tsconfig.json"
+    - "eslint.config.js"
+    - "opencode.json"
+    - ".coderabbit.yaml"
+    
+    # INCLUDE: Critical documentation
+    - "README.md"
+    - "AGENTS.md"
+    - "ROADMAP.md"
+    - "skills/**/*.md"
+    
+    # EXCLUDE: Generated/vendored
+    - "!**/bun.lockb"
+    - "!package-lock.json"
+    - "!yarn.lock"
+    - "!pnpm-lock.yaml"
+    
+    # EXCLUDE: Test/docs directories
+    - "!tests/**"
     - "!docs/**"
+    
+    # EXCLUDE: Misc files
     - "!**/*.txt"
     - "!**/.gitignore"
-    - "!**/bun.lockb"
-    - "!tests/**"
+    - "!.git/**"
+    
+    # EXCLUDE: All other markdown (catch-all, must be last)
+    - "!**/*.md"
   
   path_instructions:
     - path: "src/**/*.ts"
