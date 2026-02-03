@@ -49,11 +49,12 @@ async function execCommand(
     const result = await execAsync(command, { cwd, timeout: 5000 });
     return { stdout: result.stdout, stderr: result.stderr, exitCode: 0 };
   } catch (error: unknown) {
-    const execError = error as { stdout?: string; stderr?: string; code?: number };
+    const execError = error as { stdout?: string; stderr?: string; code?: number | string };
+    const exitCode = typeof execError.code === 'number' ? execError.code : 1;
     return {
-      stdout: execError.stdout || '',
-      stderr: execError.stderr || '',
-      exitCode: execError.code ?? 1
+      stdout: execError.stdout ?? '',
+      stderr: execError.stderr ?? '',
+      exitCode
     };
   }
 }

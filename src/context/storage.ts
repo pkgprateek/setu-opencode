@@ -21,7 +21,7 @@ import {
 } from './types';
 import { ensureSetuDir } from './feedback';
 import { debugLog, errorLog } from '../debug';
-import { debounce, CONTEXT_SAVE_DEBOUNCE_MS } from '../utils';
+import { debounce, CONTEXT_SAVE_DEBOUNCE_MS, sanitizeInput } from '../utils';
 import { 
   MAX_CONTEXT_SIZE, 
   MAX_FILES_READ, 
@@ -452,13 +452,17 @@ export function logVerification(
   const timestamp = new Date().toISOString();
   const status = success ? 'PASS' : 'FAIL';
   
-  let entry = `\n## ${timestamp} - ${step.toUpperCase()} [${status}]\n`;
+  // Sanitize inputs to prevent log injection attacks
+  const safeStep = String(sanitizeInput(step));
+  const safeOutput = output ? String(sanitizeInput(output)) : undefined;
   
-  if (output) {
+  let entry = `\n## ${timestamp} - ${safeStep.toUpperCase()} [${status}]\n`;
+  
+  if (safeOutput) {
     // Truncate long output
-    const truncated = output.length > 500 
-      ? output.slice(0, 500) + '\n... (truncated)'
-      : output;
+    const truncated = safeOutput.length > 500 
+      ? safeOutput.slice(0, 500) + '\n... (truncated)'
+      : safeOutput;
     entry += `\n\`\`\`\n${truncated}\n\`\`\`\n`;
   }
   
