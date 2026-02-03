@@ -10,7 +10,7 @@
  * Re-exports ensureSetuDir from feedback.ts for consistency.
  */
 
-import { existsSync, readFileSync, writeFileSync, appendFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, appendFileSync, statSync, renameSync, unlinkSync, openSync, fsyncSync, closeSync } from 'fs';
 import { join, relative } from 'path';
 import {
   type SetuContext,
@@ -21,13 +21,24 @@ import {
 } from './types';
 import { ensureSetuDir } from './feedback';
 import { debugLog, errorLog } from '../debug';
-import { debounce, CONTEXT_SAVE_DEBOUNCE_MS } from '../utils';
+import { debounce, CONTEXT_SAVE_DEBOUNCE_MS, sanitizeInput } from '../utils';
+import { 
+  MAX_CONTEXT_SIZE, 
+  MAX_FILES_READ, 
+  MAX_SEARCHES 
+} from './limits';
 
 // Re-export for convenience
 export { ensureSetuDir };
+// Re-export limits for backward compatibility
+export { MAX_INJECTION_SIZE } from './limits';
 
 const CONTEXT_JSON = 'context.json';
 const VERIFICATION_LOG = 'verification.log';
+
+// Log rotation settings (from PLAN.md Section 2.9.4)
+const MAX_LOG_SIZE = 1024 * 1024;    // 1MB
+const MAX_LOG_FILES = 3;
 
 /**
  * Load the Setu context stored at `.setu/context.json` inside the given project directory.
@@ -54,28 +65,159 @@ export function loadContext(projectDir: string): SetuContext | null {
 /**
  * Save a SetuContext to `.setu/context.json`.
  * 
- * Optimized context storage:
- * - Uses compact JSON (no pretty-printing) to save space
- * - Skips `.setu/context.md` (AGENTS.md serves as human-readable version)
+ * Security features (PLAN.md Section 2.9.1):
+ * - Enforces MAX_CONTEXT_SIZE (50KB) to prevent token bloat
+ * - Validates arrays before truncation
+ * - Truncates filesRead and searchesPerformed arrays if too large
+ * - Uses compact JSON by default
+ * - Never writes content larger than MAX_CONTEXT_SIZE
+ * - Uses atomic write (temp file + rename) to prevent corruption
  * 
  * @param projectDir - Project root directory
  * @param context - The context to save
  */
 export function saveContext(projectDir: string, context: SetuContext): void {
-  const setuDir = ensureSetuDir(projectDir);
-  
-  // Update timestamp
-  context.updatedAt = new Date().toISOString();
-  
-  // Write JSON - compact by default, pretty in debug mode
-  const jsonPath = join(setuDir, CONTEXT_JSON);
-  const isDebug = process.env.SETU_DEBUG === 'true';
-  const jsonContent = isDebug 
-    ? JSON.stringify(context, null, 2) 
-    : JSON.stringify(context);
-  writeFileSync(jsonPath, jsonContent, 'utf-8');
-  
-  debugLog('Context saved to .setu/context.json');
+  try {
+    const setuDir = ensureSetuDir(projectDir);
+    
+    // Update timestamp
+    context.updatedAt = new Date().toISOString();
+    
+    // DEFENSIVE: Validate arrays before slicing (corrupted state could have non-arrays)
+    if (!Array.isArray(context.filesRead)) {
+      debugLog('saveContext: filesRead was not an array, resetting to []');
+      context.filesRead = [];
+    }
+    if (!Array.isArray(context.searchesPerformed)) {
+      debugLog('saveContext: searchesPerformed was not an array, resetting to []');
+      context.searchesPerformed = [];
+    }
+    
+    // Track if initial serialization failed - prevents re-stringifying broken object
+    let serializationFailed = false;
+    let jsonContent: string;
+    
+    // Build a safe object for fallback scenarios
+    const buildMinimalContext = (note: string): Record<string, unknown> => ({
+      summary: typeof context.summary === 'string' ? context.summary.slice(0, 1000) : '[truncated]',
+      filesRead: [],
+      searchesPerformed: [],
+      patterns: [],
+      project: context.project ?? {},
+      confirmed: context.confirmed ?? false,
+      createdAt: context.createdAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      note
+    });
+    
+    // First attempt at serialization
+    try {
+      jsonContent = JSON.stringify(context);
+    } catch (serializeError) {
+      // Serialization failed (circular refs, BigInt, etc.) - use minimal safe object
+      errorLog('saveContext: JSON.stringify failed, using minimal fallback:', serializeError);
+      serializationFailed = true;
+      jsonContent = JSON.stringify(buildMinimalContext('[truncated due to serialization error]'));
+    }
+    
+    // Check size limit and truncate if needed (PLAN.md 2.9.1)
+    // Only attempt re-serialization if initial serialization succeeded
+    if (jsonContent.length > MAX_CONTEXT_SIZE && !serializationFailed) {
+      debugLog(`Context size ${jsonContent.length} exceeds ${MAX_CONTEXT_SIZE}, truncating...`);
+      
+      // Truncate arrays to most recent entries
+      context.filesRead = context.filesRead.slice(-MAX_FILES_READ);
+      context.searchesPerformed = context.searchesPerformed.slice(-MAX_SEARCHES);
+      
+      // Retry serialization on the mutated context
+      try {
+        jsonContent = JSON.stringify(context);
+      } catch {
+        serializationFailed = true;
+        jsonContent = JSON.stringify(buildMinimalContext('[truncated due to serialization error after array trim]'));
+      }
+      
+      // If still too large and not failed, truncate summary
+      if (jsonContent.length > MAX_CONTEXT_SIZE && context.summary && !serializationFailed) {
+        const maxSummary = 1000;
+        context.summary = context.summary.slice(0, maxSummary) + '... [truncated]';
+        try {
+          jsonContent = JSON.stringify(context);
+        } catch {
+          serializationFailed = true;
+          jsonContent = JSON.stringify(buildMinimalContext('[truncated due to serialization error after summary trim]'));
+        }
+      }
+      
+      // LAST RESORT: If still too large, use minimal safe object
+      if (jsonContent.length > MAX_CONTEXT_SIZE) {
+        debugLog('saveContext: Still too large after truncation, using minimal fallback');
+        jsonContent = JSON.stringify(buildMinimalContext('[truncated due to size limit]'));
+      }
+    }
+    
+    // Write JSON - compact by default, pretty in debug mode
+    const jsonPath = join(setuDir, CONTEXT_JSON);
+    const isDebug = process.env.SETU_DEBUG === 'true';
+    
+    // Determine final content - pretty print in debug, but enforce size limit
+    // IMPORTANT: Pretty-print from jsonContent (already chosen/truncated), not raw context
+    let finalContent = jsonContent;
+    if (isDebug) {
+      try {
+        // Parse the already-chosen jsonContent and re-stringify with formatting
+        // This ensures consistency with truncated/minimalContext choice
+        const parsedContent = JSON.parse(jsonContent);
+        const prettyContent = JSON.stringify(parsedContent, null, 2);
+        // Only use pretty if it fits within limit
+        if (prettyContent.length <= MAX_CONTEXT_SIZE) {
+          finalContent = prettyContent;
+        }
+      } catch {
+        // Parse/pretty print failed, stick with compact jsonContent
+        debugLog('saveContext: Pretty print failed, using compact format');
+      }
+    }
+    
+    // FINAL GUARD: Never write content larger than MAX_CONTEXT_SIZE
+    if (finalContent.length > MAX_CONTEXT_SIZE) {
+      finalContent = jsonContent; // Fall back to compact
+    }
+    
+    // ATOMIC WRITE: Write to temp file, fsync, then rename
+    // This prevents concurrent write interleaving and partial-file corruption
+    const tempPath = `${jsonPath}.${process.pid}.tmp`;
+    try {
+      // Write to temp file
+      writeFileSync(tempPath, finalContent, 'utf-8');
+      
+      // Fsync to ensure data is flushed to disk
+      const fd = openSync(tempPath, 'r+');
+      try {
+        fsyncSync(fd);
+      } finally {
+        closeSync(fd);
+      }
+      
+      // Atomic rename (replaces original atomically on POSIX systems)
+      renameSync(tempPath, jsonPath);
+      
+      debugLog('Context saved to .setu/context.json (atomic write)');
+    } catch (writeError) {
+      // Clean up temp file if it exists
+      try {
+        if (existsSync(tempPath)) {
+          unlinkSync(tempPath);
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
+      throw writeError; // Re-throw to be caught by outer catch
+    }
+  } catch (error) {
+    // Log but don't throw - context save failure shouldn't crash the plugin
+    errorLog('saveContext failed:', error);
+  }
 }
 
 /**
@@ -214,8 +356,70 @@ export function createContextCollector(projectDir: string): ContextCollector {
 }
 
 /**
+ * Rotate log file when it exceeds MAX_LOG_SIZE.
+ * 
+ * Rotation scheme (PLAN.md Section 2.9.4):
+ * - verification.log.2 → delete
+ * - verification.log.1 → verification.log.2
+ * - verification.log → verification.log.1
+ * 
+ * @param logPath - Path to the log file
+ */
+function rotateLog(logPath: string): void {
+  try {
+    // Rotate from oldest to newest
+    // With MAX_LOG_FILES=3: delete .2, rename .1→.2
+    // Then separately rename current log → .1
+    for (let i = MAX_LOG_FILES - 1; i >= 1; i--) {
+      // Always use numbered files in the loop
+      // The current (unnumbered) log is handled separately below
+      const from = `${logPath}.${i}`;
+      const to = `${logPath}.${i + 1}`;
+
+      try {
+        if (i === MAX_LOG_FILES - 1) {
+          // Delete the oldest file (e.g., .2 when MAX_LOG_FILES=3)
+          unlinkSync(from);
+        } else {
+          // Rename to next number (e.g., .1 → .2)
+          renameSync(from, to);
+        }
+      } catch (err: unknown) {
+        // Only ignore ENOENT (file not found) - other errors should be logged
+        const code = (err as NodeJS.ErrnoException)?.code;
+        if (code !== 'ENOENT') {
+          debugLog(`Log rotation error (${from}):`, err);
+        }
+        // File may not exist or already rotated - continue
+      }
+    }
+    
+    // Rename current log to .1
+    try {
+      renameSync(logPath, `${logPath}.1`);
+    } catch (err: unknown) {
+      // Only ignore ENOENT - other errors should be logged
+      const code = (err as NodeJS.ErrnoException)?.code;
+      if (code !== 'ENOENT') {
+        debugLog(`Log rotation rename error:`, err);
+      }
+      // File may not exist or already rotated
+    }
+    
+    debugLog('Log rotated successfully');
+  } catch (error) {
+    // Log rotation failure is non-critical
+    debugLog('Log rotation failed:', error);
+  }
+}
+
+/**
  * Record a verification step result in .setu/verification.log.
  *
+ * Security features (PLAN.md Section 2.9.4):
+ * - Rotates log when it exceeds MAX_LOG_SIZE (1MB)
+ * - Keeps MAX_LOG_FILES (3) rotated logs
+ * 
  * Creates the log file with a header if missing and appends a timestamped entry
  * containing the step name, PASS/FAIL status, and optional command output.
  *
@@ -233,16 +437,32 @@ export function logVerification(
   const setuDir = ensureSetuDir(projectDir);
   const logPath = join(setuDir, VERIFICATION_LOG);
   
+  // Check if rotation needed (PLAN.md 2.9.4)
+  if (existsSync(logPath)) {
+    try {
+      const stats = statSync(logPath);
+      if (stats.size > MAX_LOG_SIZE) {
+        rotateLog(logPath);
+      }
+    } catch {
+      // Ignore stat errors
+    }
+  }
+  
   const timestamp = new Date().toISOString();
   const status = success ? 'PASS' : 'FAIL';
   
-  let entry = `\n## ${timestamp} - ${step.toUpperCase()} [${status}]\n`;
+  // Sanitize inputs to prevent log injection attacks
+  const safeStep = String(sanitizeInput(step));
+  const safeOutput = output ? String(sanitizeInput(output)) : undefined;
   
-  if (output) {
+  let entry = `\n## ${timestamp} - ${safeStep.toUpperCase()} [${status}]\n`;
+  
+  if (safeOutput) {
     // Truncate long output
-    const truncated = output.length > 500 
-      ? output.slice(0, 500) + '\n... (truncated)'
-      : output;
+    const truncated = safeOutput.length > 500 
+      ? safeOutput.slice(0, 500) + '\n... (truncated)'
+      : safeOutput;
     entry += `\n\`\`\`\n${truncated}\n\`\`\`\n`;
   }
   

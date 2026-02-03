@@ -10,13 +10,13 @@ reviews:
   high_level_summary: true
   poem: false
   review_status: true
-  
+
   auto_review:
     enabled: true
     drafts: false
     base_branches:
       - main
-  
+
   path_filters:
     # INCLUDE: Config files that matter
     - "package.json"
@@ -24,68 +24,68 @@ reviews:
     - "eslint.config.js"
     - "opencode.json"
     - ".coderabbit.yaml"
-    
-    # INCLUDE: Critical documentation
+
+    # INCLUDE: Main source file
+    - "src/**/*.ts"
+
+    # INCLUDE: Critical docs and exclude unwanted docs
+    # - "!**/*.md"
+    - "!tests/**"
+    - "!docs/internal/**"
     - "README.md"
     - "AGENTS.md"
     - "ROADMAP.md"
+    - "CHANGELOG.md"
     - "skills/**/*.md"
-    
+
     # EXCLUDE: Generated/vendored
     - "!**/bun.lockb"
     - "!package-lock.json"
     - "!yarn.lock"
     - "!pnpm-lock.yaml"
-    
-    # EXCLUDE: Test/docs directories
-    - "!tests/**"
-    - "!docs/**"
-    
+
     # EXCLUDE: Misc files
     - "!**/*.txt"
     - "!**/.gitignore"
     - "!.git/**"
-    
-    # EXCLUDE: All other markdown (catch-all, must be last)
-    - "!**/*.md"
-  
+
   path_instructions:
     - path: "src/**/*.ts"
       instructions: |
         This is Setu — a security-critical OpenCode plugin that enforces discipline through TypeScript hooks.
-        
+
         **CRITICAL: TypeScript Strict Mode**
         - Never use `any` without explicit justification comment
         - Always specify explicit return types on exported functions
         - No implicit returns — all code paths must return
         - Handle all errors explicitly (no silent failures)
         - Validate null/undefined at API boundaries
-        
+
         **CRITICAL: Security & Defense in Depth**
         - Path validation: Sanitize all file paths (prevent directory traversal)
         - Input sanitization: Remove null bytes, control characters from user input
         - Secrets detection: Flag potential credential leaks in code
         - Fail-closed: Unknown tools MUST be blocked by default
         - Audit logging: All security-relevant actions must be logged
-        
+
         **CRITICAL: Hook Correctness**
         - `tool.execute.before` is the moat — must block correctly with no bypasses
         - Gear transitions (scout → architect → builder) must be atomic and deterministic
         - Phase 0 blocking must prevent ALL side-effects until context confirmed
         - Constraint enforcement (READ_ONLY, NO_PUSH, NO_DELETE, SANDBOX) must be bulletproof
         - Never allow write operations in scout gear
-        
+
         **CRITICAL: Plugin Architecture**
         - Context persistence to `.setu/` directory must handle concurrent access
         - Verification state must survive session restarts
         - Session lifecycle events must clean up properly
         - Token efficiency: Keep persona overhead minimal
         - Parallel execution: Guide agent to use parallel tool calls
-        
+
     - path: "src/enforcement/**/*.ts"
       instructions: |
         ENFORCEMENT LOGIC IS THE CORE VALUE. Verify with extreme rigor:
-        
+
         - Gear determination must check artifact existence synchronously
         - `shouldBlock()` must have no edge cases or bypasses
         - Block messages must explain WHY and provide clear next steps
@@ -93,11 +93,11 @@ reviews:
         - Attempt limits must prevent infinite retry loops (default 3)
         - Never allow race conditions in gear transitions
         - All blocking decisions must be auditable
-        
+
     - path: "src/hooks/**/*.ts"
       instructions: |
         HOOKS ARE THE MOAT. These intercept OpenCode tool execution. Verify:
-        
+
         - `tool.execute.before` must intercept BEFORE side-effects occur
         - Input sanitization must happen at the entry point
         - Gear state must be determined fresh on each tool call
@@ -105,11 +105,11 @@ reviews:
         - Metrics collection must not impact performance
         - Hook failures must be logged with full context
         - Never cache gear state across tool calls
-        
+
     - path: "src/context/**/*.ts"
       instructions: |
         CONTEXT PERSISTENCE IS CRITICAL. Verify:
-        
+
         - File I/O must handle concurrent access safely
         - Context size must be limited (50KB max) with truncation
         - Injection size must be limited (~8000 chars / 2000 tokens)
@@ -117,47 +117,47 @@ reviews:
         - Active task must survive session compaction
         - Archive rotation must prevent disk bloat
         - Never expose sensitive data in context files
-        
+
     - path: "src/tools/**/*.ts"
       instructions: |
         TOOLS EXPOSED TO AGENT. Verify:
-        
+
         - All args must be validated before use
         - Precondition checks must be enforced (e.g., RESEARCH.md before PLAN.md)
         - Side-effects must be minimal and auditable
         - Error messages must guide agent to correct action
         - Never allow tools to bypass gear restrictions
         - Tool descriptions must be clear and actionable
-        
+
     - path: "src/agent/**/*.ts"
       instructions: |
         AGENT PERSONA IS THE SOUL. Verify:
-        
+
         - Persona must be token-efficient (target <400 tokens)
         - Response discipline must prevent meta-reasoning leakage
         - Standards section must emphasize safety, architecture, craftsmanship
         - No behavioral instructions (those are enforced by hooks, not prompts)
         - Color/mode metadata must be correct
-        
+
     - path: "src/prompts/**/*.ts"
       instructions: |
         PROMPT INJECTIONS ARE DYNAMIC STATE. Verify:
-        
+
         - `getStateInjection()` must only inject dynamic content (style, file availability)
         - Never inject static "efficiency rules" — enforce via hooks
         - Style prefix `[Style: X]` must be concise
         - File availability info must be accurate
         - Keep persona overhead minimal
-        
+
     - path: "skills/**/*.md"
       instructions: |
         SKILLS ARE LOADED ON-DEMAND. Verify:
-        
+
         - Skill must have clear purpose and scope
         - Instructions must be actionable
         - Error handling must guide user to resolution
         - Examples must be realistic and correct
-        
+
     - path: "package.json"
       instructions: |
         Verify:
@@ -165,7 +165,7 @@ reviews:
         - Main entry point is correct
         - Scripts reference correct paths
         - Dependencies are minimal and justified
-        
+
     - path: "tsconfig.json"
       instructions: |
         Verify:
@@ -173,11 +173,11 @@ reviews:
         - `noImplicitAny: true` (no exceptions)
         - `strictNullChecks: true` (prevent null errors)
         - Target is appropriate for Node.js version
-        
+
     - path: "src/security/**/*.ts"
       instructions: |
         SECURITY LAYER — DEFENSE IN DEPTH. Verify with extreme rigor:
-        
+
         - Path validation must prevent directory traversal attacks (no `../` sequences)
         - Secrets detection patterns must catch API keys, tokens, passwords
         - Input sanitization must remove null bytes and control characters
@@ -186,22 +186,22 @@ reviews:
         - Prompt sanitization must prevent injection attacks
         - All security functions must have test coverage
         - Never expose internal paths or implementation details in error messages
-        
+
     - path: "src/utils/**/*.ts"
       instructions: |
         UTILITY FUNCTIONS — FOUNDATION FOR RELIABILITY. Verify:
-        
+
         - Functions must be pure when possible (no side effects)
         - Error handling must be explicit (no silent failures)
         - Type safety must be maintained (generics used correctly)
         - Debounce/throttle must handle edge cases (leading/trailing calls)
         - Guards must have comprehensive type narrowing
         - All utilities must have clear, single responsibility
-        
+
     - path: "eslint.config.js"
       instructions: |
         LINTING CONFIGURATION — CODE QUALITY GATE. Verify:
-        
+
         - Rules align with TypeScript strict mode
         - Security-related rules are enabled
         - No rules are disabled without justification

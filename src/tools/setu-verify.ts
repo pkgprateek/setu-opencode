@@ -8,6 +8,7 @@
 import { tool } from '@opencode-ai/plugin';
 import { getStyleVerificationLevel, type SetuStyle } from '../prompts/styles';
 import { detectProjectInfo } from '../context/storage';
+import { logVerification } from '../context/storage';
 
 /**
  * Build commands per tool/runtime
@@ -168,7 +169,7 @@ Automatically detects project build tool (npm/yarn/pnpm/bun for JS/TS, cargo for
       )
     },
     
-    async execute(args, _context): Promise<string> {
+    async execute(args, context): Promise<string> {
       const style = getStyleState().current;
       const verificationLevel = getStyleVerificationLevel(style);
       
@@ -215,36 +216,70 @@ Automatically detects project build tool (npm/yarn/pnpm/bun for JS/TS, cargo for
         stepsToRun = stepsToRun.filter(s => !validatedSkipSteps.includes(s.name as typeof VALID_STEP_NAMES[number]));
       }
       
-      // NOTE: We intentionally do NOT call markVerificationComplete() here.
-      // Verification is tracked by tool.execute.after hook when actual bash
-      // commands run (build, test, lint, typecheck). This tool just provides
-      // the commands to run - the hook tracks when they actually execute.
-      //
-      // The only exception is when user explicitly requests 'visual' verification,
-      // which is manual and cannot be detected by the after hook.
-      if (validatedSteps?.includes('visual')) {
-        // Visual check is inherently manual - mark as complete if user requested it
-        markVerificationComplete();
-      }
+      // Execute verification steps when possible
+      // Runtime type guard for exec function (PLAN.md security fix)
+      type ExecResult = { stdout?: string; stderr?: string; exitCode?: number };
+      type ExecFn = (command: string) => Promise<ExecResult>;
       
-      if (stepsToRun.length > 0) {
+      const maybeExec = (context as { exec?: unknown } | undefined)?.exec;
+      const exec: ExecFn | undefined = 
+        maybeExec && typeof maybeExec === 'function' 
+          ? maybeExec as ExecFn 
+          : undefined;
+
+      if (!exec) {
         const stepsList = stepsToRun
           .map(s => `### ${s.name}\n\`\`\`bash\n${s.command}\n\`\`\`\n${s.description}`)
           .join('\n\n');
-        
+
         return `## Verification Protocol [Style: ${style}]
 
 **Detected:** ${projectInfo.type || 'unknown'} project using \`${buildTool}\`
 
 ${stepsList}
 
-**Principle:** Extract only what's needed. One root error often causes many downstream failures — find the root, ignore the noise.`;
-      } else {
+**Note:** Automatic execution is unavailable in this environment. Run the commands above, then re-run \`setu_verify\` to record results.`;
+      }
+
+      const projectDirForLog = getProjectDir ? getProjectDir() : process.cwd();
+      const results: Array<{ name: string; success: boolean; output: string }> = [];
+
+      for (const step of stepsToRun) {
+        if (step.command === '(manual)') {
+          continue;
+        }
+
+        try {
+          const result = await exec(step.command);
+          const outputText = [result.stdout, result.stderr].filter(Boolean).join('\n');
+          
+          // Strict exitCode check: only explicit 0 is success
+          // undefined/null exitCode is treated as failure (unknown state)
+          const success = result.exitCode === 0;
+
+          logVerification(projectDirForLog, step.name, success, outputText);
+          results.push({ name: step.name, success, output: outputText });
+        } catch (execError) {
+          // Execution threw - treat as failure
+          const errorMsg = execError instanceof Error ? execError.message : String(execError);
+          logVerification(projectDirForLog, step.name, false, `Execution error: ${errorMsg}`);
+          results.push({ name: step.name, success: false, output: `Execution error: ${errorMsg}` });
+        }
+      }
+
+      const failures = results.filter(r => !r.success);
+      const automatedChecksPassed = failures.length === 0 && results.length > 0;
+      
+      if (automatedChecksPassed) {
+        markVerificationComplete();
+      }
+
+      if (results.length === 0) {
         let guidance = '';
         if (verificationLevel === 'discuss') {
           guidance = 'Discuss with user what verification is needed.';
         }
-        
+
         return `## Verification [Style: ${style}]
 
 **Detected:** ${projectInfo.type || 'unknown'} project using \`${buildTool}\`
@@ -252,6 +287,18 @@ ${stepsList}
 Verification level: ${verificationLevel}
 ${guidance}`;
       }
+
+      const summary = results
+        .map(r => `- ${r.name}: ${r.success ? 'PASS' : 'FAIL'}`)
+        .join('\n');
+
+      return `## Verification Results [Style: ${style}]
+
+**Detected:** ${projectInfo.type || 'unknown'} project using \`${buildTool}\`
+
+${summary}
+
+${failures.length > 0 ? 'One or more checks failed. Review logs in .setu/verification.log.' : 'All checks passed.'}`;
     }
   });
 }

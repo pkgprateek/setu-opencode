@@ -103,6 +103,42 @@ export function detectStyle(prompt: string): { style: SetuStyle; isPersistent: b
 }
 
 /**
+ * Sanitize input by removing null bytes and control characters
+ */
+function sanitizePromptInput(input: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentionally matching control chars for sanitization
+  return input.replace(/[\x00-\x1F\x7F]/g, '');
+}
+
+/**
+ * Check if the message is ONLY a style command (no other task content)
+ */
+export function isStyleOnlyCommand(prompt: string): boolean {
+  // Sanitize input first to prevent control character injection
+  const sanitized = sanitizePromptInput(prompt);
+  const trimmed = sanitized.trim();
+  if (!trimmed) return false;
+
+  // Prefix-only: ":quick" or ":ultrathink"
+  if (trimmed.startsWith(COMMAND_PREFIX)) {
+    const match = trimmed.match(/^:(\w+)$/);
+    if (!match) return false;
+    return resolveStyle(match[1]) !== null;
+  }
+
+  // Key-value only: "style: quick" / "mode: collab" / "preset: quick"
+  for (const prefix of KEY_VALUE_PREFIXES) {
+    const regex = new RegExp(`^${prefix}:\\s*(\\w+)$`, 'i');
+    const match = trimmed.match(regex);
+    if (match && resolveStyle(match[1])) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Get verification requirements for a style
  */
 export function getStyleVerificationLevel(style: SetuStyle): 'full' | 'minimal' | 'discuss' {

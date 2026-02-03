@@ -12,11 +12,14 @@
  * - Prioritization: Safe → Contextual → Efficient → Helpful
  * - Hard constraints as bright lines, soft guidance for judgment
  *
+ * Security (PLAN.md Section 2.9.3):
+ * - FAIL-CLOSED for unknown tools (block by default, whitelist safe tools)
+ * - This prevents new/unknown tools from bypassing Phase 0
+ *
  * Tool classification imported from constants.ts (single source of truth).
  * This module provides Phase 0-specific logic: blocking decisions, bash command parsing.
  */
 
-import { debugLog } from "../debug";
 import {
   READ_ONLY_BASH_COMMANDS,
   SIDE_EFFECT_TOOLS,
@@ -102,7 +105,38 @@ export interface Phase0BlockResult {
 }
 
 /**
+ * Known safe tools that are always allowed in Phase 0.
+ * 
+ * FAIL-CLOSED SECURITY (PLAN.md 2.9.3):
+ * Unknown tools are blocked by default. Add tools here to whitelist them.
+ * This prevents new/unknown tools from bypassing Phase 0.
+ * 
+ * NOTE: Only READ-ONLY tools should be here. Side-effect tools must go through
+ * isSideEffectTool check to be blocked in Phase 0.
+ */
+const KNOWN_SAFE_TOOLS = [
+  // Setu tools (via isSetuTool check)
+  // Read-only tools (via isReadOnlyTool check)
+  'task',        // Subagent spawning - will get its own Phase 0
+  'question',    // Interactive prompts
+  'skill',       // Skill loading
+  'lsp',         // Language server
+  'todoread',    // Todo list reading (read-only)
+  // NOTE: todowrite is intentionally NOT here - it's a side-effect tool
+] as const;
+
+/**
+ * Check if a tool is in the known safe list
+ */
+function isKnownSafeTool(toolName: string): boolean {
+  return (KNOWN_SAFE_TOOLS as readonly string[]).includes(toolName);
+}
+
+/**
  * Decide whether a tool invocation should be blocked by Phase 0 safeguards.
+ * 
+ * SECURITY: Uses FAIL-CLOSED model (PLAN.md 2.9.3)
+ * Unknown tools are blocked by default and must be whitelisted.
  *
  * @param toolName - Name of the tool being invoked
  * @param args - Optional tool arguments; for `bash` the `command` string is examined to determine read-only status
@@ -119,6 +153,11 @@ export function shouldBlockInPhase0(
 
   // Always allow read-only tools
   if (isReadOnlyTool(toolName)) {
+    return { blocked: false };
+  }
+  
+  // Known safe tools - allowed
+  if (isKnownSafeTool(toolName)) {
     return { blocked: false };
   }
 
@@ -144,15 +183,14 @@ export function shouldBlockInPhase0(
     };
   }
 
-  // Task/subagent tools - allow but they'll be wrapped with Phase 0 too
-  if (toolName === "task") {
-    return { blocked: false };
-  }
-
-  // Default: allow unknown tools (fail open for extensibility)
-  // This is a conscious tradeoff - we don't want to break new tools
-  debugLog(`Phase 0: Unknown tool '${toolName}' - allowing (fail open)`);
-  return { blocked: false };
+  // FAIL-CLOSED: Block unknown tools (PLAN.md 2.9.3)
+  // Log warning to help identify tools that should be whitelisted
+  console.warn(`[Setu] Unknown tool '${toolName}' - blocking by default (fail-closed). Add to KNOWN_SAFE_TOOLS if safe.`);
+  return {
+    blocked: true,
+    reason: "unknown_tool",
+    details: `Tool '${toolName}' not recognized. Add to KNOWN_SAFE_TOOLS if it's a safe tool.`,
+  };
 }
 
 /**

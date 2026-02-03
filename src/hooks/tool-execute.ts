@@ -14,13 +14,16 @@ import { basename } from 'path';
 import {
   shouldBlockInPhase0,
   createPhase0BlockMessage,
+  determineGear,
+  shouldBlock as shouldBlockByGear,
+  createGearBlockMessage,
   type Phase0State
 } from '../enforcement';
 import { type ContextCollector, formatContextForInjection, contextToSummary } from '../context';
 import { loadActiveTask, shouldBlockDueToConstraint } from '../context/active';
 import { type SetuStyle, getStyleEnforcementLevel } from '../prompts/styles';
 import { debugLog } from '../debug';
-import { isString, getStringProp } from '../utils';
+import { isString, getStringProp, getCurrentBranch, isProtectedBranch } from '../utils';
 import { isReadOnlyTool, PARALLEL_BATCH_WINDOW_MS } from '../constants';
 import { 
   detectSecrets, 
@@ -29,6 +32,7 @@ import {
   SecurityEventType,
   type SecretMatch
 } from '../security';
+import { sanitizeArgs } from '../utils/error-handling';
 
 // ============================================================================
 // Verification Step Tracking
@@ -150,21 +154,25 @@ const PACKAGE_MANIFEST_PATTERNS = [
 ] as const;
 
 /**
- * Create a before-execution hook that enforces Phase 0 rules for tool execution.
+ * Create a before-execution hook that enforces Gearbox rules for tool execution.
  *
  * Setu plugin operates exclusively within Setu agent mode.
  * When not in Setu agent, this hook remains silent.
- * When in Setu agent, enforces Phase 0 based on the current style.
+ * When in Setu agent, enforces Gearbox based on artifact existence:
+ * - Scout: No RESEARCH.md → read-only
+ * - Architect: Has RESEARCH.md but no PLAN.md → .setu/ writes only
+ * - Builder: Has both artifacts → all allowed (verification gate separate)
+ * 
  * Also enforces active task constraints (READ_ONLY, NO_PUSH, etc.)
  * Also enforces Git Discipline: requires verification before commit/push.
  *
- * @param getPhase0State - Accessor that returns the current Phase 0 state
+ * @param getPhase0State - Accessor that returns the current Phase 0 state (kept for backwards compat)
  * @param getCurrentAgent - Optional accessor for the current agent identifier; defaults to "setu" when omitted
  * @param getContextCollector - Optional accessor for a ContextCollector used to obtain and format confirmed context for injection
  * @param getSetuStyle - Optional accessor for the current Setu style (used for style-level enforcement when in Setu mode)
- * @param getProjectDir - Optional accessor for project directory (used for constraint loading)
+ * @param getProjectDir - Optional accessor for project directory (used for constraint loading and gear determination)
  * @param getVerificationState - Optional accessor for verification state (used for git discipline enforcement)
- * @returns A hook function invoked before tool execution that enforces Phase 0 rules and may throw an Error when a tool is blocked under full enforcement
+ * @returns A hook function invoked before tool execution that enforces Gearbox rules and may throw an Error when a tool is blocked
  */
 export function createToolExecuteBeforeHook(
   getPhase0State: () => Phase0State,
@@ -185,7 +193,10 @@ export function createToolExecuteBeforeHook(
       return;
     }
     
-    const state = getPhase0State();
+    // SECURITY: Sanitize args to prevent control char injection (2.9.2)
+    // Removes null bytes and control characters that could bypass parsing
+    output.args = sanitizeArgs(output.args);
+    
     const setuStyle = getSetuStyle ? getSetuStyle() : 'ultrathink';
     const enforcementLevel = getSetuEnforcementLevel(setuStyle);
     
@@ -201,34 +212,66 @@ export function createToolExecuteBeforeHook(
         const originalPrompt = getStringProp(output.args, 'prompt') ?? '';
         output.args.prompt = `${contextBlock}\n\n[TASK]\n${originalPrompt}`;
         
+        // SECURITY: Re-sanitize after prompt injection to prevent control-char bypass
+        // The injected context could reintroduce control characters
+        output.args = sanitizeArgs(output.args);
+        
         debugLog('Injected context into subagent prompt');
       }
     }
     
-    // GIT DISCIPLINE ENFORCEMENT
+    // GIT DISCIPLINE ENFORCEMENT (Pre-Commit Checklist)
     // Block git commit/push if verification is not complete
-    // This applies in Setu mode regardless of Phase 0 state
-    if (input.tool === 'bash' && getVerificationState && enforcementLevel === 'full') {
+    // This applies in Setu mode regardless of gear state
+    if (input.tool === 'bash' && getVerificationState) {
       const command = getStringProp(output.args, 'command') ?? '';
       const verificationState = getVerificationState();
       
-      // Check for git commit
-      if (GIT_COMMIT_PATTERN.test(command) && !verificationState.complete) {
-        debugLog('Git Discipline BLOCKED: git commit without verification');
-        throw new Error(
-          `🚫 [Git Discipline] Verification required before commit.\n\n` +
-          `Run verification first:\n` +
-          `  • Use \`setu_verify\` tool, OR\n` +
-          `  • Run build + test manually\n\n` +
-          `Current status: ${verificationState.stepsRun.size === 0 ? 'No verification steps run' : `Completed: ${[...verificationState.stepsRun].join(', ')}`}`
-        );
+      // Check for git commit - enhanced pre-commit checklist
+      if (GIT_COMMIT_PATTERN.test(command)) {
+        const projectDir = getProjectDir ? getProjectDir() : process.cwd();
+        const branch = getCurrentBranch(projectDir);
+        
+        if (!verificationState.complete) {
+          const activeTask = loadActiveTask(projectDir);
+          const branchWarning = isProtectedBranch(branch) 
+            ? `  ⚠️ On protected branch: ${branch}\n` 
+            : '';
+          
+          debugLog('Pre-Commit Checklist BLOCKED: git commit without verification');
+          throw new Error(
+            `🚫 [Pre-Commit Checklist] Verification required.\n\n` +
+            `Before committing, please verify:\n` +
+            `  1. ✗ Build/test verification not complete\n` +
+            `  2. ? Do you understand what was changed?\n` +
+            `  3. Branch: ${branch}\n` +
+            branchWarning +
+            `  4. Task: ${activeTask?.task?.slice(0, 50) || '(none set)'}...\n\n` +
+            `Run \`setu_verify\` first.\n\n` +
+            `Current status: ${verificationState.stepsRun.size === 0 ? 'No verification steps run' : `Completed: ${[...verificationState.stepsRun].join(', ')}`}`
+          );
+        }
+        
+        // Additional warning for complex task on protected branch
+        // (non-blocking, just logged for awareness since verification passed)
+        const activeTask = loadActiveTask(projectDir);
+        if (isProtectedBranch(branch) && activeTask?.task && activeTask.task.length > 50) {
+          debugLog(`Pre-Commit: Complex task on protected branch ${branch} - ensure thorough review`);
+        }
       }
       
       // Check for git push
       if (GIT_PUSH_PATTERN.test(command) && !verificationState.complete) {
-        debugLog('Git Discipline BLOCKED: git push without verification');
+        const projectDir = getProjectDir ? getProjectDir() : process.cwd();
+        const branch = getCurrentBranch(projectDir);
+        const branchWarning = isProtectedBranch(branch) 
+          ? `\n⚠️ Warning: Pushing to protected branch: ${branch}` 
+          : '';
+        
+        debugLog('Pre-Commit Checklist BLOCKED: git push without verification');
         throw new Error(
-          `🚫 [Git Discipline] Verification required before push.\n\n` +
+          `🚫 [Pre-Commit Checklist] Verification required before push.\n\n` +
+          `Branch: ${branch}${branchWarning}\n\n` +
           `Ensure build and tests pass before pushing.\n\n` +
           `Current status: ${verificationState.stepsRun.size === 0 ? 'No verification steps run' : `Completed: ${[...verificationState.stepsRun].join(', ')}`}`
         );
@@ -239,7 +282,7 @@ export function createToolExecuteBeforeHook(
     // Block direct edits to package manifests to prevent accidental corruption
     // Applies to: package.json, lockfiles
     // Reason: Direct edits can corrupt manifests; use package managers instead
-    if ((input.tool === 'write' || input.tool === 'edit') && enforcementLevel === 'full') {
+    if (input.tool === 'write' || input.tool === 'edit') {
       const filePath = getStringProp(output.args, 'filePath') ?? '';
       
       // Normalize path separators for cross-platform pattern matching (Windows uses backslash)
@@ -316,8 +359,8 @@ export function createToolExecuteBeforeHook(
     }
     
     // CONSTRAINT ENFORCEMENT
-    // Check active task constraints BEFORE Phase 0 check
-    // Constraints apply even after context is confirmed
+    // Check active task constraints BEFORE Gearbox check
+    // Constraints apply regardless of gear
     if (getProjectDir) {
       const projectDir = getProjectDir();
       const activeTask = loadActiveTask(projectDir);
@@ -336,31 +379,65 @@ export function createToolExecuteBeforeHook(
       }
     }
     
-    // Quick profile bypasses Phase 0 enforcement (but NOT constraint enforcement above)
+    // Quick profile bypasses Gearbox enforcement (but NOT constraints or safety checks above)
     if (enforcementLevel === 'none') {
       return;
     }
     
-    // Context confirmed - allow all tools (Phase 0 complete)
-    if (state.contextConfirmed) {
-      return;
-    }
-    
-    // Check Phase 0 blocking rules
-    const { blocked, reason, details } = shouldBlockInPhase0(input.tool, output.args);
-    
-    if (blocked && reason) {
+    // GEARBOX ENFORCEMENT
+    // Determines gear based on artifact existence:
+    // - Scout: No RESEARCH.md → read-only tools only
+    // - Architect: Has RESEARCH.md but no PLAN.md → .setu/ writes only
+    // - Builder: Has both → all allowed (verification gate is separate)
+    if (getProjectDir) {
+      const projectDir = getProjectDir();
+      const gearState = determineGear(projectDir);
+      const gearBlockResult = shouldBlockByGear(gearState.current, input.tool, output.args);
+      
+      if (gearBlockResult.blocked) {
+        if (enforcementLevel === 'full') {
+          debugLog(`Gearbox BLOCKED: ${input.tool} in ${gearState.current} gear`);
+          logSecurityEvent(
+            projectDir,
+            SecurityEventType.GEAR_BLOCKED,
+            `Blocked ${input.tool} in ${gearState.current} gear (${gearBlockResult.reason || 'no reason'})`,
+            { sessionId: input.sessionID, tool: input.tool }
+          );
+          throw new Error(createGearBlockMessage(gearBlockResult));
+        } else {
+          // Light enforcement: warn but don't block
+          debugLog(`Gearbox WARNING: ${input.tool} in ${gearState.current} gear - ${gearBlockResult.reason}`);
+          return;
+        }
+      }
+      
       if (enforcementLevel === 'full') {
-        debugLog(`Phase 0 BLOCKED: ${input.tool}`);
-        throw new Error(createPhase0BlockMessage(reason, details));
-      } else {
-        debugLog(`Phase 0 WARNING: ${input.tool} - ${reason}`);
+        debugLog(`Gearbox ALLOWED: ${input.tool} in ${gearState.current} gear`);
+      }
+    } else {
+      // Fallback to Phase 0 if no project directory (shouldn't happen)
+      // Context confirmed - allow all tools (Phase 0 complete)
+      const state = getPhase0State();
+      if (state.contextConfirmed) {
         return;
       }
-    }
-    
-    if (enforcementLevel === 'full') {
-      debugLog(`Phase 0 ALLOWED: ${input.tool}`);
+      
+      // Check Phase 0 blocking rules
+      const { blocked, reason, details } = shouldBlockInPhase0(input.tool, output.args);
+      
+      if (blocked && reason) {
+        if (enforcementLevel === 'full') {
+          debugLog(`Phase 0 BLOCKED: ${input.tool}`);
+          throw new Error(createPhase0BlockMessage(reason, details));
+        } else {
+          debugLog(`Phase 0 WARNING: ${input.tool} - ${reason}`);
+          return;
+        }
+      }
+      
+      if (enforcementLevel === 'full') {
+        debugLog(`Phase 0 ALLOWED: ${input.tool}`);
+      }
     }
   };
 }

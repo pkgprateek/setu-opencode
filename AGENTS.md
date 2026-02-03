@@ -139,6 +139,19 @@ This means:
 - Smart questions (context-aware, not generic)
 - Seamless verification (automatic, not manual)
 
+### Mode Isolation
+
+**Setu only activates in Setu mode.** When you're in OpenCode's Plan or Build mode, Setu behaves as if it's not installed:
+
+- No hooks fire
+- No persona injection
+- No Phase 0 enforcement
+- No verification gates
+
+This ensures Plan and Build modes work exactly as they do without the setu-opencode plugin installed. Setu never leaks into or affects OpenCode's native modes.
+
+**Practical effect:** Tab to Build/Plan for the standard OpenCode experience. Tab to Setu for disciplined mode.
+
 ### Phase 0 Rule
 
 **Allow (native read-only tools):** `read`, `glob`, `grep`, `list`, `webfetch`, `todoread`

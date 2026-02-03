@@ -45,7 +45,8 @@ export {
   createActiveTask,
   updateTaskStatus,
   clearActiveTask,
-  shouldBlockDueToConstraint
+  shouldBlockDueToConstraint,
+  resetProgress
 } from './active';
 
 // Token Status (Movement 3)

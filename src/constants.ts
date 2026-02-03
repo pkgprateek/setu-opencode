@@ -15,7 +15,15 @@
  * Setu's own tools - always allowed regardless of Phase 0 state
  * These are tools provided by this plugin
  */
-export const SETU_TOOLS = ['setu_verify', 'setu_context', 'setu_feedback'] as const;
+export const SETU_TOOLS = [
+  'setu_verify',
+  'setu_context',
+  'setu_feedback',
+  'setu_research',
+  'setu_plan',
+  'setu_reset',
+  'setu_doctor'
+] as const;
 
 /**
  * Read-only tools that are always allowed during Phase 0.
@@ -79,6 +87,11 @@ export const GIT_WRITE_COMMANDS = [
   'git branch -D', 'git remote add', 'git remote remove'
 ] as const;
 
+/**
+ * Protected branch names that warrant extra caution
+ */
+export const PROTECTED_BRANCHES = ['main', 'master', 'production', 'prod'] as const;
+
 // ============================================================================
 // Derived Types (for type safety)
 // ============================================================================
@@ -97,6 +110,7 @@ export type ReadOnlyBashCommand = typeof READ_ONLY_BASH_COMMANDS[number];
 
 /** Type representing a git write command */
 export type GitWriteCommand = typeof GIT_WRITE_COMMANDS[number];
+export type ProtectedBranch = typeof PROTECTED_BRANCHES[number];
 
 // ============================================================================
 // Type Guards
@@ -128,6 +142,13 @@ export function isReadOnlyToolName(toolName: string): toolName is ReadOnlyTool {
  */
 export function isSideEffectTool(toolName: string): toolName is SideEffectTool {
   return SIDE_EFFECT_TOOLS.includes(toolName as SideEffectTool);
+}
+
+/**
+ * Check if a branch name is protected
+ */
+export function isProtectedBranch(branch: string): boolean {
+  return PROTECTED_BRANCHES.includes(branch.toLowerCase() as ProtectedBranch);
 }
 
 // ============================================================================
