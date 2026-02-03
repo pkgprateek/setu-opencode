@@ -288,6 +288,25 @@ export function clearActiveTask(projectDir: string): void {
 }
 
 /**
+ * Reset progress to step 0.
+ * Used when a new plan is created or explicitly requested by user.
+ * 
+ * @param projectDir - Project root directory
+ */
+export function resetProgress(projectDir: string): void {
+  const task = loadActiveTask(projectDir);
+  if (!task) return;
+  
+  task.progress = {
+    lastCompletedStep: 0,
+    lastCompletedAt: new Date().toISOString()
+  };
+  
+  saveActiveTask(projectDir, task);
+  debugLog('Reset progress to Step 0');
+}
+
+/**
  * Normalize and tokenize a shell command for constraint checking.
  * 
  * IMPORTANT: This is a best-effort, defense-in-depth heuristic. It only inspects
