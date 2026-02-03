@@ -79,7 +79,15 @@ async function checkGitStatus(projectDir: string): Promise<HealthCheck[]> {
     
     // Check for uncommitted changes
     const statusResult = await execCommand('git status --porcelain', projectDir);
-    if (statusResult.stdout.trim()) {
+    if (statusResult.exitCode !== 0) {
+      // git status failed
+      checks.push({
+        name: 'git-status',
+        status: 'error',
+        message: `git status failed: ${statusResult.stderr || 'unknown error'}`,
+        fix: 'Check git repository integrity'
+      });
+    } else if (statusResult.stdout.trim()) {
       const fileCount = statusResult.stdout.trim().split('\n').length;
       checks.push({
         name: 'git-status',
@@ -199,6 +207,14 @@ async function checkRuntime(projectDir: string): Promise<HealthCheck[]> {
           name: 'node-version',
           status: 'healthy',
           message: `Node.js ${nodeResult.stdout.trim()}`
+        });
+      } else {
+        // Non-zero exit code
+        checks.push({
+          name: 'node-version',
+          status: 'error',
+          message: `Node.js check failed: ${nodeResult.stderr || 'unknown error'}`,
+          fix: 'Install Node.js from https://nodejs.org'
         });
       }
     } catch (error) {

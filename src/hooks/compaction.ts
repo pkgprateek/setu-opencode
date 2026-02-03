@@ -85,9 +85,10 @@ export function createCompactionHook(
       const activeTask = loadActiveTask(projectDir);
       
       if (activeTask && activeTask.status === 'in_progress') {
-        // Build constraints string with defensive check
-        const constraintsStr = Array.isArray(activeTask.constraints) && activeTask.constraints.length > 0
-          ? activeTask.constraints.join(', ')
+        // Validate constraints array once and reuse
+        const validConstraints = Array.isArray(activeTask.constraints) ? activeTask.constraints : [];
+        const constraintsStr = validConstraints.length > 0
+          ? validConstraints.join(', ')
           : 'none';
         
         // Build references string if present
@@ -104,8 +105,8 @@ Constraints: ${constraintsStr}${referencesStr}
 Started: ${activeTask.startedAt}
 
 IMPORTANT: Resume this task. Do NOT start unrelated work.
-${constraintsStr !== 'none' ? `\nCONSTRAINT ENFORCEMENT: The following constraints are ACTIVE and must be obeyed:
-${activeTask.constraints.map(c => `- ${c}`).join('\n')}` : ''}`);
+${validConstraints.length > 0 ? `\nCONSTRAINT ENFORCEMENT: The following constraints are ACTIVE and must be obeyed:
+${validConstraints.map(c => `- ${c}`).join('\n')}` : ''}`);
         
         debugLog('Compaction: Injected active task into summary');
       }

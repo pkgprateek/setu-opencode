@@ -90,14 +90,14 @@ export function createSetuError(
  * 
  * @param hookName - Name of the hook for logging
  * @param fn - The async function to wrap
- * @returns Wrapped function that handles errors gracefully
+ * @returns Wrapped function that handles errors gracefully (may return undefined on error)
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- preserves generic hook signatures so typed hook parameters can be wrapped
 export function wrapHook<T extends (...args: any[]) => Promise<any>>(
   hookName: string,
   fn: T
-): T {
-  return (async (...args: Parameters<T>) => {
+): (...args: Parameters<T>) => Promise<Awaited<ReturnType<T>> | undefined> {
+  return async (...args: Parameters<T>): Promise<Awaited<ReturnType<T>> | undefined> => {
     try {
       return await fn(...args);
     } catch (error) {
@@ -116,7 +116,7 @@ export function wrapHook<T extends (...args: any[]) => Promise<any>>(
       // This prevents Setu from breaking OpenCode
       return undefined;
     }
-  }) as T;
+  };
 }
 
 /**
