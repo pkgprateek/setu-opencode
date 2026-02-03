@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Setu Configuration",
+  "description": "Configuration file for the Setu OpenCode plugin",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference for IDE support"
+    },
+    "maxAttempts": {
+      "type": "number",
+      "default": 3,
+      "minimum": 1,
+      "maximum": 10,
+      "description": "Maximum retry attempts before suggesting gear shift"
+    },
+    "verbosity": {
+      "type": "string",
+      "enum": ["minimal", "standard", "verbose"],
+      "default": "standard",
+      "description": "Output verbosity level"
+    },
+    "contextSizeLimit": {
+      "type": "number",
+      "default": 51200,
+      "minimum": 1024,
+      "maximum": 1048576,
+      "description": "Maximum context.json size in bytes (default: 50KB)"
+    },
+    "injectionSizeLimit": {
+      "type": "number",
+      "default": 8000,
+      "minimum": 1000,
+      "maximum": 50000,
+      "description": "Maximum injection size in characters (~2000 tokens)"
+    },
+    "features": {
+      "type": "object",
+      "description": "Feature flags",
+      "properties": {
+        "coloredOutput": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable colored output in logs"
+        },
+        "goldTests": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable gold tests for critical paths"
+        },
+        "preCommitChecklist": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable pre-commit checklist enforcement"
+        },
+        "autoDoctorCheck": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable environment doctor auto-check on session start"
+        }
+      },
+      "additionalProperties": false
+    },
+    "security": {
+      "type": "object",
+      "description": "Security settings",
+      "properties": {
+        "maxLogSize": {
+          "type": "number",
+          "default": 1048576,
+          "minimum": 10240,
+          "description": "Maximum verification log size before rotation (bytes, default: 1MB)"
+        },
+        "maxLogFiles": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Number of rotated log files to keep"
+        },
+        "failClosedForUnknownTools": {
+          "type": "boolean",
+          "default": true,
+          "description": "Block unknown tools in Phase 0 (fail-closed security model)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
