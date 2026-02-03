@@ -1,5 +1,5 @@
 import { existsSync } from 'fs';
-import { join, normalize, isAbsolute, sep } from 'path';
+import { join, normalize, isAbsolute } from 'path';
 import { 
   isSideEffectTool, 
   isSetuTool,
@@ -52,33 +52,48 @@ function isSetuPath(args: unknown): boolean {
   if (!args || typeof args !== 'object') return false;
   
   // Check common path arguments
-  const path = (args as Record<string, unknown>).path || 
+  const pathArg = (args as Record<string, unknown>).path || 
                (args as Record<string, unknown>).filePath || 
                (args as Record<string, unknown>).file_path;
                
-  if (typeof path !== 'string') return false;
+  if (typeof pathArg !== 'string') return false;
+  
+  // Normalize path separators for consistent checking (handle Windows backslashes)
+  const normalizedInput = pathArg.replace(/\\/g, '/');
   
   // SECURITY: Reject absolute paths - must be relative to project
-  if (isAbsolute(path)) {
+  if (isAbsolute(pathArg)) {
     // Allow absolute paths that contain .setu if they're properly formatted
     // e.g., /Users/project/.setu/file.md
     // But still need to verify no traversal after .setu
-    const setuIndex = path.indexOf(`${sep}.setu${sep}`);
-    if (setuIndex === -1 && !path.endsWith(`${sep}.setu`)) {
+    const setuMarker = '/.setu';
+    const setuIndex = normalizedInput.indexOf(setuMarker);
+    
+    if (setuIndex === -1) {
       return false;
     }
-    // Extract the part after .setu and check for traversal
-    const afterSetu = path.substring(setuIndex + `${sep}.setu`.length);
+    
+    // Extract the part after .setu (skip the marker itself)
+    const afterSetu = normalizedInput.substring(setuIndex + setuMarker.length);
+    
+    // afterSetu should be empty (path is exactly /.setu) or start with /
+    if (afterSetu.length > 0 && !afterSetu.startsWith('/')) {
+      return false;
+    }
+    
+    // Normalize and check for traversal out of .setu
     const normalizedAfter = normalize(afterSetu).replace(/\\/g, '/');
-    // If normalizing reveals traversal out of .setu, reject
-    if (normalizedAfter.startsWith('/..') || normalizedAfter.startsWith('..')) {
+    
+    // Reject if traversal detected (.. anywhere after normalization)
+    if (normalizedAfter.includes('..')) {
       return false;
     }
+    
     return true;
   }
   
-  // Normalize to collapse .. segments and convert to forward slashes
-  const normalizedPath = normalize(path).replace(/\\/g, '/');
+  // Normalize to collapse .. segments
+  const normalizedPath = normalize(pathArg).replace(/\\/g, '/');
   
   // SECURITY: If normalization reveals traversal (starts with ..), reject
   if (normalizedPath.startsWith('..')) {
@@ -87,8 +102,7 @@ function isSetuPath(args: unknown): boolean {
   
   // Path must be exactly .setu or start with .setu/
   return normalizedPath === '.setu' || 
-         normalizedPath.startsWith('.setu/') ||
-         normalizedPath.startsWith('.setu\\');
+         normalizedPath.startsWith('.setu/');
 }
 
 export interface GearBlockResult {

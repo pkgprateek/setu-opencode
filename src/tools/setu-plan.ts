@@ -3,6 +3,7 @@ import { join } from 'path';
 import { writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { resetProgress } from '../context/active';
+import { ensureSetuDir } from '../context/storage';
 import { sanitizeForPrompt } from '../security/prompt-sanitization';
 
 export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<typeof tool> => tool({
@@ -32,8 +33,16 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
     // Format the plan using template structure
     const content = formatPlan(sanitizedArgs);
     
+    // Ensure .setu/ directory exists (defensive - may have been deleted since RESEARCH.md check)
+    ensureSetuDir(projectDir);
+    
     // Write PLAN.md
-    await writeFile(join(projectDir, '.setu', 'PLAN.md'), content);
+    try {
+      await writeFile(join(projectDir, '.setu', 'PLAN.md'), content);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      return `Failed to save plan: ${msg}. Check .setu/ directory permissions.`;
+    }
     
     // CRITICAL: Reset progress to step 0 — new plan means fresh start
     resetProgress(projectDir);

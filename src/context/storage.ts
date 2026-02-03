@@ -105,10 +105,16 @@ export function saveContext(projectDir: string, context: SetuContext): void {
   // Write JSON - compact by default, pretty in debug mode
   const jsonPath = join(setuDir, CONTEXT_JSON);
   const isDebug = process.env.SETU_DEBUG === 'true';
-  if (isDebug) {
-    jsonContent = JSON.stringify(context, null, 2);
+  
+  // Determine final content - pretty print in debug, but enforce size limit
+  let finalContent = isDebug ? JSON.stringify(context, null, 2) : jsonContent;
+  
+  // If pretty printing pushed over limit, fall back to compact
+  if (finalContent.length > MAX_CONTEXT_SIZE) {
+    finalContent = jsonContent;
   }
-  writeFileSync(jsonPath, jsonContent, 'utf-8');
+  
+  writeFileSync(jsonPath, finalContent, 'utf-8');
   
   debugLog('Context saved to .setu/context.json');
 }

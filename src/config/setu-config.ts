@@ -13,7 +13,7 @@
  */
 
 import { existsSync, readFileSync } from 'fs';
-import { join, resolve, relative } from 'path';
+import { join, resolve, relative, isAbsolute } from 'path';
 import { homedir } from 'os';
 import { debugLog } from '../debug';
 
@@ -189,8 +189,9 @@ export function loadSetuConfig(projectDir: string): SetuConfig {
   const resolvedConfigPath = resolve(projectConfigPath);
   
   // Verify config path is within project directory (prevent traversal in .setu path)
+  // Use isAbsolute for cross-platform check (handles Windows drive letters)
   const relPath = relative(resolvedProjectDir, resolvedConfigPath);
-  if (relPath.startsWith('..') || relPath.startsWith('/')) {
+  if (relPath.startsWith('..') || isAbsolute(relPath)) {
     debugLog('Invalid project config path: traversal detected');
     return config;
   }
