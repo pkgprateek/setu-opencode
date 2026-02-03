@@ -18,3 +18,6 @@ export const MAX_FILES_READ = 200;
 
 /** Maximum number of searches to track */
 export const MAX_SEARCHES = 50;
+
+/** Maximum number of learnings (worked/failed approaches) to track for ghost loop prevention */
+export const MAX_LEARNINGS = 20;

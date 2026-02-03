@@ -16,6 +16,7 @@ import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync } from 
 import { join } from 'path';
 import { ensureSetuDir } from './storage';
 import { type ActiveTask, type ConstraintType, type TaskStatus, type SetuMode, CONSTRAINT_TYPES } from './types';
+import { MAX_LEARNINGS } from './limits';
 import { debugLog, errorLog } from '../debug';
 
 /**
@@ -159,6 +160,34 @@ export function loadActiveTask(projectDir: string): ActiveTask | null {
         .map((r: string) => sanitize(r, MAX_REFERENCE_LENGTH));
     }
     
+    // Optional: progress (JIT context tracking)
+    if (parsed.progress && typeof parsed.progress === 'object') {
+      const { lastCompletedStep, lastCompletedAt } = parsed.progress;
+      if (
+        typeof lastCompletedStep === 'number' && 
+        Number.isFinite(lastCompletedStep) &&
+        lastCompletedStep >= 0 &&
+        typeof lastCompletedAt === 'string' &&
+        isValidISOTimestamp(lastCompletedAt)
+      ) {
+        task.progress = { lastCompletedStep, lastCompletedAt };
+      }
+    }
+    
+    // Optional: learnings (ghost loop prevention)
+    if (parsed.learnings && typeof parsed.learnings === 'object') {
+      const worked = Array.isArray(parsed.learnings.worked)
+        ? parsed.learnings.worked.filter((s: unknown): s is string => typeof s === 'string').slice(0, MAX_LEARNINGS)
+        : [];
+      const failed = Array.isArray(parsed.learnings.failed)
+        ? parsed.learnings.failed.filter((s: unknown): s is string => typeof s === 'string').slice(0, MAX_LEARNINGS)
+        : [];
+      
+      if (worked.length > 0 || failed.length > 0) {
+        task.learnings = { worked, failed };
+      }
+    }
+    
     debugLog(`Loaded active task: "${task.task.slice(0, 50)}..." [${task.status}]`);
     return task;
     
@@ -200,6 +229,26 @@ export function saveActiveTask(projectDir: string, task: ActiveTask): void {
       sanitizedTask.references = task.references
         .slice(0, MAX_REFERENCES)
         .map(r => sanitize(r, MAX_REFERENCE_LENGTH));
+    }
+    
+    // Save progress if present
+    if (task.progress && typeof task.progress.lastCompletedStep === 'number') {
+      sanitizedTask.progress = {
+        lastCompletedStep: task.progress.lastCompletedStep,
+        lastCompletedAt: task.progress.lastCompletedAt || new Date().toISOString()
+      };
+    }
+    
+    // Save learnings if present (cap arrays to MAX_LEARNINGS)
+    if (task.learnings) {
+      sanitizedTask.learnings = {
+        worked: Array.isArray(task.learnings.worked) 
+          ? task.learnings.worked.slice(0, MAX_LEARNINGS) 
+          : [],
+        failed: Array.isArray(task.learnings.failed) 
+          ? task.learnings.failed.slice(0, MAX_LEARNINGS) 
+          : []
+      };
     }
     
     // Atomic write: tmp → rename
