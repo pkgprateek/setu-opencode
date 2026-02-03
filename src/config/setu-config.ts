@@ -163,9 +163,10 @@ export function loadSetuConfig(projectDir: string): SetuConfig {
     return { ...DEFAULT_CONFIG };
   }
   
-  // Reject null bytes
-  if (projectDir.includes('\0')) {
-    debugLog('Invalid projectDir: contains null byte');
+  // Reject null bytes and other control characters (Unicode Cc category)
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentionally matching control chars for security
+  if (/[\x00-\x1F\x7F]/u.test(projectDir)) {
+    debugLog('Invalid projectDir: contains control characters');
     return { ...DEFAULT_CONFIG };
   }
   
@@ -181,6 +182,12 @@ export function loadSetuConfig(projectDir: string): SetuConfig {
   if (globalConfig) {
     config = mergeConfig(config, globalConfig);
     debugLog('Loaded global config from ~/.config/opencode/setu.json');
+    
+    // Validate after global merge (surfaces warnings for global-only configs)
+    const globalValidation = validateConfig(config);
+    if (!globalValidation.valid) {
+      debugLog('Global config validation warnings:', globalValidation.errors);
+    }
   }
   
   // Load project config (higher priority - overrides global)
@@ -199,15 +206,14 @@ export function loadSetuConfig(projectDir: string): SetuConfig {
   const projectConfig = loadConfigFile(resolvedConfigPath);
   if (projectConfig) {
     config = mergeConfig(config, projectConfig);
-    
-    // Validate merged config and log any issues
-    const validation = validateConfig(config);
-    if (!validation.valid) {
-      debugLog('Config validation warnings:', validation.errors);
-      // Continue with the merged config - validation is informational
-    }
-    
     debugLog('Loaded project config from .setu/setu.json');
+  }
+  
+  // Always validate final merged config (covers global-only, project-only, or merged)
+  const validation = validateConfig(config);
+  if (!validation.valid) {
+    debugLog('Config validation warnings:', validation.errors);
+    // Continue with the merged config - validation is informational
   }
   
   return config;

@@ -103,10 +103,20 @@ export function detectStyle(prompt: string): { style: SetuStyle; isPersistent: b
 }
 
 /**
+ * Sanitize input by removing null bytes and control characters
+ */
+function sanitizePromptInput(input: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentionally matching control chars for sanitization
+  return input.replace(/[\x00-\x1F\x7F]/g, '');
+}
+
+/**
  * Check if the message is ONLY a style command (no other task content)
  */
 export function isStyleOnlyCommand(prompt: string): boolean {
-  const trimmed = prompt.trim();
+  // Sanitize input first to prevent control character injection
+  const sanitized = sanitizePromptInput(prompt);
+  const trimmed = sanitized.trim();
   if (!trimmed) return false;
 
   // Prefix-only: ":quick" or ":ultrathink"
