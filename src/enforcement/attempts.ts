@@ -16,6 +16,8 @@ export interface AttemptState {
   taskId: string;
   attempts: number;
   maxAttempts: number;  // From config, default 3
+  /** Persistent counter of failed attempts - not affected by array trimming */
+  failedAttempts: number;
   approaches: Array<{
     description: string;
     succeeded: boolean;
@@ -63,19 +65,31 @@ export function createEnhancedAttemptTracker(config: AttemptTrackerConfig = {}):
         taskId, 
         attempts: 0, 
         maxAttempts,
-        approaches: [] 
+        failedAttempts: 0,
+        approaches: [] as AttemptState['approaches']
       };
       state.attempts++;
+      
+      // Track failed attempts persistently (not affected by array trimming)
+      if (!succeeded) {
+        state.failedAttempts++;
+      }
+      
       state.approaches.push({
         description: approach,
         succeeded,
         timestamp: new Date().toISOString()
       });
+      
+      // Trim approaches array for memory, but failedAttempts counter persists
+      if (state.approaches.length > 50) {
+        state.approaches = state.approaches.slice(-50);
+      }
       attempts.set(taskId, state);
       
       // Persist failed approaches after 2nd failure to prevent ghost loops
       // (Phase 3 will provide the persistence callback)
-      if (!succeeded && state.attempts >= 2 && onFailedApproach) {
+      if (!succeeded && state.failedAttempts >= 2 && onFailedApproach) {
         onFailedApproach(approach);
         debugLog(`Attempt tracker: Recorded failed approach "${approach}" for task ${taskId}`);
       }
@@ -86,15 +100,16 @@ export function createEnhancedAttemptTracker(config: AttemptTrackerConfig = {}):
     /**
      * Check if we should suggest a gear shift (update RESEARCH/PLAN)
      * 
+     * Uses persistent failedAttempts counter (not derived from array)
+     * 
      * @param taskId - Unique identifier for the task
      * @returns true if failed attempts >= maxAttempts
      */
     shouldSuggestGearShift: (taskId: string): boolean => {
       const state = attempts.get(taskId);
       if (!state) return false;
-      // Suggest gear shift after N failed attempts
-      const failedCount = state.approaches.filter(a => !a.succeeded).length;
-      return failedCount >= state.maxAttempts;
+      // Use persistent counter, not array-derived count
+      return state.failedAttempts >= state.maxAttempts;
     },
     
     /**
