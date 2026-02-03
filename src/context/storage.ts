@@ -10,7 +10,7 @@
  * Re-exports ensureSetuDir from feedback.ts for consistency.
  */
 
-import { existsSync, readFileSync, writeFileSync, appendFileSync, statSync, renameSync, unlinkSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, appendFileSync, statSync, renameSync, unlinkSync, openSync, fsyncSync, closeSync } from 'fs';
 import { join, relative } from 'path';
 import {
   type SetuContext,
@@ -71,6 +71,7 @@ export function loadContext(projectDir: string): SetuContext | null {
  * - Truncates filesRead and searchesPerformed arrays if too large
  * - Uses compact JSON by default
  * - Never writes content larger than MAX_CONTEXT_SIZE
+ * - Uses atomic write (temp file + rename) to prevent corruption
  * 
  * @param projectDir - Project root directory
  * @param context - The context to save
@@ -92,60 +93,66 @@ export function saveContext(projectDir: string, context: SetuContext): void {
       context.searchesPerformed = [];
     }
     
-    // First attempt at serialization
+    // Track if initial serialization failed - prevents re-stringifying broken object
+    let serializationFailed = false;
     let jsonContent: string;
+    
+    // Build a safe object for fallback scenarios
+    const buildMinimalContext = (note: string): Record<string, unknown> => ({
+      summary: typeof context.summary === 'string' ? context.summary.slice(0, 1000) : '[truncated]',
+      filesRead: [],
+      searchesPerformed: [],
+      patterns: [],
+      project: context.project ?? {},
+      confirmed: context.confirmed ?? false,
+      createdAt: context.createdAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      note
+    });
+    
+    // First attempt at serialization
     try {
       jsonContent = JSON.stringify(context);
     } catch (serializeError) {
       // Serialization failed (circular refs, BigInt, etc.) - use minimal safe object
       errorLog('saveContext: JSON.stringify failed, using minimal fallback:', serializeError);
-      const minimalContext = {
-        summary: typeof context.summary === 'string' ? context.summary.slice(0, 1000) : '[serialization failed]',
-        filesRead: [],
-        searchesPerformed: [],
-        patterns: [],
-        project: context.project ?? {},
-        confirmed: context.confirmed ?? false,
-        createdAt: context.createdAt ?? new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        note: '[truncated due to serialization error]'
-      };
-      jsonContent = JSON.stringify(minimalContext);
+      serializationFailed = true;
+      jsonContent = JSON.stringify(buildMinimalContext('[truncated due to serialization error]'));
     }
     
     // Check size limit and truncate if needed (PLAN.md 2.9.1)
-    if (jsonContent.length > MAX_CONTEXT_SIZE) {
+    // Only attempt re-serialization if initial serialization succeeded
+    if (jsonContent.length > MAX_CONTEXT_SIZE && !serializationFailed) {
       debugLog(`Context size ${jsonContent.length} exceeds ${MAX_CONTEXT_SIZE}, truncating...`);
       
       // Truncate arrays to most recent entries
       context.filesRead = context.filesRead.slice(-MAX_FILES_READ);
       context.searchesPerformed = context.searchesPerformed.slice(-MAX_SEARCHES);
       
-      // Retry serialization
-      jsonContent = JSON.stringify(context);
+      // Retry serialization on the mutated context
+      try {
+        jsonContent = JSON.stringify(context);
+      } catch {
+        serializationFailed = true;
+        jsonContent = JSON.stringify(buildMinimalContext('[truncated due to serialization error after array trim]'));
+      }
       
-      // If still too large, truncate summary
-      if (jsonContent.length > MAX_CONTEXT_SIZE && context.summary) {
+      // If still too large and not failed, truncate summary
+      if (jsonContent.length > MAX_CONTEXT_SIZE && context.summary && !serializationFailed) {
         const maxSummary = 1000;
         context.summary = context.summary.slice(0, maxSummary) + '... [truncated]';
-        jsonContent = JSON.stringify(context);
+        try {
+          jsonContent = JSON.stringify(context);
+        } catch {
+          serializationFailed = true;
+          jsonContent = JSON.stringify(buildMinimalContext('[truncated due to serialization error after summary trim]'));
+        }
       }
       
       // LAST RESORT: If still too large, use minimal safe object
       if (jsonContent.length > MAX_CONTEXT_SIZE) {
         debugLog('saveContext: Still too large after truncation, using minimal fallback');
-        const minimalContext = {
-          summary: typeof context.summary === 'string' ? context.summary.slice(0, 1000) : '[truncated]',
-          filesRead: [],
-          searchesPerformed: [],
-          patterns: [],
-          project: context.project ?? {},
-          confirmed: context.confirmed ?? false,
-          createdAt: context.createdAt ?? new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          note: '[truncated due to size limit]'
-        };
-        jsonContent = JSON.stringify(minimalContext);
+        jsonContent = JSON.stringify(buildMinimalContext('[truncated due to size limit]'));
       }
     }
     
@@ -154,12 +161,21 @@ export function saveContext(projectDir: string, context: SetuContext): void {
     const isDebug = process.env.SETU_DEBUG === 'true';
     
     // Determine final content - pretty print in debug, but enforce size limit
+    // IMPORTANT: Pretty-print from jsonContent (already chosen/truncated), not raw context
     let finalContent = jsonContent;
     if (isDebug) {
-      const prettyContent = JSON.stringify(context, null, 2);
-      // Only use pretty if it fits within limit
-      if (prettyContent.length <= MAX_CONTEXT_SIZE) {
-        finalContent = prettyContent;
+      try {
+        // Parse the already-chosen jsonContent and re-stringify with formatting
+        // This ensures consistency with truncated/minimalContext choice
+        const parsedContent = JSON.parse(jsonContent);
+        const prettyContent = JSON.stringify(parsedContent, null, 2);
+        // Only use pretty if it fits within limit
+        if (prettyContent.length <= MAX_CONTEXT_SIZE) {
+          finalContent = prettyContent;
+        }
+      } catch {
+        // Parse/pretty print failed, stick with compact jsonContent
+        debugLog('saveContext: Pretty print failed, using compact format');
       }
     }
     
@@ -168,9 +184,36 @@ export function saveContext(projectDir: string, context: SetuContext): void {
       finalContent = jsonContent; // Fall back to compact
     }
     
-    writeFileSync(jsonPath, finalContent, 'utf-8');
-    
-    debugLog('Context saved to .setu/context.json');
+    // ATOMIC WRITE: Write to temp file, fsync, then rename
+    // This prevents concurrent write interleaving and partial-file corruption
+    const tempPath = `${jsonPath}.${process.pid}.tmp`;
+    try {
+      // Write to temp file
+      writeFileSync(tempPath, finalContent, 'utf-8');
+      
+      // Fsync to ensure data is flushed to disk
+      const fd = openSync(tempPath, 'r+');
+      try {
+        fsyncSync(fd);
+      } finally {
+        closeSync(fd);
+      }
+      
+      // Atomic rename (replaces original atomically on POSIX systems)
+      renameSync(tempPath, jsonPath);
+      
+      debugLog('Context saved to .setu/context.json (atomic write)');
+    } catch (writeError) {
+      // Clean up temp file if it exists
+      try {
+        if (existsSync(tempPath)) {
+          unlinkSync(tempPath);
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
+      throw writeError; // Re-throw to be caught by outer catch
+    }
   } catch (error) {
     // Log but don't throw - context save failure shouldn't crash the plugin
     errorLog('saveContext failed:', error);
