@@ -93,12 +93,37 @@ function isSetuPath(args: unknown): boolean {
     const rawAfter = normalizedInput
       .substring(setuIndex + setuMarker.length)
       .replace(/^\//, '');
+    
+    // SECURITY: Handle double-encoding attacks (e.g., %252e → %2e → .)
+    // Repeatedly decode until string stabilizes or max iterations reached
+    let decodedAfter = rawAfter;
+    const MAX_DECODE_ITERATIONS = 5;
+    for (let i = 0; i < MAX_DECODE_ITERATIONS; i++) {
+      try {
+        const nextDecode = decodeURIComponent(decodedAfter);
+        if (nextDecode === decodedAfter) {
+          // Stabilized - no more encoding
+          break;
+        }
+        decodedAfter = nextDecode;
+      } catch {
+        // Invalid encoding - stop decoding, use what we have
+        break;
+      }
+    }
+    
+    // Check both raw and decoded segments for traversal
     const rawSegments = rawAfter.split('/').filter(Boolean);
+    const decodedSegments = decodedAfter.split('/').filter(Boolean);
 
     const hasRawTraversal = rawSegments.some((segment) => segment === '..');
+    const hasDecodedTraversal = decodedSegments.some((segment) => segment === '..');
+    
+    // Check for encoded traversal patterns in raw input
+    // (catches single-encoded like %2e%2e before decoding)
     const hasEncodedTraversal = rawSegments.some((segment) => /%2e|%2f|%5c/i.test(segment));
 
-    if (hasRawTraversal || hasEncodedTraversal) {
+    if (hasRawTraversal || hasDecodedTraversal || hasEncodedTraversal) {
       return false;
     }
 
