@@ -267,16 +267,20 @@ export function createContextCollector(projectDir: string): ContextCollector {
 function rotateLog(logPath: string): void {
   try {
     // Rotate from oldest to newest
+    // With MAX_LOG_FILES=3: delete .2, rename .1→.2
+    // Then separately rename current log → .1
     for (let i = MAX_LOG_FILES - 1; i >= 1; i--) {
-      const from = i === 1 ? logPath : `${logPath}.${i}`;
+      // Always use numbered files in the loop
+      // The current (unnumbered) log is handled separately below
+      const from = `${logPath}.${i}`;
       const to = `${logPath}.${i + 1}`;
 
       try {
         if (i === MAX_LOG_FILES - 1) {
-          // Delete the oldest file
+          // Delete the oldest file (e.g., .2 when MAX_LOG_FILES=3)
           unlinkSync(from);
         } else {
-          // Rename to next number
+          // Rename to next number (e.g., .1 → .2)
           renameSync(from, to);
         }
       } catch (err: unknown) {
