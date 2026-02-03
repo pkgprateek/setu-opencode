@@ -66,6 +66,18 @@ export interface ActiveTask {
   startedAt: string;
   /** Current status */
   status: TaskStatus;
+  
+  /** Progress tracking for JIT context */
+  progress?: {
+    lastCompletedStep: number;    // e.g., 3 means Step 3 is done, do Step 4 next
+    lastCompletedAt: string;      // ISO timestamp for debugging
+  };
+  
+  /** Learning persistence (prevents ghost loops) */
+  learnings?: {
+    worked: string[];   // Approaches that succeeded
+    failed: string[];   // Approaches that failed — injected to subagents
+  };
 }
 
 // ============================================================================
@@ -227,8 +239,12 @@ export function contextToSummary(context: SetuContext): SetuContextSummary {
   };
 }
 
+import { MAX_INJECTION_SIZE } from './storage';
+
 /**
  * Format a SetuContextSummary into a multi-line block suitable for prompt injection.
+ * 
+ * Security (PLAN.md 2.9.1): Enforces MAX_INJECTION_SIZE (~8000 chars / 2000 tokens)
  *
  * @param summary - The compact context summary to include in the formatted block
  * @returns The formatted multi-line string enclosed by "[SETU CONTEXT]" and "[/SETU CONTEXT]". Includes a "Project: ..." line, an optional "Files already read: ..." line listing up to 10 file paths (with " (+N more)" if truncated), an optional "Patterns: ..." line, and an optional "Task: ..." line.
@@ -253,5 +269,12 @@ export function formatContextForInjection(summary: SetuContextSummary): string {
   
   lines.push('[/SETU CONTEXT]');
   
-  return lines.join('\n');
+  let injection = lines.join('\n');
+  
+  // Enforce injection size limit (PLAN.md 2.9.1)
+  if (injection.length > MAX_INJECTION_SIZE) {
+    injection = injection.slice(0, MAX_INJECTION_SIZE - 20) + '\n[TRUNCATED]';
+  }
+  
+  return injection;
 }

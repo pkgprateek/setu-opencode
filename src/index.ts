@@ -21,18 +21,21 @@ import {
   createChatMessageHook,
   createToolExecuteBeforeHook,
   createToolExecuteAfterHook,
-  createAttemptTracker,
   createEventHook,
   createCompactionHook,
   createActiveBatchesMap,
   recordToolExecution,
   type VerificationStep
 } from './hooks';
-import { type Phase0State } from './enforcement';
+import { type Phase0State, createEnhancedAttemptTracker } from './enforcement';
 import { createSetuVerifyTool } from './tools/setu-verify';
 import { createSetuContextTool } from './tools/setu-context';
 import { createSetuFeedbackTool } from './tools/setu-feedback';
 import { createSetuTaskTool } from './tools/setu-task';
+import { createSetuResearchTool } from './tools/setu-research';
+import { createSetuPlanTool } from './tools/setu-plan';
+import { createSetuResetTool } from './tools/setu-reset';
+import { createSetuDoctorTool } from './tools/setu-doctor';
 import { createSetuAgent } from './agent/setu-agent';
 import { 
   initializeFeedbackFile, 
@@ -42,6 +45,7 @@ import {
 } from './context';
 import { debugLog, alwaysLog, errorLog } from './debug';
 import { type FileAvailability } from './prompts/persona';
+import { wrapHook } from './utils/error-handling';
 
 // Plugin state
 interface SetuState {
@@ -142,8 +146,11 @@ export const SetuPlugin: Plugin = async (ctx) => {
     fileCache: new Map()
   };
   
-  // Create attempt tracker for "2 tries then ask" pattern
-  const attemptTracker = createAttemptTracker();
+  // Create attempt tracker for "2 tries then ask" pattern with gear shifting
+  const attemptTracker = createEnhancedAttemptTracker({
+    maxAttempts: 3,
+    // Phase 3 will add: onFailedApproach: (approach) => recordFailedApproach(projectDir, approach)
+  });
   
   // Create active batches map for parallel execution tracking (audit trail)
   const activeBatches = createActiveBatchesMap();
@@ -267,20 +274,28 @@ export const SetuPlugin: Plugin = async (ctx) => {
     // Only injects when in Setu agent - silent in Build/Plan
     // Now also injects loaded context content (summary, constraints)
     // AND Silent Exploration project rules (AGENTS.md, CLAUDE.md, active task)
-    'experimental.chat.system.transform': createSystemTransformHook(
-      getStyleState,
-      getVerificationState,
-      () => state.setuFilesExist, // Pass file existence for lazy loading
-      getCurrentAgent,
-      getContextCollector, // Pass context collector for content injection
-      getProjectRules      // Pass project rules for Silent Exploration injection
+    // Wrapped for graceful degradation (2.10)
+    'experimental.chat.system.transform': wrapHook(
+      'system.transform',
+      createSystemTransformHook(
+        getStyleState,
+        getVerificationState,
+        () => state.setuFilesExist, // Pass file existence for lazy loading
+        getCurrentAgent,
+        getContextCollector, // Pass context collector for content injection
+        getProjectRules      // Pass project rules for Silent Exploration injection
+      )
     ),
     
     // Detect style keywords in user messages and track current agent
-    'chat.message': createChatMessageHook(
-      getStyleState,
-      setStyleState,
-      setCurrentAgent
+    // Wrapped for graceful degradation (2.10)
+    'chat.message': wrapHook(
+      'chat.message',
+      createChatMessageHook(
+        getStyleState,
+        setStyleState,
+        setCurrentAgent
+      )
     ),
     
     // Phase 0: Block side-effect tools until context is confirmed
@@ -313,39 +328,55 @@ export const SetuPlugin: Plugin = async (ctx) => {
     
     // Track verification steps and context (file reads, searches)
     // Only tracks when in Setu agent - silent in Build/Plan
-    'tool.execute.after': createToolExecuteAfterHook(
-      markVerificationStep,
-      getCurrentAgent,
-      getContextCollector
+    // Wrapped for graceful degradation (2.10)
+    'tool.execute.after': wrapHook(
+      'tool.execute.after',
+      createToolExecuteAfterHook(
+        markVerificationStep,
+        getCurrentAgent,
+        getContextCollector
+      )
     ),
     
     // Handle session lifecycle events
     // Loads existing context on session start for continuity
     // Performs Silent Exploration: loads project rules automatically
     // Cleans up parallel execution tracking on session end
-    event: createEventHook(
-      resetVerificationState,
-      () => attemptTracker.clearAll(),
-      setFirstSessionDone,
-      confirmContext,
-      resetPhase0,
-      getContextCollector,
-      refreshSetuFilesExist,  // Silent file existence check
-      setProjectRules,         // Silent Exploration: store loaded rules
-      getProjectDir,           // Project directory accessor (avoids process.cwd())
-      activeBatches            // Parallel execution tracking cleanup
+    // Wrapped for graceful degradation (2.10)
+    event: wrapHook(
+      'event',
+      createEventHook(
+        resetVerificationState,
+        () => attemptTracker.clearAll(),
+        setFirstSessionDone,
+        confirmContext,
+        resetPhase0,
+        getContextCollector,
+        refreshSetuFilesExist,  // Silent file existence check
+        setProjectRules,         // Silent Exploration: store loaded rules
+        getProjectDir,           // Project directory accessor (avoids process.cwd())
+        activeBatches            // Parallel execution tracking cleanup
+      )
     ),
     
     // Compaction safety: inject active task into compaction summary
     // Prevents "going rogue" after context compression
-    'experimental.session.compacting': createCompactionHook(getProjectDir),
+    // Wrapped for graceful degradation (2.10)
+    'experimental.session.compacting': wrapHook(
+      'session.compacting',
+      createCompactionHook(getProjectDir)
+    ),
     
     // Custom tools
     tool: {
       setu_verify: createSetuVerifyTool(getStyleState, markVerificationComplete, getProjectDir),
       setu_context: createSetuContextTool(getPhase0State, confirmContext, getContextCollector, getProjectDir),
       setu_feedback: createSetuFeedbackTool(getProjectDir),
-      setu_task: createSetuTaskTool(getProjectDir, resetVerificationState)
+      setu_task: createSetuTaskTool(getProjectDir, resetVerificationState),
+      setu_research: createSetuResearchTool(getProjectDir),
+      setu_plan: createSetuPlanTool(getProjectDir),
+      setu_reset: createSetuResetTool(getProjectDir),
+      setu_doctor: createSetuDoctorTool(getProjectDir)
     }
   };
 };

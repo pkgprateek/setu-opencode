@@ -10,7 +10,7 @@
  * Re-exports ensureSetuDir from feedback.ts for consistency.
  */
 
-import { existsSync, readFileSync, writeFileSync, appendFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, appendFileSync, statSync, renameSync, unlinkSync } from 'fs';
 import { join, relative } from 'path';
 import {
   type SetuContext,
@@ -28,6 +28,18 @@ export { ensureSetuDir };
 
 const CONTEXT_JSON = 'context.json';
 const VERIFICATION_LOG = 'verification.log';
+
+// Security limits (from PLAN.md Section 2.9.1)
+const MAX_CONTEXT_SIZE = 51200;      // 50KB
+const MAX_FILES_READ = 50;           // Truncate filesRead array
+const MAX_SEARCHES = 20;             // Truncate searchesPerformed array
+
+// Exported for use in formatContextForInjection
+export const MAX_INJECTION_SIZE = 8000;     // ~2000 tokens
+
+// Log rotation settings (from PLAN.md Section 2.9.4)
+const MAX_LOG_SIZE = 1024 * 1024;    // 1MB
+const MAX_LOG_FILES = 3;
 
 /**
  * Load the Setu context stored at `.setu/context.json` inside the given project directory.
@@ -54,9 +66,10 @@ export function loadContext(projectDir: string): SetuContext | null {
 /**
  * Save a SetuContext to `.setu/context.json`.
  * 
- * Optimized context storage:
- * - Uses compact JSON (no pretty-printing) to save space
- * - Skips `.setu/context.md` (AGENTS.md serves as human-readable version)
+ * Security features (PLAN.md Section 2.9.1):
+ * - Enforces MAX_CONTEXT_SIZE (50KB) to prevent token bloat
+ * - Truncates filesRead and searchesPerformed arrays if too large
+ * - Uses compact JSON by default
  * 
  * @param projectDir - Project root directory
  * @param context - The context to save
@@ -67,12 +80,34 @@ export function saveContext(projectDir: string, context: SetuContext): void {
   // Update timestamp
   context.updatedAt = new Date().toISOString();
   
+  // First attempt at serialization
+  let jsonContent = JSON.stringify(context);
+  
+  // Check size limit and truncate if needed (PLAN.md 2.9.1)
+  if (jsonContent.length > MAX_CONTEXT_SIZE) {
+    debugLog(`Context size ${jsonContent.length} exceeds ${MAX_CONTEXT_SIZE}, truncating...`);
+    
+    // Truncate arrays to most recent entries
+    context.filesRead = context.filesRead.slice(-MAX_FILES_READ);
+    context.searchesPerformed = context.searchesPerformed.slice(-MAX_SEARCHES);
+    
+    // Retry serialization
+    jsonContent = JSON.stringify(context);
+    
+    // If still too large, truncate summary
+    if (jsonContent.length > MAX_CONTEXT_SIZE && context.summary) {
+      const maxSummary = 1000;
+      context.summary = context.summary.slice(0, maxSummary) + '... [truncated]';
+      jsonContent = JSON.stringify(context);
+    }
+  }
+  
   // Write JSON - compact by default, pretty in debug mode
   const jsonPath = join(setuDir, CONTEXT_JSON);
   const isDebug = process.env.SETU_DEBUG === 'true';
-  const jsonContent = isDebug 
-    ? JSON.stringify(context, null, 2) 
-    : JSON.stringify(context);
+  if (isDebug) {
+    jsonContent = JSON.stringify(context, null, 2);
+  }
   writeFileSync(jsonPath, jsonContent, 'utf-8');
   
   debugLog('Context saved to .setu/context.json');
@@ -214,8 +249,52 @@ export function createContextCollector(projectDir: string): ContextCollector {
 }
 
 /**
+ * Rotate log file when it exceeds MAX_LOG_SIZE.
+ * 
+ * Rotation scheme (PLAN.md Section 2.9.4):
+ * - verification.log.2 → delete
+ * - verification.log.1 → verification.log.2
+ * - verification.log → verification.log.1
+ * 
+ * @param logPath - Path to the log file
+ */
+function rotateLog(logPath: string): void {
+  try {
+    // Rotate from oldest to newest
+    for (let i = MAX_LOG_FILES - 1; i >= 1; i--) {
+      const from = i === 1 ? logPath : `${logPath}.${i}`;
+      const to = `${logPath}.${i + 1}`;
+      
+      if (existsSync(from)) {
+        if (i === MAX_LOG_FILES - 1) {
+          // Delete the oldest file
+          unlinkSync(from);
+        } else {
+          // Rename to next number
+          renameSync(from, to);
+        }
+      }
+    }
+    
+    // Rename current log to .1
+    if (existsSync(logPath)) {
+      renameSync(logPath, `${logPath}.1`);
+    }
+    
+    debugLog('Log rotated successfully');
+  } catch (error) {
+    // Log rotation failure is non-critical
+    debugLog('Log rotation failed:', error);
+  }
+}
+
+/**
  * Record a verification step result in .setu/verification.log.
  *
+ * Security features (PLAN.md Section 2.9.4):
+ * - Rotates log when it exceeds MAX_LOG_SIZE (1MB)
+ * - Keeps MAX_LOG_FILES (3) rotated logs
+ * 
  * Creates the log file with a header if missing and appends a timestamped entry
  * containing the step name, PASS/FAIL status, and optional command output.
  *
@@ -232,6 +311,18 @@ export function logVerification(
 ): void {
   const setuDir = ensureSetuDir(projectDir);
   const logPath = join(setuDir, VERIFICATION_LOG);
+  
+  // Check if rotation needed (PLAN.md 2.9.4)
+  if (existsSync(logPath)) {
+    try {
+      const stats = statSync(logPath);
+      if (stats.size > MAX_LOG_SIZE) {
+        rotateLog(logPath);
+      }
+    } catch {
+      // Ignore stat errors
+    }
+  }
   
   const timestamp = new Date().toISOString();
   const status = success ? 'PASS' : 'FAIL';
