@@ -46,13 +46,25 @@ export interface CompactionOutput {
  * @returns Hook function for experimental.session.compacting
  */
 export function createCompactionHook(
-  getProjectDir: () => string
+  getProjectDir: () => string,
+  getCurrentAgent?: () => string
 ): (input: CompactionInput, output: CompactionOutput) => Promise<void> {
   
   return async (
     _input: CompactionInput,
     output: CompactionOutput
   ): Promise<void> => {
+    // Defensively handle null/undefined currentAgent
+    let currentAgent = getCurrentAgent ? getCurrentAgent() : undefined;
+    if (!currentAgent) {
+      currentAgent = 'setu';
+    }
+    
+    if (currentAgent.toLowerCase() !== 'setu') {
+      debugLog(`Compaction: Skipping - not in Setu mode (current agent: ${currentAgent})`);
+      return;
+    }
+
     const projectDir = getProjectDir();
     
     // Load active task

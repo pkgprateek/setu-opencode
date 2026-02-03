@@ -284,6 +284,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
         getCurrentAgent,
         getContextCollector, // Pass context collector for content injection
         getProjectRules      // Pass project rules for Silent Exploration injection
+        // NOTE: setStyleState removed - transform is pure, chat.message handles persistence
       )
     ),
     
@@ -364,7 +365,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
     // Wrapped for graceful degradation (2.10)
     'experimental.session.compacting': wrapHook(
       'session.compacting',
-      createCompactionHook(getProjectDir)
+      createCompactionHook(getProjectDir, getCurrentAgent)
     ),
     
     // Custom tools
