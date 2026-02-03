@@ -199,6 +199,14 @@ export function loadSetuConfig(projectDir: string): SetuConfig {
   const projectConfig = loadConfigFile(resolvedConfigPath);
   if (projectConfig) {
     config = mergeConfig(config, projectConfig);
+    
+    // Validate merged config and log any issues
+    const validation = validateConfig(config);
+    if (!validation.valid) {
+      debugLog('Config validation warnings:', validation.errors);
+      // Continue with the merged config - validation is informational
+    }
+    
     debugLog('Loaded project config from .setu/setu.json');
   }
   

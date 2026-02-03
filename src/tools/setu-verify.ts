@@ -274,13 +274,6 @@ ${stepsList}
         markVerificationComplete();
       }
 
-      // Visual check alone cannot complete verification - automated checks must also pass
-      // This prevents bypass via manual-only requests
-      if (validatedSteps?.includes('visual') && automatedChecksPassed) {
-        // Already marked complete above, this is just for clarity
-        markVerificationComplete();
-      }
-
       if (results.length === 0) {
         let guidance = '';
         if (verificationLevel === 'discuss') {

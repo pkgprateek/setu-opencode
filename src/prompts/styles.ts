@@ -88,8 +88,7 @@ export function detectStyle(prompt: string): { style: SetuStyle; isPersistent: b
   for (const prefix of KEY_VALUE_PREFIXES) {
     // Match "prefix:" followed by optional whitespace and a word
     // Case-insensitive matching
-    // Must escape backslashes in template literal: \\s and \\w
-    const regex = new RegExp(`${prefix}:\\\\s*(\\\\w+)`, 'i');
+    const regex = new RegExp(`${prefix}:\\s*(\\w+)`, 'i');
     const match = lowerPrompt.match(regex);
     if (match) {
       const styleName = match[1];
@@ -119,8 +118,7 @@ export function isStyleOnlyCommand(prompt: string): boolean {
 
   // Key-value only: "style: quick" / "mode: collab" / "preset: quick"
   for (const prefix of KEY_VALUE_PREFIXES) {
-    // Must escape backslashes in template literal: \\s and \\w
-    const regex = new RegExp(`^${prefix}:\\\\s*(\\\\w+)$`, 'i');
+    const regex = new RegExp(`^${prefix}:\\s*(\\w+)$`, 'i');
     const match = trimmed.match(regex);
     if (match && resolveStyle(match[1])) {
       return true;

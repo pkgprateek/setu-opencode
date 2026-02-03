@@ -166,7 +166,7 @@ export interface GearBlockResult {
 
 export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockResult {
   switch (gear) {
-    case 'scout':
+    case 'scout': {
       // Only read-only tools or approved Setu tools allowed
       const scoutAllowedSetuTools = new Set(['setu_research', 'setu_doctor']);
       const isScoutAllowedSetuTool = isSetuTool(tool) && scoutAllowedSetuTools.has(tool);
@@ -179,7 +179,8 @@ export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockR
         };
       }
       return { blocked: false, gear };
-    case 'architect':
+    }
+    case 'architect': {
       // Read + write to .setu/ only
       // If it's a side effect tool, it MUST be targeting .setu/ path
       if (!isReadOnlyTool(tool) && !isSetuTool(tool)) {
@@ -199,9 +200,11 @@ export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockR
         };
       }
       return { blocked: false, gear };
-    case 'builder':
+    }
+    case 'builder': {
       // All allowed (verification gate handled elsewhere)
       return { blocked: false, gear };
+    }
   }
 }
 

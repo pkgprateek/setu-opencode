@@ -81,7 +81,7 @@ export function createSetuError(
 }
 
 /**
- * Wrap an async function to handle errors gracefully.
+ * Wrap an async function (typically a hook) to handle errors gracefully.
  * 
  * Known SetuErrors are re-thrown with context.
  * Unknown errors are logged and the function returns undefined (graceful degradation).
@@ -92,7 +92,7 @@ export function createSetuError(
  * @param fn - The async function to wrap
  * @returns Wrapped function that handles errors gracefully
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- preserves generic hook signatures so typed hook parameters can be wrapped
 export function wrapHook<T extends (...args: any[]) => Promise<any>>(
   hookName: string,
   fn: T
@@ -127,7 +127,7 @@ export function wrapHook<T extends (...args: any[]) => Promise<any>>(
  * @param fallback - Value to return on error
  * @returns Wrapped function that handles errors gracefully
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- preserves generic function signatures for sync wrapper
 export function wrapSync<T extends (...args: any[]) => any, R>(
   functionName: string,
   fn: T,
@@ -198,9 +198,13 @@ export function trySync<T>(
 export function sanitizeInput(value: unknown): unknown {
   if (typeof value === 'string') {
     // Remove null bytes and control characters (except newline, tab)
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: intentionally matching control chars for sanitization
+    const nullBytePattern = /\u0000/g;
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: intentionally matching control chars for sanitization
+    const controlCharPattern = /[\u0001-\u0008\u000B\u000C\u000E-\u001F]/g;
     return value
-      .replace(/\u0000/g, '')
-      .replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+      .replace(nullBytePattern, '')
+      .replace(controlCharPattern, '');
   }
   
   if (Array.isArray(value)) {

@@ -212,6 +212,10 @@ export function createToolExecuteBeforeHook(
         const originalPrompt = getStringProp(output.args, 'prompt') ?? '';
         output.args.prompt = `${contextBlock}\n\n[TASK]\n${originalPrompt}`;
         
+        // SECURITY: Re-sanitize after prompt injection to prevent control-char bypass
+        // The injected context could reintroduce control characters
+        output.args = sanitizeArgs(output.args);
+        
         debugLog('Injected context into subagent prompt');
       }
     }

@@ -172,9 +172,10 @@ async function checkDependencies(projectDir: string): Promise<HealthCheck[]> {
             message: 'Dependencies appear to be in sync'
           });
         }
-      } catch {
-        // Ignore stat errors
-      }
+        } catch (error) {
+          // Stat errors are non-critical but useful for debugging
+          debugLog('Failed to stat lockfile or node_modules:', error);
+        }
       break;  // Only check first found lockfile
     }
   }
@@ -200,7 +201,8 @@ async function checkRuntime(projectDir: string): Promise<HealthCheck[]> {
           message: `Node.js ${nodeResult.stdout.trim()}`
         });
       }
-    } catch {
+    } catch (error) {
+      debugLog('Failed to check Node.js version:', error);
       checks.push({
         name: 'node-version',
         status: 'error',

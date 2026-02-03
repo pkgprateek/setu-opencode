@@ -8,7 +8,7 @@
  * - Loaded on session start for continuity
  */
 
-import { MAX_INJECTION_SIZE } from './storage';
+import { MAX_INJECTION_SIZE } from './limits';
 
 // ============================================================================
 // Constraint Types (Active Task Persistence)
@@ -250,30 +250,36 @@ export function contextToSummary(context: SetuContext): SetuContextSummary {
  * @returns The formatted multi-line string enclosed by "[SETU CONTEXT]" and "[/SETU CONTEXT]". Includes a "Project: ..." line, an optional "Files already read: ..." line listing up to 10 file paths (with " (+N more)" if truncated), an optional "Patterns: ..." line, and an optional "Task: ..." line.
  */
 export function formatContextForInjection(summary: SetuContextSummary): string {
-  const lines: string[] = [
-    '[SETU CONTEXT]',
+  const header = '[SETU CONTEXT]';
+  const footer = '[/SETU CONTEXT]';
+  
+  const bodyLines: string[] = [
     `Project: ${summary.project}`
   ];
   
   if (summary.filesRead.length > 0) {
-    lines.push(`Files already read: ${summary.filesRead.slice(0, 10).join(', ')}${summary.filesRead.length > 10 ? ` (+${summary.filesRead.length - 10} more)` : ''}`);
+    bodyLines.push(`Files already read: ${summary.filesRead.slice(0, 10).join(', ')}${summary.filesRead.length > 10 ? ` (+${summary.filesRead.length - 10} more)` : ''}`);
   }
   
   if (summary.patterns.length > 0) {
-    lines.push(`Patterns: ${summary.patterns.join(', ')}`);
+    bodyLines.push(`Patterns: ${summary.patterns.join(', ')}`);
   }
   
   if (summary.task) {
-    lines.push(`Task: ${summary.task}`);
+    bodyLines.push(`Task: ${summary.task}`);
   }
   
-  lines.push('[/SETU CONTEXT]');
-  
-  let injection = lines.join('\n');
+  let injection = [header, ...bodyLines, footer].join('\n');
   
   // Enforce injection size limit (PLAN.md 2.9.1)
+  // CRITICAL: Always preserve the closing tag to maintain boundary integrity
   if (injection.length > MAX_INJECTION_SIZE) {
-    injection = injection.slice(0, MAX_INJECTION_SIZE - 12) + '\n[TRUNCATED]';
+    const marker = '[TRUNCATED]';
+    // Reserve space for header, marker, footer, and newlines
+    const reservedSpace = header.length + footer.length + marker.length + 4;
+    const maxBodyLength = Math.max(0, MAX_INJECTION_SIZE - reservedSpace);
+    const truncatedBody = bodyLines.join('\n').slice(0, maxBodyLength);
+    injection = `${header}\n${truncatedBody}\n${marker}\n${footer}`;
   }
   
   return injection;

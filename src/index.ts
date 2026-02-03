@@ -146,7 +146,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
     fileCache: new Map()
   };
   
-  // Create attempt tracker for "2 tries then ask" pattern with gear shifting
+  // Create attempt tracker for "3 tries then suggest gear shift" pattern
   const attemptTracker = createEnhancedAttemptTracker({
     maxAttempts: 3,
     // Phase 3 will add: onFailedApproach: (approach) => recordFailedApproach(projectDir, approach)
