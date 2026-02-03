@@ -14,6 +14,7 @@
 
 import { loadActiveTask } from '../context/active';
 import { loadContext } from '../context/storage';
+import type { FileRead, ObservedPattern } from '../context/types';
 import { debugLog } from '../debug';
 
 /**
@@ -113,10 +114,13 @@ ${activeTask.constraints.map(c => `- ${c}`).join('\n')}` : ''}`);
       const context = loadContext(projectDir);
       
       if (context?.summary) {
-        // Defensively check filesRead is an array before using it
-        const filesRead = Array.isArray(context.filesRead) ? context.filesRead : [];
-        const filesWorkedOn = filesRead.length > 0
-          ? `Key files worked on: ${filesRead.slice(0, 5).map(f => f.path).join(', ')}${filesRead.length > 5 ? ` (+${filesRead.length - 5} more)` : ''}`
+        // Defensively check filesRead is an array and filter for valid entries with path property
+        const filesReadRaw = Array.isArray(context.filesRead) ? context.filesRead : [];
+        const validFilesRead = filesReadRaw.filter(
+          (f): f is FileRead => f !== null && typeof f === 'object' && typeof (f as FileRead).path === 'string'
+        );
+        const filesWorkedOn = validFilesRead.length > 0
+          ? `Key files worked on: ${validFilesRead.slice(0, 5).map(f => f.path).join(', ')}${validFilesRead.length > 5 ? ` (+${validFilesRead.length - 5} more)` : ''}`
           : '';
         
         output.context.push(`## Project Understanding
@@ -128,16 +132,27 @@ ${context.summary}${filesWorkedOn ? `\n\n${filesWorkedOn}` : ''}`);
       
       // Add patterns if any were observed
       if (context?.patterns && context.patterns.length > 0) {
-        const patternsSummary = context.patterns
-          .slice(0, 5)
-          .map(p => `- ${p.name}: ${p.description}`)
-          .join('\n');
+        // Filter for valid pattern entries with name and description properties
+        const validPatterns = context.patterns.filter(
+          (p): p is ObservedPattern => 
+            p !== null && 
+            typeof p === 'object' && 
+            typeof (p as ObservedPattern).name === 'string' && 
+            typeof (p as ObservedPattern).description === 'string'
+        );
         
-        output.context.push(`## Observed Patterns
+        if (validPatterns.length > 0) {
+          const patternsSummary = validPatterns
+            .slice(0, 5)
+            .map(p => `- ${p.name}: ${p.description}`)
+            .join('\n');
+          
+          output.context.push(`## Observed Patterns
 
 ${patternsSummary}`);
-        
-        debugLog('Compaction: Injected observed patterns');
+          
+          debugLog('Compaction: Injected observed patterns');
+        }
       }
     } catch (error) {
       // Log full context and return gracefully - never crash OpenCode

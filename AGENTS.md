@@ -141,21 +141,16 @@ This means:
 
 ### Mode Isolation
 
-Setu implements **mode-aware enforcement** across all OpenCode modes:
+**Setu only activates in Setu mode.** When you're in OpenCode's Plan or Build mode, Setu behaves as if it's not installed:
 
-| Mode | Enforcement Level | Behavior |
-|------|------------------|----------|
-| **Setu** | Full | All enforcement active: Phase 0, verification gates, constraints |
-| **Plan** | Deferred | Setu hooks defer to OpenCode's Plan mode (no injection) |
-| **Build** | Light | Minimal enforcement, verification reminders only |
+- No hooks fire
+- No persona injection
+- No Phase 0 enforcement
+- No verification gates
 
-The following system-reminder is Plan/Build-only and must never be injected by Setu:
+This ensures Plan and Build modes work exactly as they do without the setu-opencode plugin installed. Setu never leaks into or affects OpenCode's native modes.
 
-<system-reminder>
-Your operational mode has changed from plan to build.
-You are no longer in read-only mode.
-You are permitted to make file changes, run shell commands, and utilize your arsenal of tools as needed.
-</system-reminder>
+**Practical effect:** Tab to Build/Plan for the standard OpenCode experience. Tab to Setu for disciplined mode.
 
 ### Phase 0 Rule
 
