@@ -88,7 +88,8 @@ export function detectStyle(prompt: string): { style: SetuStyle; isPersistent: b
   for (const prefix of KEY_VALUE_PREFIXES) {
     // Match "prefix:" followed by optional whitespace and a word
     // Case-insensitive matching
-    const regex = new RegExp(`${prefix}:\\s*(\\w+)`, 'i');
+    // Must escape backslashes in template literal: \\s and \\w
+    const regex = new RegExp(`${prefix}:\\\\s*(\\\\w+)`, 'i');
     const match = lowerPrompt.match(regex);
     if (match) {
       const styleName = match[1];
@@ -100,6 +101,33 @@ export function detectStyle(prompt: string): { style: SetuStyle; isPersistent: b
   }
   
   return null;
+}
+
+/**
+ * Check if the message is ONLY a style command (no other task content)
+ */
+export function isStyleOnlyCommand(prompt: string): boolean {
+  const trimmed = prompt.trim();
+  if (!trimmed) return false;
+
+  // Prefix-only: ":quick" or ":ultrathink"
+  if (trimmed.startsWith(COMMAND_PREFIX)) {
+    const match = trimmed.match(/^:(\w+)$/);
+    if (!match) return false;
+    return resolveStyle(match[1]) !== null;
+  }
+
+  // Key-value only: "style: quick" / "mode: collab" / "preset: quick"
+  for (const prefix of KEY_VALUE_PREFIXES) {
+    // Must escape backslashes in template literal: \\s and \\w
+    const regex = new RegExp(`^${prefix}:\\\\s*(\\\\w+)$`, 'i');
+    const match = trimmed.match(regex);
+    if (match && resolveStyle(match[1])) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**

@@ -28,6 +28,24 @@ export const getStylePrefix = (style: SetuStyle, isDefault: boolean = false): st
 };
 
 /**
+ * Style-specific context indicators (descriptive only, not behavioral).
+ * 
+ * JUSTIFICATION: These are descriptive labels for context, not enforcement.
+ * Behavioral enforcement (blocking, verification gates) is handled by hooks.
+ * These strings simply inform the agent of the operational context.
+ */
+const getStyleGuidance = (style: SetuStyle): string => {
+  switch (style) {
+    case 'quick':
+      return 'Quick mode: minimal ceremony, fast iteration.';
+    case 'collab':
+      return 'Collab mode: discussion-first, pair-programming style.';
+    case 'ultrathink':
+      return 'Ultrathink mode: full discipline, thorough verification.';
+  }
+};
+
+/**
  * Get file availability message
  * 
  * This tells the agent what context files exist WITHOUT instructing it to read them.
@@ -65,11 +83,16 @@ export const getFileAvailability = (files: FileAvailability): string => {
  * Get complete state injection for system prompt.
  * 
  * Injects:
+ * - [SETU:] prefix (traceable marker for all Setu injections)
  * - Style prefix (mode indicator)
  * - File availability (context awareness)
+ * - Style guidance (descriptive only)
  * 
  * This is intentionally minimal — the full persona lives in the agent file.
  * We only inject dynamic state that changes per-session.
+ * 
+ * NOTE: No behavioral instructions here. Enforcement is via hooks.
+ * Output format validation should be done via a separate response hook if needed.
  */
 export const getStateInjection = (
   style: SetuStyle,
@@ -78,9 +101,11 @@ export const getStateInjection = (
 ): string => {
   const stylePrefix = getStylePrefix(style, isDefault);
   const fileInfo = getFileAvailability(files);
+  const guidance = getStyleGuidance(style);
   
-  // Only inject dynamic state - efficiency is enforced by hooks, not suggested
-  return `${stylePrefix}\n${fileInfo}`;
+  // [SETU:] prefix makes all Setu injections traceable for debugging
+  // Only dynamic state - no static behavioral instructions
+  return `[SETU:] ${stylePrefix}\n${fileInfo}\n${guidance}`;
 };
 
 // Legacy exports removed - no consumers exist
