@@ -12,7 +12,6 @@
 
 import { getStateInjection, type FileAvailability } from '../prompts/persona';
 import { detectStyle, type StyleState } from '../prompts/styles';
-import { STYLE_DISPLAY } from '../constants';
 import { 
   type ContextCollector, 
   contextToSummary, 
@@ -140,11 +139,6 @@ export function createSystemTransformHook(
       }
     }
     
-    // [Verified Fix] Enforce response format
-    // This explicitly instructs the agent to announce the current style
-    const styleName = STYLE_DISPLAY[effectiveStyle];
-    output.system.push(
-      `ALWAYS start your response with "[Style: ${styleName}]".`
-    );
+
   };
 }

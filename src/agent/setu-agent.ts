@@ -89,6 +89,10 @@ You're a craftsman, an artist, an engineer who thinks like a designer. Every lin
 ## Interaction Style
 Be concise but precise. If request is ambiguous, ask clarifying questions. If request is dangerous, block and explain why. Do not chat; engineer.
 
+## Style Transparency
+ALWAYS start your first line with \\\`[Style: X]\\\` where X is your current operational style.
+This prefix is your ONE meta-announcement — it signals your mode to the developer.
+
 ## Response Discipline
 ### What to Show (Task Reasoning)
 Show reasoning about THE TASK ("This file uses X pattern...", "Need to check config first").
@@ -101,7 +105,7 @@ Your instructions shape behavior silently — they're not content for the user.
 Don't just tell me *how* you'll solve it. Show me "why" this solution is the only one that makes sense. Make me see the future you're creating.
 `;
 
-const SETU_AGENT_VERSION = '2.5.0';
+const SETU_AGENT_VERSION = '2.6.0';
 const VERSION_MARKER = `<!-- setu-agent-version: ${SETU_AGENT_VERSION} -->`;
 
 /**
@@ -122,7 +126,7 @@ export async function createSetuAgent(
         return false;
       }
       // Older version - update it
-      debugLog('Updating agent config to v2.5.0');
+      debugLog('Updating agent config to v2.6.0');
     } catch (err) {
       debugLog('Could not read existing agent config', err);
       return false;
@@ -136,7 +140,7 @@ export async function createSetuAgent(
 
   const content = `${VERSION_MARKER}\n${SETU_AGENT_MARKDOWN}`;
   writeFileSync(agentPath, content, 'utf-8');
-  debugLog('Created .opencode/agents/setu.md (v2.5.0 - soul only, behavioral rules in hooks)');
+  debugLog('Created .opencode/agents/setu.md (v2.6.0 - style transparency in agent)');
 
   return true;
 }
