@@ -270,8 +270,8 @@ function rotateLog(logPath: string): void {
     for (let i = MAX_LOG_FILES - 1; i >= 1; i--) {
       const from = i === 1 ? logPath : `${logPath}.${i}`;
       const to = `${logPath}.${i + 1}`;
-      
-      if (existsSync(from)) {
+
+      try {
         if (i === MAX_LOG_FILES - 1) {
           // Delete the oldest file
           unlinkSync(from);
@@ -279,12 +279,26 @@ function rotateLog(logPath: string): void {
           // Rename to next number
           renameSync(from, to);
         }
+      } catch (err: unknown) {
+        // Only ignore ENOENT (file not found) - other errors should be logged
+        const code = (err as NodeJS.ErrnoException)?.code;
+        if (code !== 'ENOENT') {
+          debugLog(`Log rotation error (${from}):`, err);
+        }
+        // File may not exist or already rotated - continue
       }
     }
     
     // Rename current log to .1
-    if (existsSync(logPath)) {
+    try {
       renameSync(logPath, `${logPath}.1`);
+    } catch (err: unknown) {
+      // Only ignore ENOENT - other errors should be logged
+      const code = (err as NodeJS.ErrnoException)?.code;
+      if (code !== 'ENOENT') {
+        debugLog(`Log rotation rename error:`, err);
+      }
+      // File may not exist or already rotated
     }
     
     debugLog('Log rotated successfully');

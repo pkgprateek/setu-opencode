@@ -8,16 +8,39 @@ export const createSetuResetTool = (getProjectDir: () => string): ReturnType<typ
   },
   async execute(args, _context) {
     const projectDir = getProjectDir();
+
+    // Wrap loadActiveTask in try/catch - file may be corrupted
+    let active: ReturnType<typeof loadActiveTask>;
+    try {
+      active = loadActiveTask(projectDir);
+    } catch (loadError) {
+      const msg = loadError instanceof Error ? loadError.message : String(loadError);
+      console.error(`[Setu] Failed to load active.json: ${msg}`);
+      active = null; // Fall back to null, continue with reset
+    }
     
-    // Reset progress
-    resetProgress(projectDir);
-    
-    // Optionally clear learnings
-    if (args.clearLearnings) {
-      const active = loadActiveTask(projectDir);
-      if (active) {
+    if (active) {
+      active.progress = {
+        lastCompletedStep: 0,
+        lastCompletedAt: new Date().toISOString()
+      };
+
+      if (args.clearLearnings) {
         active.learnings = { worked: [], failed: [] };
+      }
+
+      try {
         saveActiveTask(projectDir, active);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        return `Failed to reset progress: ${msg}. Check .setu/ directory permissions.`;
+      }
+    } else {
+      try {
+        resetProgress(projectDir);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        return `Failed to reset progress: ${msg}. Check .setu/ directory permissions.`;
       }
     }
     

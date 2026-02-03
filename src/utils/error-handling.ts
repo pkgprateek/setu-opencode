@@ -10,24 +10,6 @@
 import { errorLog, debugLog } from '../debug';
 
 /**
- * Setu-specific error with recovery information
- */
-export class SetuError extends Error {
-  constructor(
-    message: string,
-    /** Error code for programmatic handling */
-    public readonly code: string,
-    /** Whether the operation can be retried */
-    public readonly recoverable: boolean = true,
-    /** Suggested user action */
-    public readonly suggestion?: string
-  ) {
-    super(message);
-    this.name = 'SetuError';
-  }
-}
-
-/**
  * Error codes for common Setu errors
  */
 export const ErrorCodes = {
@@ -55,6 +37,32 @@ export const ErrorCodes = {
 } as const;
 
 export type ErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes];
+
+/**
+ * Setu-specific error with recovery information
+ */
+export class SetuError extends Error {
+  constructor(
+    message: string,
+    /** Error code for programmatic handling */
+    public readonly code: ErrorCode,
+    /** Whether the operation can be retried */
+    public readonly recoverable: boolean = true,
+    /** Suggested user action */
+    public readonly suggestion?: string
+  ) {
+    super(message);
+    this.name = 'SetuError';
+    
+    // Restore prototype chain for proper instanceof checks after transpilation
+    Object.setPrototypeOf(this, SetuError.prototype);
+    
+    // Capture stack trace for better debugging (V8 only)
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, SetuError);
+    }
+  }
+}
 
 /**
  * Create a SetuError with a standard format
@@ -100,6 +108,9 @@ export function wrapHook<T extends (...args: any[]) => Promise<any>>(
       
       // Unknown error - log and gracefully degrade
       errorLog(`Hook ${hookName} failed:`, error);
+      if (process.env.SETU_DEBUG === 'true') {
+        debugLog(`Hook ${hookName} failed (debug):`, error);
+      }
       
       // Don't block the operation - just log
       // This prevents Setu from breaking OpenCode
@@ -187,7 +198,9 @@ export function trySync<T>(
 export function sanitizeInput(value: unknown): unknown {
   if (typeof value === 'string') {
     // Remove null bytes and control characters (except newline, tab)
-    return value.replace(/\x00/g, '').replace(/[\x01-\x08\x0b\x0c\x0e-\x1f]/g, '');
+    return value
+      .replace(/\u0000/g, '')
+      .replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F]/g, '');
   }
   
   if (Array.isArray(value)) {
