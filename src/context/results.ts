@@ -59,6 +59,7 @@ function formatResultMarkdown(result: StepResult): string {
   // Sanitize each output entry for YAML safety
   const sanitizeOutput = (o: string): string => {
     return o
+      // biome-ignore-next-line lint/suspicious/noControlCharactersInRegex: intentional control char removal
       .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
       .replace(/:/g, '\\:') // Escape colons
       .replace(/\n/g, ' ') // Replace newlines with spaces
@@ -158,16 +159,32 @@ export function writeStepResult(projectDir: string, result: StepResult): void {
   const resultsDir = ensureResultsDir(projectDir);
   let content = formatResultMarkdown(result);
 
-  // Enforce 50KB limit
+  // Enforce 50KB limit using byte length (UTF-8)
   const MAX_SIZE = 50 * 1024;
-  if (content.length > MAX_SIZE) {
-    // Truncate verification field to fit
-    const overflow = content.length - MAX_SIZE;
-    if (result.verification && result.verification.length > overflow + 100) {
-      const truncatedVerification = result.verification.slice(0, result.verification.length - overflow - 100) + '\n[TRUNCATED]';
-      content = formatResultMarkdown({ ...result, verification: truncatedVerification });
-    } else {
-      throw new Error(`Step result exceeds 50KB limit (${content.length} bytes)`);
+  if (Buffer.byteLength(content, 'utf8') > MAX_SIZE) {
+    // Iteratively truncate verification field to fit
+    let truncatedResult = { ...result };
+    let attempts = 0;
+    const MAX_ATTEMPTS = 10;
+
+    while (Buffer.byteLength(content, 'utf8') > MAX_SIZE && attempts < MAX_ATTEMPTS) {
+      attempts++;
+      const currentSize = Buffer.byteLength(content, 'utf8');
+      const overflow = currentSize - MAX_SIZE;
+
+      if (truncatedResult.verification && truncatedResult.verification.length > overflow + 100) {
+        // Remove more characters from verification
+        truncatedResult.verification = truncatedResult.verification.slice(0, truncatedResult.verification.length - overflow - 100) + '\n[TRUNCATED]';
+        content = formatResultMarkdown(truncatedResult);
+      } else {
+        // Can't truncate enough, throw error
+        break;
+      }
+    }
+
+    // Final validation
+    if (Buffer.byteLength(content, 'utf8') > MAX_SIZE) {
+      throw new Error(`Step result exceeds 50KB limit (${Buffer.byteLength(content, 'utf8')} bytes) even after truncation`);
     }
   }
 
