@@ -10,6 +10,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { ensureSetuDir } from './storage';
+import { debugLog } from '../debug';
 
 export interface StepResult {
   step: number;
@@ -36,12 +37,13 @@ function ensureResultsDir(projectDir: string): string {
 
 /**
  * Sanitize string for YAML frontmatter (defense-in-depth)
- * Prevents YAML injection via newlines, colons, or comment chars.
+ * Prevents YAML injection via control characters, newlines, colons, or comment chars.
  *
  * @see docs/internal/Audit.md - YAML Injection Risk analysis
  */
 export function sanitizeYamlString(str: string): string {
   return str
+    .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
     .replace(/\n/g, ' ')
     .replace(/:/g, ' -')
     .replace(/#/g, '')
@@ -66,7 +68,7 @@ function formatResultMarkdown(result: StepResult): string {
 step: ${result.step}
 status: ${result.status}
 timestamp: ${result.timestamp}
-${result.durationMs ? `duration_ms: ${result.durationMs}` : ''}outputs:
+${result.durationMs ? `duration_ms: ${result.durationMs}\n` : ''}outputs:
 ${outputsList}
 ---
 
@@ -128,7 +130,8 @@ function parseResultMarkdown(content: string): StepResult | null {
       summary: summaryMatch?.[1]?.trim() || '',
       verification: verificationMatch?.[1]?.trim(),
     };
-  } catch {
+  } catch (error) {
+    debugLog('Failed to parse step result markdown:', error instanceof Error ? error.message : error);
     return null;
   }
 }
@@ -147,6 +150,10 @@ export function writeStepResult(projectDir: string, result: StepResult): void {
  * Returns null if step not completed
  */
 export function readStepResult(projectDir: string, step: number): StepResult | null {
+  if (!Number.isInteger(step) || step <= 0) {
+    debugLog(`Invalid step parameter: ${step} (must be positive integer)`);
+    return null;
+  }
   const path = join(projectDir, '.setu', 'results', `step-${step}.md`);
   if (!existsSync(path)) return null;
   return parseResultMarkdown(readFileSync(path, 'utf-8'));
@@ -175,7 +182,12 @@ export function clearResults(projectDir: string): void {
 
   const files = readdirSync(dir).filter((f) => f.endsWith('.md'));
   for (const f of files) {
-    unlinkSync(join(dir, f));
+    try {
+      unlinkSync(join(dir, f));
+    } catch (error) {
+      // Log but continue - one failure shouldn't abort cleanup
+      debugLog(`Failed to delete result file ${f}:`, error instanceof Error ? error.message : error);
+    }
   }
 }
 
