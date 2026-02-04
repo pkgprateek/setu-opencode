@@ -43,6 +43,7 @@ function ensureResultsDir(projectDir: string): string {
  */
 export function sanitizeYamlString(str: string): string {
   return str
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional control char removal
     .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
     .replace(/\n/g, ' ')
     .replace(/:/g, ' -')
@@ -55,9 +56,18 @@ export function sanitizeYamlString(str: string): string {
  * Format step result as Markdown with YAML frontmatter
  */
 function formatResultMarkdown(result: StepResult): string {
+  // Sanitize each output entry for YAML safety
+  const sanitizeOutput = (o: string): string => {
+    return o
+      .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
+      .replace(/:/g, '\\:') // Escape colons
+      .replace(/\n/g, ' ') // Replace newlines with spaces
+      .trim();
+  };
+
   const outputsList =
     result.outputs.length > 0
-      ? result.outputs.map((o) => `  - ${o}`).join('\n')
+      ? result.outputs.map((o) => `  - ${sanitizeOutput(o)}`).join('\n')
       : '  - (none)';
 
   // Sanitize user-influenced fields for YAML safety
@@ -140,8 +150,27 @@ function parseResultMarkdown(content: string): StepResult | null {
  * Write step result to .setu/results/step-N.md
  */
 export function writeStepResult(projectDir: string, result: StepResult): void {
+  // Validate step number
+  if (!Number.isInteger(result.step) || result.step <= 0) {
+    throw new Error(`Invalid step number: ${result.step} (must be positive integer)`);
+  }
+
   const resultsDir = ensureResultsDir(projectDir);
-  const content = formatResultMarkdown(result);
+  let content = formatResultMarkdown(result);
+
+  // Enforce 50KB limit
+  const MAX_SIZE = 50 * 1024;
+  if (content.length > MAX_SIZE) {
+    // Truncate verification field to fit
+    const overflow = content.length - MAX_SIZE;
+    if (result.verification && result.verification.length > overflow + 100) {
+      const truncatedVerification = result.verification.slice(0, result.verification.length - overflow - 100) + '\n[TRUNCATED]';
+      content = formatResultMarkdown({ ...result, verification: truncatedVerification });
+    } else {
+      throw new Error(`Step result exceeds 50KB limit (${content.length} bytes)`);
+    }
+  }
+
   writeFileSync(join(resultsDir, `step-${result.step}.md`), content, 'utf-8');
 }
 
@@ -156,7 +185,12 @@ export function readStepResult(projectDir: string, step: number): StepResult | n
   }
   const path = join(projectDir, '.setu', 'results', `step-${step}.md`);
   if (!existsSync(path)) return null;
-  return parseResultMarkdown(readFileSync(path, 'utf-8'));
+  try {
+    return parseResultMarkdown(readFileSync(path, 'utf-8'));
+  } catch (error) {
+    debugLog(`Failed to read step result ${step} from ${path}:`, error instanceof Error ? error.message : error);
+    return null;
+  }
 }
 
 /**
@@ -166,11 +200,16 @@ export function listCompletedSteps(projectDir: string): number[] {
   const dir = join(projectDir, '.setu', 'results');
   if (!existsSync(dir)) return [];
 
-  return readdirSync(dir)
-    .filter((f) => /^step-\d+\.md$/.test(f))
-    .map((f) => parseInt(f.match(/step-(\d+)/)?.[1] || '0'))
-    .filter((n) => n > 0)
-    .sort((a, b) => a - b);
+  try {
+    return readdirSync(dir)
+      .filter((f) => /^step-\d+\.md$/.test(f))
+      .map((f) => parseInt(f.match(/step-(\d+)/)?.[1] || '0'))
+      .filter((n) => n > 0)
+      .sort((a, b) => a - b);
+  } catch (error) {
+    debugLog(`Failed to list completed steps from ${dir}:`, error instanceof Error ? error.message : error);
+    return [];
+  }
 }
 
 /**
