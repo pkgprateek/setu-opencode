@@ -74,6 +74,23 @@ export {
 
 export type { RateLimitResult } from './feedback';
 
+// Results Pattern (Phase 3.0)
+export type { StepResult } from './results';
+
+export {
+  writeStepResult,
+  readStepResult,
+  listCompletedSteps,
+  clearResults,
+  getLastCompletedStep,
+  sanitizeYamlString,
+} from './results';
+
+// Cleanse Protocol (Phase 3.0)
+export type { CleanseOptions, JITContext } from './cleanse';
+
+export { prepareJITContext, getJITContextSummary } from './cleanse';
+
 // Project rules (Silent Exploration)
 export type { ProjectRules, GitState } from './project-rules';
 

@@ -12,14 +12,17 @@
 
 import { getStateInjection, type FileAvailability } from '../prompts/persona';
 import { detectStyle, isStyleOnlyCommand, type StyleState } from '../prompts/styles';
-import { 
-  type ContextCollector, 
-  contextToSummary, 
+import {
+  type ContextCollector,
+  contextToSummary,
   formatContextForInjection,
   type ProjectRules,
   formatRulesForInjection,
   hasProjectRules,
+  getJITContextSummary,
+  loadActiveTask,
 } from '../context';
+import { debugLog } from '../debug';
 
 /**
  * Format files already read for injection into system prompt
@@ -60,7 +63,8 @@ export function createSystemTransformHook(
   getSetuFilesExist?: () => FileAvailability,
   getCurrentAgent?: () => string,
   getContextCollector?: () => ContextCollector | null,
-  getProjectRules?: () => ProjectRules | null
+  getProjectRules?: () => ProjectRules | null,
+  getProjectDir?: () => string
   // NOTE: setStyleState intentionally removed - state mutation is handled by chat.message hook, not here.
   // The transform must remain pure (no side effects).
 ) {
@@ -69,9 +73,17 @@ export function createSystemTransformHook(
     output: { system: string[] }
   ): Promise<void> => {
     const currentAgent = getCurrentAgent ? getCurrentAgent() : 'setu';
+    const agentLower = currentAgent.toLowerCase();
 
-    // Only inject when in Setu agent mode
-    if (currentAgent.toLowerCase() !== 'setu') {
+    // Define which agents should receive Setu injections
+    // Setu: Full persona + all injections
+    // Subagents (explore, general): JIT context only (for task awareness)
+    // Build/Plan: No Setu injections
+    const isSetuAgent = agentLower === 'setu';
+    const isSubagent = ['explore', 'general'].includes(agentLower);
+
+    // Only inject for Setu or known subagents
+    if (!isSetuAgent && !isSubagent) {
       return;
     }
     
@@ -149,12 +161,50 @@ export function createSystemTransformHook(
       const stepsNeeded = ['build', 'test', 'lint'].filter(
         s => !verificationState.stepsRun.has(s)
       );
-      
+
       if (stepsNeeded.length > 0) {
         output.system.push(`[Verify before done: ${stepsNeeded.join(', ')}]`);
       }
     }
-    
+
+    // JIT Context Injection: Inject active task context for subagent awareness
+    // This provides step tracking, failed approaches, and constraints
+    // CRITICAL: Subagents need this to know which step to execute
+    if (getProjectDir) {
+      try {
+        const projectDir = getProjectDir();
+        const active = loadActiveTask(projectDir);
+
+        if (active && active.progress && active.progress.lastCompletedStep >= 0) {
+          const jitSummary = getJITContextSummary(projectDir);
+
+          // Build JIT injection
+          const jitParts: string[] = [];
+
+          if (jitSummary.objective) {
+            jitParts.push(`## Current Task\n${jitSummary.objective}`);
+          }
+
+          if (jitSummary.failedApproaches.length > 0) {
+            jitParts.push(`## Failed Approaches (DO NOT REPEAT)\n${jitSummary.failedApproaches.map(a => `- ${a}`).join('\n')}`);
+          }
+
+          if (jitSummary.constraints.length > 0) {
+            jitParts.push(`## Active Constraints\n${jitSummary.constraints.map(c => `- ${c}`).join('\n')}`);
+          }
+
+          if (jitParts.length > 0) {
+            const jitInjection = `[SETU: JIT Context]\n\n${jitParts.join('\n\n')}\n\n---\n`;
+            // Prepend to system array so it appears first
+            output.system.unshift(jitInjection);
+          }
+        }
+      } catch (error) {
+        // Graceful degradation: JIT context is enhancement, not critical
+        // Log for debugging but don't crash OpenCode
+        debugLog('JIT context injection failed:', error instanceof Error ? error.message : error);
+      }
+    }
 
   };
 }
