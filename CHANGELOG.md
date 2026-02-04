@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Added
+- **JIT Context Engine (Phase 3.0)**: Just-in-time context preparation for subagents
+  - Results Pattern: Step completion tracked via `.setu/results/step-N.md` files
+  - Cleanse Protocol: JIT context preparation with token budgeting (< 2000 tokens)
+  - Defense-in-depth: YAML sanitization, prompt truncation, constraint validation
+  - Subagent support: JIT context injected for `explore` and `general` subagents
 - **Gearbox State Machine**: Artifact-driven state transitions (Scout/Architect/Builder)
   - Scout gear: read-only until RESEARCH.md created
   - Architect gear: can write to `.setu/` only until PLAN.md created
@@ -23,6 +28,8 @@
 - Pre-commit checklist with branch detection
 
 ### Fixed
+- **JIT context injection**: Added error handling with `debugLog()` (no empty catch blocks)
+- **Subagent detection**: Extended to include `explore` and `general` subagents for JIT context
 - **Context size limit**: Reduced from 512KB to 50KB per policy (prevents token bloat)
 - **Step validation**: Added `Number.isInteger()` check for progress steps
 - **setu-doctor indentation**: Fixed try-catch alignment in lockfile check
