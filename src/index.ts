@@ -57,7 +57,8 @@ interface SetuState {
   phase0: Phase0State;
   contextCollector: ContextCollector | null;
   projectRules: ProjectRules | null;  // Silent Exploration: loaded on session start
-  
+  projectDir: string;  // Project root directory for JIT context injection
+
   // File existence tracking (checked silently, no auto-read)
   setuFilesExist: {
     active: boolean;       // .setu/active.json
@@ -65,7 +66,7 @@ interface SetuState {
     agentsMd: boolean;     // AGENTS.md
     claudeMd: boolean;     // CLAUDE.md
   };
-  
+
   // Cache for file existence checks (avoids repeated fs.existsSync)
   fileCache: Map<string, { exists: boolean; checkedAt: number }>;
 }
@@ -133,7 +134,8 @@ export const SetuPlugin: Plugin = async (ctx) => {
     },
     contextCollector,
     projectRules: null,  // Loaded on session start via Silent Exploration
-    
+    projectDir,  // Project root directory for JIT context injection
+
     // File existence flags - checked silently, no errors on first run
     setuFilesExist: {
       active: false,
@@ -141,7 +143,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
       agentsMd: false,
       claudeMd: false
     },
-    
+
     // File cache (avoids repeated fs calls)
     fileCache: new Map()
   };
@@ -283,7 +285,8 @@ export const SetuPlugin: Plugin = async (ctx) => {
         () => state.setuFilesExist, // Pass file existence for lazy loading
         getCurrentAgent,
         getContextCollector, // Pass context collector for content injection
-        getProjectRules      // Pass project rules for Silent Exploration injection
+        getProjectRules,      // Pass project rules for Silent Exploration injection
+        () => state.projectDir // Pass project directory for JIT context injection
         // NOTE: setStyleState removed - transform is pure, chat.message handles persistence
       )
     ),

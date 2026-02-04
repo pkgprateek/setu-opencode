@@ -12,13 +12,15 @@
 
 import { getStateInjection, type FileAvailability } from '../prompts/persona';
 import { detectStyle, isStyleOnlyCommand, type StyleState } from '../prompts/styles';
-import { 
-  type ContextCollector, 
-  contextToSummary, 
+import {
+  type ContextCollector,
+  contextToSummary,
   formatContextForInjection,
   type ProjectRules,
   formatRulesForInjection,
   hasProjectRules,
+  getJITContextSummary,
+  loadActiveTask,
 } from '../context';
 
 /**
@@ -60,7 +62,8 @@ export function createSystemTransformHook(
   getSetuFilesExist?: () => FileAvailability,
   getCurrentAgent?: () => string,
   getContextCollector?: () => ContextCollector | null,
-  getProjectRules?: () => ProjectRules | null
+  getProjectRules?: () => ProjectRules | null,
+  getProjectDir?: () => string
   // NOTE: setStyleState intentionally removed - state mutation is handled by chat.message hook, not here.
   // The transform must remain pure (no side effects).
 ) {
@@ -149,12 +152,43 @@ export function createSystemTransformHook(
       const stepsNeeded = ['build', 'test', 'lint'].filter(
         s => !verificationState.stepsRun.has(s)
       );
-      
+
       if (stepsNeeded.length > 0) {
         output.system.push(`[Verify before done: ${stepsNeeded.join(', ')}]`);
       }
     }
-    
+
+    // JIT Context Injection: Inject active task context for subagent awareness
+    // This provides step tracking, failed approaches, and constraints
+    if (getProjectDir) {
+      const projectDir = getProjectDir();
+      const active = loadActiveTask(projectDir);
+
+      if (active && active.progress && active.progress.lastCompletedStep >= 0) {
+        const jitSummary = getJITContextSummary(projectDir);
+
+        // Build JIT injection
+        const jitParts: string[] = [];
+
+        if (jitSummary.objective) {
+          jitParts.push(`## Current Task\n${jitSummary.objective}`);
+        }
+
+        if (jitSummary.failedApproaches.length > 0) {
+          jitParts.push(`## Failed Approaches (DO NOT REPEAT)\n${jitSummary.failedApproaches.map(a => `- ${a}`).join('\n')}`);
+        }
+
+        if (jitSummary.constraints.length > 0) {
+          jitParts.push(`## Active Constraints\n${jitSummary.constraints.map(c => `- ${c}`).join('\n')}`);
+        }
+
+        if (jitParts.length > 0) {
+          const jitInjection = `[SETU: JIT Context]\n\n${jitParts.join('\n\n')}\n\n---\n`;
+          // Prepend to system array so it appears first
+          output.system.unshift(jitInjection);
+        }
+      }
+    }
 
   };
 }
