@@ -27,6 +27,7 @@ import {
   isSetuTool,
   isReadOnlyTool,
 } from "../constants";
+import { debugLog } from "../debug";
 
 // Re-export type guards for consumers of this module
 export { isSetuTool, isReadOnlyTool };
@@ -185,7 +186,7 @@ export function shouldBlockInPhase0(
 
   // FAIL-CLOSED: Block unknown tools (PLAN.md 2.9.3)
   // Log warning to help identify tools that should be whitelisted
-  console.warn(`[Setu] Unknown tool '${toolName}' - blocking by default (fail-closed). Add to KNOWN_SAFE_TOOLS if safe.`);
+  debugLog(`[Setu] Unknown tool '${toolName}' - blocking by default (fail-closed). Add to KNOWN_SAFE_TOOLS if safe.`);
   return {
     blocked: true,
     reason: "unknown_tool",
