@@ -3,7 +3,19 @@
 ## [Unreleased]
 
 ### Added
-- **JIT Context Engine (Phase 3.0)**: Just-in-time context preparation for subagents
+- **Progress tracking and step completion system**
+  - `advanceStep`: Automatically advance step counter after verification
+  - `recordFailedApproach`: Track failed attempts to prevent repeated mistakes
+  - `recordWorkedApproach`: Record successful approaches for reference
+  - Results Pattern: Atomic file writes with YAML sanitization
+  - `prepareJITContext`: Just-in-time context preparation for subagents
+  - `getJITContextSummary`: Debug summary of current context state
+  - Integration with `setu_verify`: Auto-advance step and persist results
+  - Integration with `setu_plan`: Clear old results on new plan creation
+  - Attempt tracker persistence to prevent "ghost loops"
+  - Comprehensive test suite (67 tests, 115 assertions)
+  - Increased limits: 100KB result size, 2000 char YAML fields
+- **Just-in-time context preparation for subagents**
   - Results Pattern: Step completion tracked via `.setu/results/step-N.md` files
   - Cleanse Protocol: JIT context preparation with token budgeting (< 2000 tokens)
   - Defense-in-depth: YAML sanitization, prompt truncation, constraint validation
@@ -28,8 +40,12 @@
 - Pre-commit checklist with branch detection
 
 ### Fixed
-- **JIT context injection**: Added error handling with `debugLog()` (no empty catch blocks)
-- **Subagent detection**: Extended to include `explore` and `general` subagents for JIT context
+- **Security**: Path validation checks traversal patterns before normalization
+- **Atomic writes**: Enhanced error handling with temp file cleanup on failure
+- **Error handling**: Standardized error message extraction with `getErrorMessage` helper
+- **Size limits**: Increased from 50KB to 100KB for realistic usage
+- **Context injection**: Added error handling with `debugLog()` (no empty catch blocks)
+- **Subagent detection**: Extended to include `explore` and `general` subagents for context
 - **Context size limit**: Reduced from 512KB to 50KB per policy (prevents token bloat)
 - **Step validation**: Added `Number.isInteger()` check for progress steps
 - **setu-doctor indentation**: Fixed try-catch alignment in lockfile check
@@ -56,6 +72,10 @@
 - Removed parallel execution guidance from persona (enforcement via hooks instead)
 
 ### Security
+- Atomic writes with 32-char entropy (16 bytes) for collision resistance
+- Path traversal validation with pre-normalization checks
+- YAML injection prevention with control char removal
+- Status runtime validation with type guards
 - Context size enforcement at 50KB (down from 512KB)
 - Fail-closed unknown tool handling with whitelist
 - Log rotation at 1MB with 3-file retention
