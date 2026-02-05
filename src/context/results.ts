@@ -76,8 +76,6 @@ function ensureResultsDir(projectDir: string): string {
 /**
  * Sanitize string for YAML frontmatter (defense-in-depth)
  * Prevents YAML injection via control characters, newlines, colons, or comment chars.
- *
- * @see docs/internal/Audit.md - YAML Injection Risk analysis
  */
 export function sanitizeYamlString(str: string): string {
   return str

@@ -11,7 +11,7 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, rmSync, existsSync, readFileSync, readdirSync } from 'fs';
+import { mkdirSync, rmSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import {
@@ -209,7 +209,7 @@ describe('Results Pattern', () => {
       // Write corrupted content
       const corruptedFile = join(resultsDir, 'step-1.md');
       mkdirSync(resultsDir, { recursive: true });
-      require('fs').writeFileSync(corruptedFile, 'not valid markdown');
+      writeFileSync(corruptedFile, 'not valid markdown');
 
       const read = readStepResult(testDir, 1);
       expect(read).toBeNull();
@@ -337,7 +337,7 @@ describe('Path Validation', () => {
   let testDir: string;
 
   beforeEach(() => {
-    testDir = join(tmpdir(), `setu-path-test-${Date.now()}`);
+    testDir = join(tmpdir(), `setu-path-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(testDir, { recursive: true });
   });
 

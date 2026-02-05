@@ -127,7 +127,6 @@ Context unavailable. Read .setu/PLAN.md directly.`;
 
   // Get previous step summary (for context continuity)
   // Defense-in-depth: Limit summary length to prevent prompt bloat
-  // @see docs/internal/Audit.md - Prompt Injection Risk analysis
   let prevSummary = '';
   if (lastStep > 0) {
     try {

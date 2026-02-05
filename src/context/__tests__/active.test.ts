@@ -169,10 +169,27 @@ describe('Phase 4.0 Helper Functions', () => {
       recordFailedApproach(testDir, 'Failed attempt 1');
       recordWorkedApproach(testDir, 'Success approach 1');
       recordFailedApproach(testDir, 'Failed attempt 2');
-      
+
       const updated = loadActiveTask(testDir);
       expect(updated?.learnings?.failed).toHaveLength(2);
       expect(updated?.learnings?.worked).toHaveLength(1);
+    });
+
+    test('caps worked array at MAX_LEARNINGS using FIFO', () => {
+      const task = createActiveTask('Test task', 'ultrathink');
+      saveActiveTask(testDir, task);
+
+      // Add 22 approaches (MAX_LEARNINGS is 20)
+      for (let i = 0; i < 22; i++) {
+        recordWorkedApproach(testDir, `Worked approach ${i}`);
+      }
+
+      const updated = loadActiveTask(testDir);
+      expect(updated?.learnings?.worked).toHaveLength(20);
+
+      // Should keep most recent (Worked approach 2-21, not 0-1)
+      expect(updated?.learnings?.worked[0]).toBe('Worked approach 2');
+      expect(updated?.learnings?.worked[19]).toBe('Worked approach 21');
     });
   });
 
