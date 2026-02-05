@@ -7,10 +7,35 @@
  * - Human-readable audit trail
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
-import { join } from 'path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, renameSync, openSync, writeSync, fsyncSync, closeSync } from 'fs';
+import { join, resolve, normalize } from 'path';
+import { randomBytes } from 'crypto';
 import { ensureSetuDir } from './storage';
 import { debugLog } from '../debug';
+
+/**
+ * Validate project directory path to prevent directory traversal
+ * Ensures the resolved path does not contain traversal patterns
+ */
+function validateProjectDir(projectDir: string): void {
+  // Prevent null bytes and control characters
+  if (/[\x00-\x1f]/.test(projectDir)) {
+    throw new Error('Invalid characters in project directory path');
+  }
+
+  // SECURITY: Check for path traversal attempts BEFORE normalization
+  // This catches attempts like "../../../etc/passwd" before resolve() normalizes them
+  if (projectDir.includes('..')) {
+    throw new Error('Invalid projectDir: path traversal detected');
+  }
+
+  const resolved = normalize(resolve(projectDir));
+
+  // Additional check: ensure resolved path doesn't contain '..' (shouldn't happen after resolve, but defense in depth)
+  if (resolved.includes('..')) {
+    throw new Error('Invalid projectDir: path traversal detected after resolution');
+  }
+}
 
 export interface StepResult {
   step: number;
@@ -23,10 +48,22 @@ export interface StepResult {
   durationMs?: number;
 }
 
+const VALID_STATUSES = ['completed', 'failed', 'skipped'] as const;
+
+/**
+ * Parse and validate status string
+ */
+function parseStatus(s: string | undefined): StepResult['status'] {
+  return VALID_STATUSES.includes(s as typeof VALID_STATUSES[number]) 
+    ? (s as StepResult['status']) 
+    : 'completed';
+}
+
 /**
  * Ensure results directory exists
  */
 function ensureResultsDir(projectDir: string): string {
+  validateProjectDir(projectDir);
   const resultsDir = join(projectDir, '.setu', 'results');
   if (!existsSync(resultsDir)) {
     ensureSetuDir(projectDir);
@@ -45,10 +82,13 @@ export function sanitizeYamlString(str: string): string {
   return str
     // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional control char removal
     .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
+    .replace(/\\/g, '\\\\') // Escape backslashes first
+    .replace(/"/g, '\\"') // Escape double quotes
     .replace(/\n/g, ' ')
-    .replace(/:/g, ' -')
-    .replace(/#/g, '')
-    .slice(0, 200)
+    // Only replace colons at line start or after whitespace to preserve URLs
+    .replace(/(^|\s):/g, '$1-')
+    .replace(/#/g, '\\#')
+    .slice(0, 2000)
     .trim();
 }
 
@@ -74,6 +114,9 @@ function formatResultMarkdown(result: StepResult): string {
   // Sanitize user-influenced fields for YAML safety
   const safeObjective = sanitizeYamlString(result.objective);
   const safeSummary = sanitizeYamlString(result.summary);
+  const safeVerification = result.verification
+    ? result.verification.replace(/[\x00-\x1F\x7F]/g, '').slice(0, 10000)
+    : undefined;
 
   return `---
 step: ${result.step}
@@ -89,9 +132,9 @@ ${outputsList}
 
 ${safeSummary}
 
-${result.verification ? `## Verification
+${safeVerification ? `## Verification
 
-${result.verification}
+${safeVerification}
 ` : ''}`;
 }
 
@@ -133,7 +176,7 @@ function parseResultMarkdown(content: string): StepResult | null {
 
     return {
       step: parseInt(stepMatch?.[1] || '0'),
-      status: (statusMatch?.[1] as StepResult['status']) || 'completed',
+      status: parseStatus(statusMatch?.[1]),
       timestamp: timestampMatch?.[1] || new Date().toISOString(),
       durationMs: durationMatch ? parseInt(durationMatch[1]) : undefined,
       outputs: outputs.filter((o) => o !== '(none)'),
@@ -159,8 +202,8 @@ export function writeStepResult(projectDir: string, result: StepResult): void {
   const resultsDir = ensureResultsDir(projectDir);
   let content = formatResultMarkdown(result);
 
-  // Enforce 50KB limit using byte length (UTF-8)
-  const MAX_SIZE = 50 * 1024;
+  // Enforce 100KB limit using byte length (UTF-8)
+  const MAX_SIZE = 100 * 1024;
   if (Buffer.byteLength(content, 'utf8') > MAX_SIZE) {
     // Iteratively truncate verification field to fit
     let truncatedResult = { ...result };
@@ -184,11 +227,33 @@ export function writeStepResult(projectDir: string, result: StepResult): void {
 
     // Final validation
     if (Buffer.byteLength(content, 'utf8') > MAX_SIZE) {
-      throw new Error(`Step result exceeds 50KB limit (${Buffer.byteLength(content, 'utf8')} bytes) even after truncation`);
+      throw new Error(`Step result exceeds 100KB limit (${Buffer.byteLength(content, 'utf8')} bytes) even after truncation`);
     }
   }
 
-  writeFileSync(join(resultsDir, `step-${result.step}.md`), content, 'utf-8');
+  // Atomic write: write to temp file, then rename
+  const targetPath = join(resultsDir, `step-${result.step}.md`);
+  // SECURITY: Use 16 bytes (32 hex chars) for collision resistance in parallel execution
+  const tempPath = `${targetPath}.${randomBytes(16).toString('hex')}.tmp`;
+
+  // Write to temp file with explicit sync
+  let fd: number | undefined;
+  try {
+    fd = openSync(tempPath, 'w');
+    writeSync(fd, content, 0, 'utf-8');
+    fsyncSync(fd);
+    closeSync(fd);
+    fd = undefined; // Mark as closed
+    // Atomic rename
+    renameSync(tempPath, targetPath);
+  } catch (error) {
+    // Clean up temp file if it exists
+    if (fd !== undefined) {
+      try { closeSync(fd); } catch {}
+    }
+    try { unlinkSync(tempPath); } catch {}
+    throw error;
+  }
 }
 
 /**
