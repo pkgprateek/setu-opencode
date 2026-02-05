@@ -81,18 +81,33 @@ describe('JIT Context Preparation', () => {
     });
 
     test('truncates failed approaches to 200 chars', () => {
+      const longApproach = 'x'.repeat(500);
       const task = createActiveTask('Test task', 'ultrathink');
       task.learnings = {
         worked: [],
-        failed: ['x'.repeat(500)]
+        failed: [longApproach]
       };
       saveActiveTask(testDir, task);
 
       const context = prepareJITContext(testDir, 'Do something', { mode: 'full' });
 
-      // Should be truncated in the context (allow some buffer for markdown formatting)
-      const failedSection = context.split('## Failed Approaches')[1];
-      expect(failedSection?.length).toBeLessThan(400);
+      // Verify "## Failed Approaches" section exists
+      expect(context).toContain('## Failed Approaches');
+
+      // Extract the failed approaches section - handle various newline patterns
+      const failedSectionMatch = context.match(/## Failed Approaches[\s\S]*?(?=\n## |---|$)/);
+      expect(failedSectionMatch).not.toBeNull();
+
+      const failedSection = failedSectionMatch![0];
+      // Extract the actual failed approach text (should be a list item)
+      const approachMatch = failedSection.match(/- ([^\n]+)/);
+      expect(approachMatch).not.toBeNull();
+
+      const approachText = approachMatch![1];
+      // Should be truncated to 200 chars (plus any markdown formatting)
+      expect(approachText.length).toBeLessThanOrEqual(210); // Allow small buffer for formatting
+      expect(approachText).toContain('x'.repeat(50)); // Should contain start of original
+      expect(approachText.length).toBeLessThan(longApproach.length); // Should be shorter than original
     });
 
     test('includes constraints from active task', () => {
@@ -141,12 +156,14 @@ describe('JIT Context Preparation', () => {
       expect(context).not.toContain('\x02');
     });
 
-    test('throws on path traversal attempt', () => {
+    test('returns recovery mode on path traversal attempt', () => {
       // Use path with traversal attempt which will fail validation
       const badDir = testDir + '/../../etc';
 
-      // Should throw for invalid paths
-      expect(() => prepareJITContext(badDir, 'Do something', { mode: 'full' })).toThrow('path traversal');
+      // Should return recovery mode for invalid paths (Issue 1: consistent error handling)
+      const context = prepareJITContext(badDir, 'Do something', { mode: 'full' });
+      expect(context).toContain('[SETU: JIT Context - Recovery Mode]');
+      expect(context).toContain('Do something');
     });
 
     test('truncates context if over maxTokens', () => {
@@ -227,12 +244,16 @@ describe('JIT Context Preparation', () => {
       expect(summary.constraints).toEqual([]);
     });
 
-    test('throws on path traversal attempt', () => {
+    test('returns safe default on path traversal attempt', () => {
       // Use string concatenation to avoid path normalization
       const badDir = testDir + '/../../etc';
       
-      // Should throw for invalid paths
-      expect(() => getJITContextSummary(badDir)).toThrow('path traversal');
+      // Should return safe default for invalid paths (Issue 1: consistent error handling)
+      const summary = getJITContextSummary(badDir);
+      expect(summary.step).toBe(1);
+      expect(summary.objective).toBe('Unknown (context unavailable)');
+      expect(summary.failedApproaches).toEqual([]);
+      expect(summary.constraints).toEqual([]);
     });
 
     test('includes failed approaches (last 3)', () => {
