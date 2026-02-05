@@ -5,6 +5,7 @@ import { existsSync } from 'fs';
 import { resetProgress } from '../context/active';
 import { ensureSetuDir } from '../context/storage';
 import { sanitizeForPrompt } from '../security/prompt-sanitization';
+import { clearResults } from '../context/results';
 
 export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<typeof tool> => tool({
   description: 'Create execution plan in .setu/PLAN.md. Requires RESEARCH.md to exist. Resets step progress to 0.',
@@ -16,12 +17,27 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
   },
   async execute(args, _context) {
     const projectDir = getProjectDir();
-    
+
+    // Validate required fields
+    if (!args.objective?.trim()) {
+      throw new Error('objective is required and cannot be empty');
+    }
+
+    if (!args.steps?.trim()) {
+      throw new Error('steps is required and cannot be empty');
+    }
+
+    // Validate step count to prevent DoS (max 100 steps)
+    const stepCount = (args.steps.match(/## Step \d+|### Step \d+|\*\*Step \d+\*\*/gi) || []).length;
+    if (stepCount > 100) {
+      throw new Error(`Too many steps (${stepCount}). Maximum is 100.`);
+    }
+
     // Check precondition: RESEARCH.md must exist
     if (!existsSync(join(projectDir, '.setu', 'RESEARCH.md'))) {
       throw new Error('RESEARCH.md required before creating PLAN.md. Run setu_research first.');
     }
-    
+
     // Sanitize inputs before persisting (content may be injected into prompts later)
     const sanitizedArgs = {
       objective: sanitizeForPrompt(args.objective, 500),
@@ -47,7 +63,15 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
     // CRITICAL: Reset progress to step 0 — new plan means fresh start
     resetProgress(projectDir);
     
-    return `Plan created with ${countSteps(content)} steps. Gear shifted: architect → builder. Progress reset to Step 0. Ready for execution.`;
+    // Clear old results for fresh start (best-effort, non-critical)
+    try {
+      clearResults(projectDir);
+    } catch (error) {
+      // Log but don't fail — stale results won't break execution
+      console.warn(`[setu-plan] Failed to clear old results: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    
+    return `Plan created with ${countSteps(content)} steps. Gear shifted: architect → builder. Progress reset to Step 0. Old results cleared. Ready for execution.`;
   }
 });
 
