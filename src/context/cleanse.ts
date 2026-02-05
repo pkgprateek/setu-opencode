@@ -11,8 +11,44 @@
  * We just tell the subagent: "Find Step N in PLAN.md"
  */
 
+import { resolve, normalize } from 'path';
 import { loadActiveTask } from './active';
 import { readStepResult } from './results';
+
+/**
+ * Validate and sanitize project directory path
+ * Prevents directory traversal attacks
+ */
+function validateProjectDir(dir: string): string {
+  // Prevent null bytes and control characters
+  if (/[\x00-\x1f]/.test(dir)) {
+    throw new Error('Invalid characters in project directory path');
+  }
+
+  // SECURITY: Check for path traversal attempts BEFORE normalization
+  // This catches attempts like "../../../etc/passwd" before resolve() normalizes them
+  if (dir.includes('..')) {
+    throw new Error('Invalid projectDir: path traversal detected');
+  }
+
+  const resolved = normalize(resolve(dir));
+
+  // Additional check: ensure resolved path doesn't contain '..' (shouldn't happen after resolve, but defense in depth)
+  if (resolved.includes('..')) {
+    throw new Error('Invalid projectDir: path traversal detected after resolution');
+  }
+
+  return resolved;
+}
+
+/**
+ * Sanitize objective input to prevent prompt injection
+ * Removes null bytes and control characters (except newlines/tabs)
+ */
+function sanitizeObjective(input: string): string {
+  // Remove null bytes and control characters (except newlines/tabs)
+  return input.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '');
+}
 
 export interface CleanseOptions {
   mode: 'full' | 'focused';
@@ -40,7 +76,23 @@ export function prepareJITContext(
   objective: string,
   options: CleanseOptions = { mode: 'full', maxTokens: 2000 }
 ): string {
-  const active = loadActiveTask(projectDir);
+  // SECURITY: Validate and sanitize inputs
+  const safeDir = validateProjectDir(projectDir);
+  const safeObjective = sanitizeObjective(objective);
+
+  let active;
+  try {
+    active = loadActiveTask(safeDir);
+  } catch (err) {
+    // Fail-safe: return minimal context if state corrupted
+    console.error('[SETU] Failed to load active task:', err);
+    return `[SETU: JIT Context - Recovery Mode]
+
+## Your Objective
+${safeObjective}
+
+Context unavailable. Read .setu/PLAN.md directly.`;
+  }
 
   // Calculate which step comes next
   const lastStep = active?.progress?.lastCompletedStep ?? 0;
@@ -58,10 +110,14 @@ export function prepareJITContext(
   // @see docs/internal/Audit.md - Prompt Injection Risk analysis
   let prevSummary = '';
   if (lastStep > 0) {
-    const prevResult = readStepResult(projectDir, lastStep);
-    if (prevResult) {
-      const truncatedSummary = prevResult.summary?.slice(0, 500) || '';
-      prevSummary = `\n## Previous Step (${lastStep}) Summary\n${truncatedSummary}\n`;
+    try {
+      const prevResult = readStepResult(safeDir, lastStep);
+      if (prevResult) {
+        const truncatedSummary = prevResult.summary?.slice(0, 500) || '';
+        prevSummary = `\n## Previous Step (${lastStep}) Summary\n${truncatedSummary}\n`;
+      }
+    } catch {
+      // Non-fatal: previous step summary is optional
     }
   }
 
@@ -69,7 +125,7 @@ export function prepareJITContext(
   let context = `[SETU: JIT Context - Step ${nextStep}]
 
 ## Your Objective
-${objective}
+${safeObjective}
 
 ## Current Position
 Last completed: Step ${lastStep}${lastStep === 0 ? ' (starting fresh)' : ''}
@@ -95,7 +151,7 @@ Learn from these failures. Try a different approach.
 Start by reading .setu/PLAN.md to find Step ${nextStep}.`;
 
   // Simple truncation if over budget
-  const maxChars = (options.maxTokens || 2000) * 4; // ~4 chars per token
+  const maxChars = (options.maxTokens ?? 2000) * 4; // ~4 chars per token
   if (context.length > maxChars) {
     context = context.slice(0, maxChars - 20) + '\n[TRUNCATED]';
   }
@@ -107,7 +163,21 @@ Start by reading .setu/PLAN.md to find Step ${nextStep}.`;
  * Get summary of JIT context (for debugging)
  */
 export function getJITContextSummary(projectDir: string): JITContext {
-  const active = loadActiveTask(projectDir);
+  const safeDir = validateProjectDir(projectDir);
+
+  let active;
+  try {
+    active = loadActiveTask(safeDir);
+  } catch {
+    // Return safe default on error
+    return {
+      step: 1,
+      objective: 'Unknown (context unavailable)',
+      failedApproaches: [],
+      constraints: [],
+    };
+  }
+
   const lastStep = active?.progress?.lastCompletedStep ?? 0;
 
   return {
