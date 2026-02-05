@@ -28,6 +28,7 @@ import {
   type VerificationStep
 } from './hooks';
 import { type Phase0State, createEnhancedAttemptTracker } from './enforcement';
+import { recordFailedApproach } from './context';
 import { createSetuVerifyTool } from './tools/setu-verify';
 import { createSetuContextTool } from './tools/setu-context';
 import { createSetuFeedbackTool } from './tools/setu-feedback';
@@ -151,7 +152,8 @@ export const SetuPlugin: Plugin = async (ctx) => {
   // Create attempt tracker for "3 tries then suggest gear shift" pattern
   const attemptTracker = createEnhancedAttemptTracker({
     maxAttempts: 3,
-    // Phase 3 will add: onFailedApproach: (approach) => recordFailedApproach(projectDir, approach)
+    // Persist failed approaches to active.json for ghost loop prevention
+    onFailedApproach: (approach: string) => recordFailedApproach(projectDir, approach)
   });
   
   // Create active batches map for parallel execution tracking (audit trail)

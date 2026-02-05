@@ -3,11 +3,21 @@
 ## [Unreleased]
 
 ### Added
-- **JIT Context Engine (Phase 3.0)**: Just-in-time context preparation for subagents
-  - Results Pattern: Step completion tracked via `.setu/results/step-N.md` files
+- **Progress tracking and step completion system**
+  - `advanceStep`: Automatically advance step counter after verification
+  - `recordFailedApproach`: Track failed attempts to prevent repeated mistakes
+  - `recordWorkedApproach`: Record successful approaches for reference
+  - Results Pattern: Step completion tracked via `.setu/results/step-N.md` files with atomic writes and YAML sanitization
+  - Integration with `setu_verify`: Auto-advance step and persist results
+  - Integration with `setu_plan`: Clear old results on new plan creation
+  - Attempt tracker persistence to prevent "ghost loops"
+  - Comprehensive test suite (67 tests, 115 assertions)
+  - Increased limits: 100KB result size, 2000 char YAML fields
+- **Just-in-time context preparation for subagents** (see `prepareJITContext`)
   - Cleanse Protocol: JIT context preparation with token budgeting (< 2000 tokens)
   - Defense-in-depth: YAML sanitization, prompt truncation, constraint validation
   - Subagent support: JIT context injected for `explore` and `general` subagents
+  - `getJITContextSummary`: Debug summary of current context state
 - **Gearbox State Machine**: Artifact-driven state transitions (Scout/Architect/Builder)
   - Scout gear: read-only until RESEARCH.md created
   - Architect gear: can write to `.setu/` only until PLAN.md created
@@ -28,8 +38,12 @@
 - Pre-commit checklist with branch detection
 
 ### Fixed
-- **JIT context injection**: Added error handling with `debugLog()` (no empty catch blocks)
-- **Subagent detection**: Extended to include `explore` and `general` subagents for JIT context
+- **Path validation**: Checks traversal patterns before normalization (defense-in-depth)
+- **Atomic writes**: Enhanced error handling with temp file cleanup on failure, using 32-char entropy for collision resistance
+- **Error handling**: Standardized error message extraction with `getErrorMessage` helper
+- **Size limits**: Increased from 50KB to 100KB for realistic usage
+- **Context injection**: Added error handling with `debugLog()` (no empty catch blocks)
+- **Subagent detection**: Extended to include `explore` and `general` subagents for context
 - **Context size limit**: Reduced from 512KB to 50KB per policy (prevents token bloat)
 - **Step validation**: Added `Number.isInteger()` check for progress steps
 - **setu-doctor indentation**: Fixed try-catch alignment in lockfile check
@@ -39,7 +53,6 @@
 - **Key collision logging**: Added debug warning when sanitization causes key collision
 - Serialization fallback tracking prevents re-stringifying broken objects
 - Pretty-print now parses from safe JSON string, not raw context object
-- Atomic writes prevent corruption under concurrent saves
 - Input sanitization rejects all control characters (0x00-0x1F, 0x7F)
 - Compaction hook validates constraints array before use
 - Environment doctor handles non-zero exit codes from git/node commands
@@ -56,11 +69,12 @@
 - Removed parallel execution guidance from persona (enforcement via hooks instead)
 
 ### Security
+- YAML injection prevention with control char removal
+- Status runtime validation with type guards
 - Context size enforcement at 50KB (down from 512KB)
 - Fail-closed unknown tool handling with whitelist
 - Log rotation at 1MB with 3-file retention
 - Path traversal prevention in gear checks and config loading
-- Defense-in-depth: sanitization + validation + atomic writes
 - Double-encoding attack prevention in path validation
 
 ---

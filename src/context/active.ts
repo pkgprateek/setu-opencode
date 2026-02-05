@@ -18,6 +18,7 @@ import { ensureSetuDir } from './storage';
 import { type ActiveTask, type ConstraintType, type TaskStatus, type SetuMode, CONSTRAINT_TYPES } from './types';
 import { MAX_LEARNINGS } from './limits';
 import { debugLog, errorLog } from '../debug';
+import { sanitizeForPrompt } from '../security/prompt-sanitization';
 
 /**
  * Patterns that may indicate constraint bypass attempts.
@@ -193,7 +194,13 @@ export function loadActiveTask(projectDir: string): ActiveTask | null {
     return task;
     
   } catch (error) {
-    errorLog('Failed to parse active.json:', error);
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    errorLog('Failed to parse active.json:', errorMsg);
+    // Distinguish between "file not found" (expected) and "corrupted" (unexpected)
+    // Both return null, but we log the difference for debugging
+    if (error instanceof SyntaxError) {
+      errorLog('active.json is corrupted - JSON syntax error');
+    }
     return null;
   }
 }
@@ -364,6 +371,86 @@ export function resetProgress(projectDir: string): void {
 }
 
 /**
+ * Advance to next step after successful verification.
+ * Called by: setu_verify tool after verification passes
+ * 
+ * @param projectDir - Project root directory
+ * @returns New step number
+ */
+export function advanceStep(projectDir: string): number {
+  const task = loadActiveTask(projectDir);
+  if (!task) return 0;
+  
+  const newStep = (task.progress?.lastCompletedStep ?? 0) + 1;
+  
+  task.progress = {
+    lastCompletedStep: newStep,
+    lastCompletedAt: new Date().toISOString()
+  };
+  
+  saveActiveTask(projectDir, task);
+  debugLog(`Advanced to Step ${newStep}`);
+  
+  return newStep;
+}
+
+/**
+ * Record a failed approach to prevent ghost loops.
+ * Called by: attempt tracker after 2nd failed attempt
+ * 
+ * @param projectDir - Project root directory
+ * @param approach - Description of what was tried
+ */
+export function recordFailedApproach(projectDir: string, approach: string): void {
+  const task = loadActiveTask(projectDir);
+  if (!task) return;
+
+  // SECURITY: Sanitize approach description before storage
+  // Prevents prompt injection if learnings are later injected into prompts
+  const sanitizedApproach = sanitizeForPrompt(approach, 500);
+
+  task.learnings = task.learnings || { worked: [], failed: [] };
+
+  // Check before adding to avoid unnecessary array operations and memory spikes
+  if (task.learnings.failed.length >= MAX_LEARNINGS) {
+    // Remove oldest entry (FIFO)
+    task.learnings.failed.shift();
+  }
+  task.learnings.failed.push(sanitizedApproach);
+
+  saveActiveTask(projectDir, task);
+  debugLog(`Recorded failed approach: ${sanitizedApproach.slice(0, 50)}...`);
+}
+
+/**
+ * Record a successful approach for future reference.
+ * Called by: optionally after a step succeeds with a notable technique
+ * 
+ * @param projectDir - Project root directory
+ * @param approach - Description of what worked
+ */
+export function recordWorkedApproach(projectDir: string, approach: string): void {
+  const task = loadActiveTask(projectDir);
+  if (!task) return;
+
+  // SECURITY: Sanitize approach description before storage
+  // Prevents prompt injection if learnings are later injected into prompts
+  const sanitizedApproach = sanitizeForPrompt(approach, 500);
+
+  task.learnings = task.learnings || { worked: [], failed: [] };
+
+  // Check before adding to avoid unnecessary array operations and memory spikes
+  if (task.learnings.worked.length >= MAX_LEARNINGS) {
+    // Remove oldest entry (FIFO)
+    task.learnings.worked.shift();
+  }
+  task.learnings.worked.push(sanitizedApproach);
+
+  saveActiveTask(projectDir, task);
+  debugLog(`Recorded worked approach: ${sanitizedApproach.slice(0, 50)}...`);
+}
+
+/**
  * Normalize and tokenize a shell command for constraint checking.
  * 
  * IMPORTANT: This is a best-effort, defense-in-depth heuristic. It only inspects
@@ -390,7 +477,15 @@ export function resetProgress(projectDir: string): void {
  * @param command - Raw shell command string
  * @returns Array of normalized tokens
  */
+const MAX_COMMAND_LENGTH = 10000;
+
 function tokenizeCommand(command: string): string[] {
+  // SECURITY: Prevent ReDoS attacks with very long commands
+  if (command.length > MAX_COMMAND_LENGTH) {
+    debugLog('Command too long for tokenization, truncating');
+    command = command.slice(0, MAX_COMMAND_LENGTH);
+  }
+
   // Step 1: Remove backslash escapes (git\ push → git push)
   let normalized = command.replace(/\\(.)/g, '$1');
   
