@@ -191,6 +191,59 @@ export function trySync<T>(
 }
 
 /**
+ * Get error message from unknown error type
+ * Standardizes error message extraction across the codebase
+ */
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  return String(error);
+}
+
+/**
+ * Get error stack trace if available
+ */
+export function getErrorStack(error: unknown): string | undefined {
+  if (error instanceof Error) {
+    return error.stack;
+  }
+  return undefined;
+}
+
+/**
+ * Check if error is a validation error
+ */
+export function isValidationError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  
+  // Check error name (common validation error types)
+  if (error.name === 'ValidationError' || 
+      error.name === 'ZodError' ||
+      error.name === 'ValidatorError') {
+    return true;
+  }
+  
+  // Case-insensitive, specific message checks
+  const msg = error.message.toLowerCase();
+  return msg.includes('validation failed') ||
+    msg.includes('invalid input') ||
+    msg.includes('validation error') ||
+    msg.includes('failed validation');
+}
+
+/**
+ * Check if error is a filesystem error
+ */
+export function isFileSystemError(error: unknown): boolean {
+  const code = (error as { code?: string })?.code;
+  return ['ENOENT', 'EACCES', 'EPERM', 'EISDIR'].includes(code || '');
+}
+
+/**
  * Input sanitization: Remove null bytes and control characters
  * 
  * @see PLAN.md Section 2.9.2
