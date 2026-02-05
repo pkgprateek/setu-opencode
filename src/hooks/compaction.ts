@@ -16,6 +16,7 @@ import { loadActiveTask } from '../context/active';
 import { loadContext } from '../context/storage';
 import type { FileRead, ObservedPattern } from '../context/types';
 import { debugLog } from '../debug';
+import { getErrorMessage } from '../utils/error-handling';
 
 /**
  * Compaction hook input (from OpenCode Plugin API)
@@ -160,7 +161,7 @@ ${patternsSummary}`);
       const agentInfo = currentAgent ?? 'unknown';
       debugLog(
         `Compaction hook error (agent: ${agentInfo}):`,
-        error instanceof Error ? error.message : String(error)
+        getErrorMessage(error)
       );
       // Return without rethrowing - graceful degradation
       return;
