@@ -17,7 +17,7 @@ reviews:
     drafts: false
     base_branches:
       - main
-      - release/**
+      - release/.*
       - dev
 
   path_filters:
