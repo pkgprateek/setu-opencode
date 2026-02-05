@@ -21,9 +21,12 @@ import { errorLog } from '../debug';
  * Prevents directory traversal attacks
  */
 function validateProjectDir(dir: string): string {
-  // Prevent null bytes and control characters
-  if (/[\x00-\x1f]/.test(dir)) {
-    throw new Error('Invalid characters in project directory path');
+  // Prevent null bytes and control characters using charCodeAt (avoid regex with control chars)
+  for (let i = 0; i < dir.length; i++) {
+    const code = dir.charCodeAt(i);
+    if (code >= 0x00 && code <= 0x1f) {
+      throw new Error('Invalid characters in project directory path');
+    }
   }
 
   // SECURITY: Check for path traversal attempts BEFORE normalization
@@ -47,8 +50,24 @@ function validateProjectDir(dir: string): string {
  * Removes null bytes and control characters (except newlines/tabs)
  */
 function sanitizeObjective(input: string): string {
-  // Remove null bytes and control characters (except newlines/tabs)
-  return input.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '');
+  // Remove null bytes and control characters (except newlines/tabs) using charCodeAt
+  let result = '';
+  for (let i = 0; i < input.length; i++) {
+    const code = input.charCodeAt(i);
+    // Allow: 0x09 (tab), 0x0a (newline), 0x0d (carriage return)
+    // Remove: 0x00-0x08, 0x0b, 0x0c, 0x0e-0x1f, 0x7f
+    if (
+      (code >= 0x00 && code <= 0x08) ||
+      code === 0x0b ||
+      code === 0x0c ||
+      (code >= 0x0e && code <= 0x1f) ||
+      code === 0x7f
+    ) {
+      continue;
+    }
+    result += input[i];
+  }
+  return result;
 }
 
 export interface CleanseOptions {
