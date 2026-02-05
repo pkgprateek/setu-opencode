@@ -86,8 +86,10 @@ export {
   listCompletedSteps,
   clearResults,
   getLastCompletedStep,
-  sanitizeYamlString,
 } from './results';
+
+// Re-export from unified sanitization module
+export { sanitizeYamlString } from '../utils/sanitization';
 
 // Cleanse Protocol (Phase 3.0)
 export type { CleanseOptions, JITContext } from './cleanse';
