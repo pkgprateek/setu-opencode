@@ -284,7 +284,8 @@ ${stepsList}
         markVerificationComplete();
         
         // Write result file and advance step (Results Pattern)
-        const projectDirForResults = getProjectDir ? getProjectDir() : process.cwd();
+        // Reuse projectDirForLog to avoid duplicate logic
+        const projectDirForResults = projectDirForLog;
         let completedStep = 1;
         
         try {

@@ -19,6 +19,7 @@ import { debugLog } from '../debug';
  */
 function validateProjectDir(projectDir: string): void {
   // Prevent null bytes and control characters
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional control char detection for security
   if (/[\x00-\x1f]/.test(projectDir)) {
     throw new Error('Invalid characters in project directory path');
   }
@@ -115,6 +116,7 @@ function formatResultMarkdown(result: StepResult): string {
   const safeObjective = sanitizeYamlString(result.objective);
   const safeSummary = sanitizeYamlString(result.summary);
   const safeVerification = result.verification
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional control char removal for security
     ? result.verification.replace(/[\x00-\x1F\x7F]/g, '').slice(0, 10000)
     : undefined;
 
@@ -261,6 +263,7 @@ export function writeStepResult(projectDir: string, result: StepResult): void {
  * Returns null if step not completed
  */
 export function readStepResult(projectDir: string, step: number): StepResult | null {
+  validateProjectDir(projectDir);
   if (!Number.isInteger(step) || step <= 0) {
     debugLog(`Invalid step parameter: ${step} (must be positive integer)`);
     return null;
@@ -279,6 +282,7 @@ export function readStepResult(projectDir: string, step: number): StepResult | n
  * List all completed steps (sorted)
  */
 export function listCompletedSteps(projectDir: string): number[] {
+  validateProjectDir(projectDir);
   const dir = join(projectDir, '.setu', 'results');
   if (!existsSync(dir)) return [];
 
@@ -298,6 +302,7 @@ export function listCompletedSteps(projectDir: string): number[] {
  * Clear all result files (for new plan)
  */
 export function clearResults(projectDir: string): void {
+  validateProjectDir(projectDir);
   const dir = join(projectDir, '.setu', 'results');
   if (!existsSync(dir)) return;
 

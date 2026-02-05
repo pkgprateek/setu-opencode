@@ -14,6 +14,7 @@
 import { resolve, normalize } from 'path';
 import { loadActiveTask } from './active';
 import { readStepResult } from './results';
+import { errorLog } from '../debug';
 
 /**
  * Validate and sanitize project directory path
@@ -85,7 +86,7 @@ export function prepareJITContext(
     active = loadActiveTask(safeDir);
   } catch (err) {
     // Fail-safe: return minimal context if state corrupted
-    console.error('[SETU] Failed to load active task:', err);
+    errorLog('Failed to load active task for JIT context:', err);
     return `[SETU: JIT Context - Recovery Mode]
 
 ## Your Objective
