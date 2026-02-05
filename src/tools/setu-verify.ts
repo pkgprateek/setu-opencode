@@ -9,6 +9,16 @@ import { tool } from '@opencode-ai/plugin';
 import { getStyleVerificationLevel, type SetuStyle } from '../prompts/styles';
 import { detectProjectInfo } from '../context/storage';
 import { logVerification } from '../context/storage';
+import { writeStepResult, sanitizeYamlString } from '../context/results';
+import { advanceStep, loadActiveTask } from '../context/active';
+
+/**
+ * Helper to extract error message consistently
+ * Prevents repetitive error instanceof Error checks
+ */
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 /**
  * Build commands per tool/runtime
@@ -272,6 +282,52 @@ ${stepsList}
       
       if (automatedChecksPassed) {
         markVerificationComplete();
+        
+        // Write result file and advance step (Results Pattern)
+        const projectDirForResults = getProjectDir ? getProjectDir() : process.cwd();
+        let completedStep = 1;
+        
+        try {
+          completedStep = advanceStep(projectDirForResults) ?? 1;
+        } catch (err) {
+          // Log but don't fail verification on step tracking error
+          logVerification(projectDirForResults, 'step-advance', false, getErrorMessage(err));
+        }
+        
+        // Build verification summary for result file
+        const verificationDetails = results
+          .map(r => `${r.name}: ${r.success ? 'PASS' : 'FAIL'}`)
+          .join(', ');
+        
+        // SECURITY: Sanitize all user-influenced fields for YAML safety
+        try {
+          const active = loadActiveTask(projectDirForResults);
+          writeStepResult(projectDirForResults, {
+            step: completedStep,
+            status: 'completed',
+            objective: sanitizeYamlString(active?.task || 'Verification'),
+            outputs: [],  // Future: detect from git diff
+            summary: sanitizeYamlString(`Step ${completedStep} verified successfully. ${verificationDetails}`),
+            verification: sanitizeYamlString(`Build/test/lint passed: ${verificationDetails}`),
+            timestamp: new Date().toISOString()
+          });
+        } catch (writeErr) {
+          logVerification(projectDirForResults, 'result-write', false, getErrorMessage(writeErr));
+          // Continue - verification passed even if result persistence failed
+        }
+        
+        const summary = results
+          .map(r => `- ${r.name}: ${r.success ? 'PASS' : 'FAIL'}`)
+          .join('\n');
+
+        return `## Verification Results [Style: ${style}]
+
+**Detected:** ${projectInfo.type || 'unknown'} project using \`${buildTool}\`
+
+${summary}
+
+✅ Step ${completedStep} verified and recorded to .setu/results/step-${completedStep}.md
+Next: Step ${completedStep + 1}`;
       }
 
       if (results.length === 0) {
