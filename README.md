@@ -256,10 +256,6 @@ Setu's persona is lean. Skills load on-demand, not upfront.
 | `setu-bootstrap` | Project setup that follows the discipline protocol |
 | `setu-verification` | Style-specific verification steps |
 | `setu-rules-creation` | Create effective AGENTS.md files |
-| `code-quality` | Naming, error handling, testing patterns |
-| `refine-code` | Transform code to match project standards |
-| `commit-helper` | Conventional commits that explain "why" |
-| `pr-review` | Security, performance, quality review |
 
 Skills load when relevant, not at startup.
 
