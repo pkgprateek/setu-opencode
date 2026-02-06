@@ -240,7 +240,7 @@ export function isValidationError(error: unknown): boolean {
  */
 export function isFileSystemError(error: unknown): boolean {
   const code = (error as { code?: string })?.code;
-  return ['ENOENT', 'EACCES', 'EPERM', 'EISDIR'].includes(code || '');
+  return ['ENOENT', 'EACCES', 'EPERM', 'EISDIR', 'EEXIST', 'ENOTDIR', 'EROFS', 'ENOSPC'].includes(code || '');
 }
 
 /**
