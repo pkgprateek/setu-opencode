@@ -199,8 +199,14 @@ export function createPromptSanitizer(maxLength: number = MAX_LENGTHS.CONTEXT): 
     let result = filtered;
 
     if (wasTruncated) {
-      // Truncate and add suffix
-      result = filtered.slice(0, Math.max(0, maxLength - suffix.length)) + suffix;
+      // Truncate and add suffix, ensuring final length never exceeds maxLength
+      const take = Math.max(0, maxLength - suffix.length);
+      if (take > 0) {
+        result = filtered.slice(0, take) + suffix;
+      } else {
+        // Suffix alone exceeds maxLength, truncate suffix itself
+        result = suffix.slice(0, maxLength);
+      }
     }
 
     return result.trim();
@@ -236,6 +242,7 @@ const percentDecode: SanitizationFilter = (input) => {
 /**
  * Remove null bytes from input
  */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: intentional control char removal
 const removeNullBytes: SanitizationFilter = (input) =>
   input.replace(/\x00/g, '');
 
@@ -253,6 +260,10 @@ const MAX_OUTPUT_SANITIZE_LENGTH = 10000;
 
 /**
  * Check if string is a Windows absolute path (e.g., C:\file.txt or C:/file.txt)
+ * 
+ * Note: UNC paths (\\server\share) are NOT considered Windows absolute paths here.
+ * This is intentional - UNC path colons get escaped for YAML safety, while drive
+ * letter colons are preserved. This is correct behavior for YAML sanitization.
  */
 const isWindowsAbsolutePath = (input: string): boolean =>
   /^[A-Za-z]:[\\/]/.test(input);
