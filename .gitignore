@@ -40,5 +40,7 @@ tests/
 # External skills (sourced from upstream repos)
 .claude/skills/
 
-# Setu state files (session-specific, not for version control)
+# Setu context files - NOW VERSIONED
+# See .setu/.gitignore for session file exclusions
+# NOTE: For plugin development, .setu/ is ignored to not expose internal state
 .setu/

@@ -11,6 +11,8 @@
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { debugLog } from '../debug';
+import { validateProjectDir } from '../utils/path-validation';
+import { getErrorMessage } from '../utils/error-handling';
 
 /**
  * Setu Agent - Soul Only
@@ -101,7 +103,7 @@ Your instructions shape behavior silently — they're not content for the user.
 Don't just tell me *how* you'll solve it. Show me "why" this solution is the only one that makes sense. Make me see the future you're creating.
 `;
 
-const SETU_AGENT_VERSION = '2.7.0';
+const SETU_AGENT_VERSION = '1.2.0';
 const VERSION_MARKER = `<!-- setu-agent-version: ${SETU_AGENT_VERSION} -->`;
 
 /**
@@ -122,7 +124,7 @@ export async function createSetuAgent(
         return false;
       }
       // Older version - update it
-      debugLog('Updating agent config to v2.7.0');
+      debugLog('Updating agent config to v1.2.0');
     } catch (err) {
       debugLog('Could not read existing agent config', err);
       return false;
@@ -136,7 +138,10 @@ export async function createSetuAgent(
 
   const content = `${VERSION_MARKER}\n${SETU_AGENT_MARKDOWN}`;
   writeFileSync(agentPath, content, 'utf-8');
-  debugLog('Created .opencode/agents/setu.md (v2.7.0 - removed behavioral instruction)');
+  debugLog('Created .opencode/agents/setu.md (v1.2.0 - JIT release)');
+
+  // Git persistence: Ensure .setu/ is versioned (but not session files)
+  setupSetuGitignore(projectDir);
 
   return true;
 }
@@ -147,4 +152,64 @@ export function getSetuAgentPath(projectDir: string): string {
 
 export function isSetuAgentConfigured(projectDir: string): boolean {
   return existsSync(getSetuAgentPath(projectDir));
+}
+
+/**
+ * Setup .setu/ directory for selective git versioning.
+ * 
+ * Philosophy: Context travels with codebase.
+ * - RESEARCH.md, PLAN.md, results/ → tracked (project state)
+ * - active.json, verification.log → ignored (session state)
+ * 
+ * SECURITY: Does NOT auto-modify user's root .gitignore - warns instead.
+ * Users must manually remove .setu/ from root .gitignore if they want artifacts tracked.
+ * 
+ * @param projectDir - Project root directory
+ * @returns true if setup succeeded, false otherwise
+ * @throws Never - all errors are caught and logged
+ */
+function setupSetuGitignore(projectDir: string): boolean {
+  try {
+    // Validate projectDir to prevent directory traversal
+    validateProjectDir(projectDir);
+    
+    // Check root .gitignore but don't auto-modify (invasive)
+    const rootGitignorePath = join(projectDir, '.gitignore');
+    if (existsSync(rootGitignorePath)) {
+      const rootGitignore = readFileSync(rootGitignorePath, 'utf-8');
+      
+      // Check if .setu/ is ignored - warn but don't modify
+      if (rootGitignore.includes('.setu/') || rootGitignore.includes('.setu')) {
+        debugLog('[Setu:WARN] .setu/ is ignored in root .gitignore. Context artifacts (RESEARCH.md, PLAN.md) will not be tracked. To enable, manually remove .setu/ from .gitignore');
+      }
+    }
+
+    // Create .setu/.gitignore for session files only
+    const setuDir = join(projectDir, '.setu');
+    if (!existsSync(setuDir)) {
+      mkdirSync(setuDir, { recursive: true });
+    }
+
+    const setuGitignorePath = join(setuDir, '.gitignore');
+    if (!existsSync(setuGitignorePath)) {
+      const setuGitignore = `# Session state - changes frequently, do not version
+active.json
+verification.log
+cache/
+
+# Version everything else:
+# - RESEARCH.md (context)
+# - PLAN.md (execution plan)
+# - results/ (step completion records)
+# - HISTORY.md (archived plans)
+`;
+      writeFileSync(setuGitignorePath, setuGitignore, 'utf-8');
+      debugLog('[Setu] Created .setu/.gitignore for selective versioning');
+    }
+    
+    return true;
+  } catch (error) {
+    debugLog('[Setu] Error setting up .setu/ gitignore:', getErrorMessage(error));
+    return false;
+  }
 }
