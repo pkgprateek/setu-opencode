@@ -16,7 +16,7 @@ export const createSetuResetTool = (getProjectDir: () => string): ReturnType<typ
     try {
       active = loadActiveTask(projectDir);
     } catch (loadError) {
-      errorLog(`[Setu] Failed to load active.json: ${getErrorMessage(loadError)}`);
+      errorLog(`Failed to load active.json: ${getErrorMessage(loadError)}`);
       active = null; // Fall back to null, continue with reset
     }
     
