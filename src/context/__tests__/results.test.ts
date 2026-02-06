@@ -101,7 +101,7 @@ describe('Results Pattern', () => {
       // Control characters should be removed, newlines replaced with spaces
       // Colons followed by spaces are also sanitized to prevent YAML injection
       expect(content).not.toContain('\x00');
-      expect(content).toContain('Test-with controlcharNew-line');
+      expect(content).toContain('Test-with controlchar New-line');
     });
 
     test('sanitizes verification field', () => {
