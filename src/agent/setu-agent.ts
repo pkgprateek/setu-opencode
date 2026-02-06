@@ -178,8 +178,11 @@ function setupSetuGitignore(projectDir: string): boolean {
     if (existsSync(rootGitignorePath)) {
       const rootGitignore = readFileSync(rootGitignorePath, 'utf-8');
       
-      // Check if .setu/ is ignored - warn but don't modify
-      if (rootGitignore.includes('.setu/') || rootGitignore.includes('.setu')) {
+      // Check exact lines to avoid false positives (e.g., .setu-temp or my.setup.js)
+      const lines = rootGitignore.split(/\r?\n/).map(l => l.trim());
+      const isIgnored = lines.some(line => line === '.setu' || line === '.setu/');
+      
+      if (isIgnored) {
         debugLog('[Setu:WARN] .setu/ is ignored in root .gitignore. Context artifacts (RESEARCH.md, PLAN.md) will not be tracked. To enable, manually remove .setu/ from .gitignore');
       }
     }

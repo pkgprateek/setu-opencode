@@ -1,4 +1,5 @@
 import { tool } from '@opencode-ai/plugin';
+import { validateProjectDir } from '../utils/path-validation';
 import { resetProgress, loadActiveTask, saveActiveTask } from '../context/active';
 import { getErrorMessage } from '../utils/error-handling';
 import { errorLog } from '../debug';
@@ -10,6 +11,7 @@ export const createSetuResetTool = (getProjectDir: () => string): ReturnType<typ
   },
   async execute(args, _context) {
     const projectDir = getProjectDir();
+    validateProjectDir(projectDir);
 
     // Wrap loadActiveTask in try/catch - file may be corrupted
     let active: ReturnType<typeof loadActiveTask>;

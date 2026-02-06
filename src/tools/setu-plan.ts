@@ -1,4 +1,5 @@
 import { tool } from '@opencode-ai/plugin';
+import { validateProjectDir } from '../utils/path-validation';
 import { join } from 'path';
 import { writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
@@ -25,6 +26,9 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
   },
   async execute(args, _context) {
     const projectDir = getProjectDir();
+
+    // Validate projectDir to prevent directory traversal
+    validateProjectDir(projectDir);
 
     // Validate required fields
     if (!args.objective?.trim()) {
