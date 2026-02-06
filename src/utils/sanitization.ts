@@ -83,7 +83,7 @@ export const removeSystemPatterns: SanitizationFilter = (input) => {
     /\[SYSTEM\]/gi,
     /\[ASSISTANT\]/gi,
     /\[USER\]/gi,
-    /\[SETU\]/gi,
+    /\[SETU(?::[^\]]*)?\]/gi, // Matches [SETU] and [SETU: ...] with optional content
     /\[ADMIN\]/gi,
     /\[OVERRIDE\]/gi,
     /<\s*system\s*>/gi,
@@ -159,12 +159,12 @@ export function createYamlSanitizer(maxLength: number = MAX_LENGTHS.YAML_FIELD):
 
     const pipeline = [
       removeControlChars,
+      truncate(maxLength), // Truncate before escaping to avoid lone trailing backslashes
       escapeBackslashes,
       escapeQuotes,
       removeNewlines,
       sanitizeColons,
       escapeHashes,
-      truncate(maxLength),
     ];
 
     return pipeline.reduce((acc, filter) => filter(acc), input).trim();
@@ -228,13 +228,10 @@ const percentDecode: SanitizationFilter = (input) => {
   let previous;
   do {
     previous = result;
-    result = result.replace(/%([0-9A-Fa-f]{2})/g, (_, hex) => {
-      try {
-        return String.fromCharCode(parseInt(hex, 16));
-      } catch {
-        return _;
-      }
-    });
+    // parseInt never throws, String.fromCharCode never throws - no try/catch needed
+    result = result.replace(/%([0-9A-Fa-f]{2})/g, (_, hex) =>
+      String.fromCharCode(parseInt(hex, 16))
+    );
   } while (result !== previous);
   return result;
 };
@@ -292,10 +289,11 @@ export function createOutputSanitizer(): SanitizationFilter {
       return '';
     }
 
-    // Enforce max length to prevent DoS
+    // Enforce max length to prevent DoS (strict 10000 char limit)
     let truncated = input;
     if (input.length > MAX_OUTPUT_SANITIZE_LENGTH) {
-      truncated = input.slice(0, MAX_OUTPUT_SANITIZE_LENGTH) + '...[truncated]';
+      const suffix = '...[truncated]';
+      truncated = input.slice(0, MAX_OUTPUT_SANITIZE_LENGTH - suffix.length) + suffix;
     }
 
     const pipeline = [
