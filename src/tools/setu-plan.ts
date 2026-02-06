@@ -28,7 +28,11 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
     const projectDir = getProjectDir();
 
     // Validate projectDir to prevent directory traversal
-    validateProjectDir(projectDir);
+    try {
+      validateProjectDir(projectDir);
+    } catch (error) {
+      throw new Error(`Invalid project directory: ${getErrorMessage(error)}`);
+    }
 
     // Validate required fields
     if (!args.objective?.trim()) {

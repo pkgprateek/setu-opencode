@@ -1,6 +1,6 @@
 import { tool } from '@opencode-ai/plugin';
 import { validateProjectDir } from '../utils/path-validation';
-import { resetProgress, loadActiveTask, saveActiveTask } from '../context/active';
+import { loadActiveTask, saveActiveTask } from '../context/active';
 import { getErrorMessage } from '../utils/error-handling';
 import { errorLog } from '../debug';
 
@@ -11,7 +11,11 @@ export const createSetuResetTool = (getProjectDir: () => string): ReturnType<typ
   },
   async execute(args, _context) {
     const projectDir = getProjectDir();
-    validateProjectDir(projectDir);
+    try {
+      validateProjectDir(projectDir);
+    } catch (error) {
+      throw new Error(`Invalid project directory: ${getErrorMessage(error)}`);
+    }
 
     // Wrap loadActiveTask in try/catch - file may be corrupted
     let active: ReturnType<typeof loadActiveTask>;
@@ -39,12 +43,8 @@ export const createSetuResetTool = (getProjectDir: () => string): ReturnType<typ
         return `Failed to reset progress: ${getErrorMessage(error)}. Check .setu/ directory permissions.`;
       }
     } else {
-      try {
-        resetProgress(projectDir);
-      } catch (error) {
-        errorLog(`Failed to reset progress: ${getErrorMessage(error)}`, error);
-        return `Failed to reset progress: ${getErrorMessage(error)}. Check .setu/ directory permissions.`;
-      }
+      // If no active task, there's nothing to reset
+      return `No active task found to reset.`;
     }
     
     return args.clearLearnings

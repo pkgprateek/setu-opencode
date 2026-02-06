@@ -170,7 +170,7 @@ export function isSetuAgentConfigured(projectDir: string): boolean {
  */
 function setupSetuGitignore(projectDir: string): boolean {
   try {
-    // Validate projectDir to prevent directory traversal
+    // Defense-in-depth: Validate projectDir even if caller did (redundant but safe)
     validateProjectDir(projectDir);
     
     // Check root .gitignore but don't auto-modify (invasive)
