@@ -4,6 +4,7 @@ import { writeFile } from 'fs/promises';
 import { ensureSetuDir } from '../context/storage';
 import { getErrorMessage } from '../utils/error-handling';
 import { createPromptSanitizer } from '../utils/sanitization';
+import { validateProjectDir } from '../utils/path-validation';
 
 // Create sanitizers for different field lengths
 const sanitizeSummary = createPromptSanitizer(5000);
@@ -21,6 +22,13 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
   },
   async execute(args, _context) {
     const projectDir = getProjectDir();
+
+    // Validate projectDir to prevent directory traversal
+    try {
+      validateProjectDir(projectDir);
+    } catch (error) {
+      return `Error: Invalid project directory. ${getErrorMessage(error)}`;
+    }
 
     // Validate required fields
     if (!args.summary || typeof args.summary !== 'string' || args.summary.trim().length === 0) {

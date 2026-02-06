@@ -33,12 +33,14 @@ export const createSetuResetTool = (getProjectDir: () => string): ReturnType<typ
       try {
         saveActiveTask(projectDir, active);
       } catch (error) {
+        errorLog(`Failed to save active.json during reset: ${getErrorMessage(error)}`, error);
         return `Failed to reset progress: ${getErrorMessage(error)}. Check .setu/ directory permissions.`;
       }
     } else {
       try {
         resetProgress(projectDir);
       } catch (error) {
+        errorLog(`Failed to reset progress: ${getErrorMessage(error)}`, error);
         return `Failed to reset progress: ${getErrorMessage(error)}. Check .setu/ directory permissions.`;
       }
     }

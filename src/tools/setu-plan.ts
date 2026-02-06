@@ -79,17 +79,12 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
       debugLog(`Failed to clear old results: ${getErrorMessage(error)}`);
     }
     
-    return `Plan created with ${countSteps(content)} steps. Gear shifted: architect → builder. Progress reset to Step 0. Old results cleared. Ready for execution.`;
+    // SECURITY: Log gear transition (architect → builder unlocks write operations)
+    debugLog(`[AUDIT] Gear transition: architect → builder. Plan created with ${stepCount} steps. Project: ${projectDir}`);
+    
+    return `Plan created with ${stepCount} steps. Gear shifted: architect → builder. Progress reset to Step 0. Old results cleared. Ready for execution.`;
   }
 });
-
-/**
- * Count steps in plan content (simple regex, doesn't need to be perfect)
- */
-function countSteps(content: string): number {
-  const stepMatches = content.match(/## Step \d+|### Step \d+|\*\*Step \d+\*\*/gi);
-  return stepMatches?.length ?? 0;
-}
 
 /**
  * Format plan content from args
