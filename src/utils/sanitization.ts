@@ -77,46 +77,45 @@ export const truncate = (maxLength: number): SanitizationFilter => {
   return (input) => input.slice(0, validatedLength);
 };
 
+// Hoisted pattern arrays to avoid per-call allocation
+const SYSTEM_PATTERNS: RegExp[] = [
+  /\[SYSTEM\]/gi,
+  /\[ASSISTANT\]/gi,
+  /\[USER\]/gi,
+  /\[SETU(?::[^\]]*)?\]/gi, // Matches [SETU] and [SETU: ...] with optional content
+  /\[ADMIN\]/gi,
+  /\[OVERRIDE\]/gi,
+  /<\s*system\s*>/gi,
+  /<\s*\/\s*system\s*>/gi,
+  /^---$/gm,
+  /^```\s*yaml\s*$/gmi,
+];
+
+const INSTRUCTION_BOUNDARY_PATTERNS: RegExp[] = [
+  /ignore\s+(all\s+)?previous\s+instructions?/gi,
+  /forget\s+(all\s+)?previous\s+instructions?/gi,
+  /disregard\s+(all\s+)?previous/gi,
+  /new\s+instructions?:/gi,
+  /you\s+are\s+now\s+in\s+(\w+\s+)?mode/gi,
+  /bypass\s+(all\s+)?safety/gi,
+  /override\s+(all\s+)?restrictions?/gi,
+  /admin(istrator)?\s+mode/gi,
+  /god\s+mode/gi,
+  /jailbreak/gi,
+  /DAN\s+(mode)?/gi,
+];
+
 /**
  * Remove system instruction patterns (prompt injection prevention)
  */
-export const removeSystemPatterns: SanitizationFilter = (input) => {
-  const patterns = [
-    /\[SYSTEM\]/gi,
-    /\[ASSISTANT\]/gi,
-    /\[USER\]/gi,
-    /\[SETU(?::[^\]]*)?\]/gi, // Matches [SETU] and [SETU: ...] with optional content
-    /\[ADMIN\]/gi,
-    /\[OVERRIDE\]/gi,
-    /<\s*system\s*>/gi,
-    /<\s*\/\s*system\s*>/gi,
-    /^---$/gm,
-    /^```\s*yaml\s*$/gmi,
-  ];
-
-  return patterns.reduce((acc, pattern) => acc.replace(pattern, '[FILTERED]'), input);
-};
+export const removeSystemPatterns: SanitizationFilter = (input) =>
+  SYSTEM_PATTERNS.reduce((acc, pattern) => acc.replace(pattern, '[FILTERED]'), input);
 
 /**
  * Remove instruction boundary patterns (prompt injection prevention)
  */
-export const removeInstructionBoundaries: SanitizationFilter = (input) => {
-  const patterns = [
-    /ignore\s+(all\s+)?previous\s+instructions?/gi,
-    /forget\s+(all\s+)?previous\s+instructions?/gi,
-    /disregard\s+(all\s+)?previous/gi,
-    /new\s+instructions?:/gi,
-    /you\s+are\s+now\s+in\s+(\w+\s+)?mode/gi,
-    /bypass\s+(all\s+)?safety/gi,
-    /override\s+(all\s+)?restrictions?/gi,
-    /admin(istrator)?\s+mode/gi,
-    /god\s+mode/gi,
-    /jailbreak/gi,
-    /DAN\s+(mode)?/gi,
-  ];
-
-  return patterns.reduce((acc, pattern) => acc.replace(pattern, '[FILTERED]'), input);
-};
+export const removeInstructionBoundaries: SanitizationFilter = (input) =>
+  INSTRUCTION_BOUNDARY_PATTERNS.reduce((acc, pattern) => acc.replace(pattern, '[FILTERED]'), input);
 
 /**
  * Escape markdown code blocks
@@ -179,9 +178,8 @@ export function createYamlSanitizer(maxLength: number = MAX_LENGTHS.YAML_FIELD):
  * Use for: User input injected into prompts
  * Output: Safe from prompt injection attacks
  *
- * Note: Newlines are stripped by removeControlChars (not converted to spaces).
- * This is intentional for prompt context - multi-line input is compressed to
- * single line to prevent prompt structure manipulation.
+ * Note: Newlines are converted to spaces by removeNewlines early in the pipeline
+ * to prevent prompt structure manipulation via multi-line injection.
  */
 export function createPromptSanitizer(maxLength: number = MAX_LENGTHS.CONTEXT): SanitizationFilter {
   return (input: string): string => {
@@ -192,9 +190,9 @@ export function createPromptSanitizer(maxLength: number = MAX_LENGTHS.CONTEXT): 
     const suffix = '\n... (truncated for safety)';
 
     // Apply filters first
-    // Note: removeControlChars strips newlines (intentional - see JSDoc above)
     const filtered = [
       removeControlChars,
+      removeNewlines, // Convert newlines to spaces for single-line output
       removeSystemPatterns,
       removeInstructionBoundaries,
       escapeCodeBlocks,
