@@ -45,6 +45,9 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
 
     // Validate step count to prevent DoS (max 100 steps)
     const stepCount = (args.steps.match(/## Step \d+|### Step \d+|\*\*Step \d+\*\*/gi) || []).length;
+    if (stepCount === 0) {
+      throw new Error('No steps detected. Steps must use headings like "## Step 1", "### Step 1", or "**Step 1**".');
+    }
     if (stepCount > 100) {
       throw new Error(`Too many steps (${stepCount}). Maximum is 100.`);
     }
@@ -79,18 +82,20 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
     // CRITICAL: Reset progress to step 0 — new plan means fresh start
     resetProgress(projectDir);
     
+    let resultsCleared = true;
     // Clear old results for fresh start (best-effort, non-critical)
     try {
       clearResults(projectDir);
     } catch (error) {
       // Log but don't fail — stale results won't break execution
       debugLog(`Failed to clear old results: ${getErrorMessage(error)}`);
+      resultsCleared = false;
     }
     
     // SECURITY: Log gear transition (architect → builder unlocks write operations)
     debugLog(`[AUDIT] Gear transition: architect → builder. Plan created with ${stepCount} steps. Project: ${projectDir}`);
     
-    return `Plan created with ${stepCount} steps. Gear shifted: architect → builder. Progress reset to Step 0. Old results cleared. Ready for execution.`;
+    return `Plan created with ${stepCount} steps. Gear shifted: architect → builder. Progress reset to Step 0. ${resultsCleared ? 'Old results cleared.' : 'Warning: failed to clear old results.'} Ready for execution.`;
   }
 });
 
