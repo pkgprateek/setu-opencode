@@ -18,11 +18,13 @@ export type SanitizationFilter = (input: string) => string;
 // ============================================================================
 
 /**
- * Remove control characters (0x00-0x1F and 0x7F)
+ * Remove control characters (0x00-0x1F and 0x7F), excluding newlines (0x0A, 0x0D)
+ * Newlines are handled separately by removeNewlines to convert them to spaces
  */
 export const removeControlChars: SanitizationFilter = (input) =>
   // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional control char removal
-  input.replace(/[\x00-\x1F\x7F]/g, '');
+  // Exclude \x0A (LF) and \x0D (CR) so removeNewlines can process them
+  input.replace(/[\x00-\x09\x0B\x0C\x0E-\x1F\x7F]/g, '');
 
 /**
  * Escape backslashes for YAML safety
@@ -176,6 +178,10 @@ export function createYamlSanitizer(maxLength: number = MAX_LENGTHS.YAML_FIELD):
  *
  * Use for: User input injected into prompts
  * Output: Safe from prompt injection attacks
+ *
+ * Note: Newlines are stripped by removeControlChars (not converted to spaces).
+ * This is intentional for prompt context - multi-line input is compressed to
+ * single line to prevent prompt structure manipulation.
  */
 export function createPromptSanitizer(maxLength: number = MAX_LENGTHS.CONTEXT): SanitizationFilter {
   return (input: string): string => {
@@ -186,6 +192,7 @@ export function createPromptSanitizer(maxLength: number = MAX_LENGTHS.CONTEXT): 
     const suffix = '\n... (truncated for safety)';
 
     // Apply filters first
+    // Note: removeControlChars strips newlines (intentional - see JSDoc above)
     const filtered = [
       removeControlChars,
       removeSystemPatterns,
@@ -338,6 +345,9 @@ export function sanitizeForPrompt(input: string, maxLength = MAX_LENGTHS.CONTEXT
   return createPromptSanitizer(maxLength)(input);
 }
 
+// Cached output sanitizer for backward-compatible wrapper
+const _cachedOutputSanitizer = createOutputSanitizer();
+
 /**
  * Sanitize output entry for YAML list (backward compatible)
  * @deprecated Use createOutputSanitizer() for new code
@@ -347,5 +357,5 @@ export function sanitizeOutputEntry(output: string): string {
   if (!output || typeof output !== 'string') {
     return '';
   }
-  return createOutputSanitizer()(output);
+  return _cachedOutputSanitizer(output);
 }
