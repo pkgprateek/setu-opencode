@@ -270,8 +270,8 @@ export function saveActiveTask(projectDir: string, task: ActiveTask): void {
     debugLog(`Saved active task: "${sanitizedTask.task.slice(0, 50)}..." [${sanitizedTask.status}]`);
     
   } catch (error) {
-    errorLog('Failed to save active.json:', error);
-    
+    errorLog('Failed to save active.json:', getErrorMessage(error));
+
     // Clean up tmp file if it exists
     try {
       if (existsSync(tmpPath)) {
@@ -280,9 +280,9 @@ export function saveActiveTask(projectDir: string, task: ActiveTask): void {
       }
     } catch (cleanupError) {
       // Log cleanup failure but don't throw (save failure is more important)
-      debugLog('Warning: Failed to cleanup tmp file:', cleanupError);
+      debugLog('Warning: Failed to cleanup tmp file:', getErrorMessage(cleanupError));
     }
-    
+
     throw error; // Re-throw so caller knows save failed
   }
 }
@@ -343,7 +343,7 @@ export function clearActiveTask(projectDir: string): void {
       debugLog('Cleared active task');
     }
   } catch (error) {
-    errorLog('Failed to clear active.json:', error);
+    errorLog('Failed to clear active.json:', getErrorMessage(error));
   }
 }
 
