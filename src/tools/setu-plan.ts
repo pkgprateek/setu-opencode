@@ -7,6 +7,7 @@ import { ensureSetuDir } from '../context/storage';
 import { clearResults } from '../context/results';
 import { getErrorMessage } from '../utils/error-handling';
 import { createPromptSanitizer } from '../utils/sanitization';
+import { debugLog } from '../debug';
 
 // Create sanitizers for different field lengths
 const sanitizeObjective = createPromptSanitizer(500);
@@ -75,7 +76,7 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
       clearResults(projectDir);
     } catch (error) {
       // Log but don't fail — stale results won't break execution
-      console.warn(`[setu-plan] Failed to clear old results: ${getErrorMessage(error)}`);
+      debugLog(`Failed to clear old results: ${getErrorMessage(error)}`);
     }
     
     return `Plan created with ${countSteps(content)} steps. Gear shifted: architect → builder. Progress reset to Step 0. Old results cleared. Ready for execution.`;
