@@ -28,7 +28,11 @@ export {
   trySync,
   sanitizeInput,
   sanitizeArgs,
-  type TryResult
+  type TryResult,
+  getErrorMessage,
+  getErrorStack,
+  isValidationError,
+  isFileSystemError
 } from './error-handling';
 
 // Git utilities (PLAN.md Section 2.6)

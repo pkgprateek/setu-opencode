@@ -496,7 +496,7 @@ export function createToolExecuteAfterHook(
         // Debounced persistence - batches parallel reads into single write
         try {
           collector.debouncedSave();
-        } catch (err) {
+        } catch (err: unknown) {
           debugLog('Context: Failed to queue debounced save:', err);
         }
       }

@@ -1,5 +1,7 @@
 import { tool } from '@opencode-ai/plugin';
 import { resetProgress, loadActiveTask, saveActiveTask } from '../context/active';
+import { getErrorMessage } from '../utils/error-handling';
+import { errorLog } from '../debug';
 
 export const createSetuResetTool = (getProjectDir: () => string): ReturnType<typeof tool> => tool({
   description: 'Reset step progress to 0. Use when you want to restart the current plan from the beginning.',
@@ -14,8 +16,7 @@ export const createSetuResetTool = (getProjectDir: () => string): ReturnType<typ
     try {
       active = loadActiveTask(projectDir);
     } catch (loadError) {
-      const msg = loadError instanceof Error ? loadError.message : String(loadError);
-      console.error(`[Setu] Failed to load active.json: ${msg}`);
+      errorLog(`Failed to load active.json: ${getErrorMessage(loadError)}`, loadError);
       active = null; // Fall back to null, continue with reset
     }
     
@@ -32,15 +33,13 @@ export const createSetuResetTool = (getProjectDir: () => string): ReturnType<typ
       try {
         saveActiveTask(projectDir, active);
       } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        return `Failed to reset progress: ${msg}. Check .setu/ directory permissions.`;
+        return `Failed to reset progress: ${getErrorMessage(error)}. Check .setu/ directory permissions.`;
       }
     } else {
       try {
         resetProgress(projectDir);
       } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        return `Failed to reset progress: ${msg}. Check .setu/ directory permissions.`;
+        return `Failed to reset progress: ${getErrorMessage(error)}. Check .setu/ directory permissions.`;
       }
     }
     

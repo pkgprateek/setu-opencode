@@ -18,7 +18,11 @@ import { ensureSetuDir } from './storage';
 import { type ActiveTask, type ConstraintType, type TaskStatus, type SetuMode, CONSTRAINT_TYPES } from './types';
 import { MAX_LEARNINGS } from './limits';
 import { debugLog, errorLog } from '../debug';
-import { sanitizeForPrompt } from '../security/prompt-sanitization';
+import { createPromptSanitizer } from '../utils/sanitization';
+import { getErrorMessage } from '../utils/error-handling';
+
+// Create a sanitizer for learnings with 500 char limit
+const sanitizeLearning = createPromptSanitizer(500);
 
 /**
  * Patterns that may indicate constraint bypass attempts.
@@ -194,8 +198,7 @@ export function loadActiveTask(projectDir: string): ActiveTask | null {
     return task;
     
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    errorLog('Failed to parse active.json:', errorMsg);
+    errorLog('Failed to parse active.json:', getErrorMessage(error));
     // Distinguish between "file not found" (expected) and "corrupted" (unexpected)
     // Both return null, but we log the difference for debugging
     if (error instanceof SyntaxError) {
@@ -267,8 +270,8 @@ export function saveActiveTask(projectDir: string, task: ActiveTask): void {
     debugLog(`Saved active task: "${sanitizedTask.task.slice(0, 50)}..." [${sanitizedTask.status}]`);
     
   } catch (error) {
-    errorLog('Failed to save active.json:', error);
-    
+    errorLog('Failed to save active.json:', getErrorMessage(error));
+
     // Clean up tmp file if it exists
     try {
       if (existsSync(tmpPath)) {
@@ -277,9 +280,9 @@ export function saveActiveTask(projectDir: string, task: ActiveTask): void {
       }
     } catch (cleanupError) {
       // Log cleanup failure but don't throw (save failure is more important)
-      debugLog('Warning: Failed to cleanup tmp file:', cleanupError);
+      debugLog('Warning: Failed to cleanup tmp file:', getErrorMessage(cleanupError));
     }
-    
+
     throw error; // Re-throw so caller knows save failed
   }
 }
@@ -340,7 +343,7 @@ export function clearActiveTask(projectDir: string): void {
       debugLog('Cleared active task');
     }
   } catch (error) {
-    errorLog('Failed to clear active.json:', error);
+    errorLog('Failed to clear active.json:', getErrorMessage(error));
   }
 }
 
@@ -371,15 +374,25 @@ export function resetProgress(projectDir: string): void {
 }
 
 /**
+ * Result type for advanceStep
+ * Discriminated union for type-safe error handling
+ */
+export type AdvanceStepResult =
+  | { success: true; step: number }
+  | { success: false; error: string };
+
+/**
  * Advance to next step after successful verification.
  * Called by: setu_verify tool after verification passes
  * 
  * @param projectDir - Project root directory
- * @returns New step number
+ * @returns Result object with step number or error
  */
-export function advanceStep(projectDir: string): number {
+export function advanceStep(projectDir: string): AdvanceStepResult {
   const task = loadActiveTask(projectDir);
-  if (!task) return 0;
+  if (!task) {
+    return { success: false, error: 'No active task found' };
+  }
   
   const newStep = (task.progress?.lastCompletedStep ?? 0) + 1;
   
@@ -391,7 +404,7 @@ export function advanceStep(projectDir: string): number {
   saveActiveTask(projectDir, task);
   debugLog(`Advanced to Step ${newStep}`);
   
-  return newStep;
+  return { success: true, step: newStep };
 }
 
 /**
@@ -407,7 +420,7 @@ export function recordFailedApproach(projectDir: string, approach: string): void
 
   // SECURITY: Sanitize approach description before storage
   // Prevents prompt injection if learnings are later injected into prompts
-  const sanitizedApproach = sanitizeForPrompt(approach, 500);
+  const sanitizedApproach = sanitizeLearning(approach);
 
   task.learnings = task.learnings || { worked: [], failed: [] };
 
@@ -435,7 +448,7 @@ export function recordWorkedApproach(projectDir: string, approach: string): void
 
   // SECURITY: Sanitize approach description before storage
   // Prevents prompt injection if learnings are later injected into prompts
-  const sanitizedApproach = sanitizeForPrompt(approach, 500);
+  const sanitizedApproach = sanitizeLearning(approach);
 
   task.learnings = task.learnings || { worked: [], failed: [] };
 

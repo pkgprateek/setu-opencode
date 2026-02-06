@@ -17,11 +17,11 @@ import { tmpdir } from 'os';
 import {
   writeStepResult,
   readStepResult,
-  sanitizeYamlString,
   listCompletedSteps,
   clearResults,
   getLastCompletedStep
 } from '../results';
+import { sanitizeYamlString } from '../../utils/sanitization';
 import type { StepResult } from '../results';
 
 describe('Results Pattern', () => {
@@ -31,7 +31,7 @@ describe('Results Pattern', () => {
   beforeEach(() => {
     testDir = join(tmpdir(), `setu-results-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     resultsDir = join(testDir, '.setu', 'results');
-    mkdirSync(resultsDir, { recursive: true });
+    // Don't create resultsDir here - tests that need it should create it themselves
   });
 
   afterEach(() => {
@@ -42,6 +42,7 @@ describe('Results Pattern', () => {
 
   describe('writeStepResult', () => {
     test('writes result file with YAML frontmatter', () => {
+      mkdirSync(resultsDir, { recursive: true });
       const result: StepResult = {
         step: 1,
         status: 'completed',
@@ -65,6 +66,7 @@ describe('Results Pattern', () => {
     });
 
     test('uses atomic write pattern (temp file + rename)', () => {
+      mkdirSync(resultsDir, { recursive: true });
       const result: StepResult = {
         step: 1,
         status: 'completed',
@@ -83,6 +85,7 @@ describe('Results Pattern', () => {
     });
 
     test('sanitizes objective field', () => {
+      mkdirSync(resultsDir, { recursive: true });
       const result: StepResult = {
         step: 1,
         status: 'completed',
@@ -96,11 +99,13 @@ describe('Results Pattern', () => {
 
       const content = readFileSync(join(resultsDir, 'step-1.md'), 'utf-8');
       // Control characters should be removed, newlines replaced with spaces
+      // Colons followed by spaces are also sanitized to prevent YAML injection
       expect(content).not.toContain('\x00');
-      expect(content).toContain('Test: with controlcharNew: line');
+      expect(content).toContain('Test-with controlchar New-line');
     });
 
     test('sanitizes verification field', () => {
+      mkdirSync(resultsDir, { recursive: true });
       const result: StepResult = {
         step: 1,
         status: 'completed',
@@ -119,6 +124,7 @@ describe('Results Pattern', () => {
     });
 
     test('enforces 100KB size limit with truncation', () => {
+      mkdirSync(resultsDir, { recursive: true });
       // Create a summary that's definitely over 100KB before sanitization
       // Each char is 1 byte in UTF-8, so 120000 chars = ~120KB
       const hugeSummary = 'x'.repeat(120000);
@@ -144,6 +150,7 @@ describe('Results Pattern', () => {
     });
 
     test('validates step number is positive integer', () => {
+      mkdirSync(resultsDir, { recursive: true });
       const result: StepResult = {
         step: -1,
         status: 'completed',
@@ -157,6 +164,7 @@ describe('Results Pattern', () => {
     });
 
     test('uses high entropy for temp filename', () => {
+      mkdirSync(resultsDir, { recursive: true });
       const result: StepResult = {
         step: 1,
         status: 'completed',
@@ -177,6 +185,7 @@ describe('Results Pattern', () => {
 
   describe('readStepResult', () => {
     test('reads and parses result file correctly', () => {
+      mkdirSync(resultsDir, { recursive: true });
       const result: StepResult = {
         step: 1,
         status: 'completed',
@@ -256,6 +265,7 @@ describe('Results Pattern', () => {
 
   describe('listCompletedSteps', () => {
     test('returns sorted list of completed steps', () => {
+      mkdirSync(resultsDir, { recursive: true });
       // Write steps out of order
       for (const step of [3, 1, 5, 2]) {
         writeStepResult(testDir, {
@@ -280,6 +290,7 @@ describe('Results Pattern', () => {
 
   describe('clearResults', () => {
     test('removes all result files', () => {
+      mkdirSync(resultsDir, { recursive: true });
       // Create some results
       for (let i = 1; i <= 3; i++) {
         writeStepResult(testDir, {
@@ -306,6 +317,7 @@ describe('Results Pattern', () => {
 
   describe('getLastCompletedStep', () => {
     test('returns highest step number', () => {
+      mkdirSync(resultsDir, { recursive: true });
       writeStepResult(testDir, {
         step: 5,
         status: 'completed',
@@ -348,6 +360,7 @@ describe('Path Validation', () => {
   });
 
   test('accepts valid project directory', () => {
+    mkdirSync(join(testDir, '.setu', 'results'), { recursive: true });
     const result: StepResult = {
       step: 1,
       status: 'completed',

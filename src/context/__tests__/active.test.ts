@@ -49,9 +49,12 @@ describe('Phase 4.0 Helper Functions', () => {
       task.progress = { lastCompletedStep: 0, lastCompletedAt: new Date().toISOString() };
       saveActiveTask(testDir, task);
 
-      const newStep = advanceStep(testDir);
+      const result = advanceStep(testDir);
       
-      expect(newStep).toBe(1);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.step).toBe(1);
+      }
       
       const updated = loadActiveTask(testDir);
       expect(updated?.progress?.lastCompletedStep).toBe(1);
@@ -62,14 +65,20 @@ describe('Phase 4.0 Helper Functions', () => {
       task.progress = { lastCompletedStep: 5, lastCompletedAt: new Date().toISOString() };
       saveActiveTask(testDir, task);
 
-      const newStep = advanceStep(testDir);
+      const result = advanceStep(testDir);
       
-      expect(newStep).toBe(6);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.step).toBe(6);
+      }
     });
 
-    test('returns 0 when no active task exists', () => {
-      const newStep = advanceStep(testDir);
-      expect(newStep).toBe(0);
+    test('returns error when no active task exists', () => {
+      const result = advanceStep(testDir);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toBe('No active task found');
+      }
     });
 
     test('updates timestamp on advancement', () => {

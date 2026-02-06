@@ -23,6 +23,7 @@ import {
   loadActiveTask,
 } from '../context';
 import { debugLog } from '../debug';
+import { getErrorMessage } from '../utils/error-handling';
 
 /**
  * Format files already read for injection into system prompt
@@ -202,7 +203,7 @@ export function createSystemTransformHook(
       } catch (error) {
         // Graceful degradation: JIT context is enhancement, not critical
         // Log for debugging but don't crash OpenCode
-        debugLog('JIT context injection failed:', error instanceof Error ? error.message : error);
+        debugLog('JIT context injection failed:', getErrorMessage(error));
       }
     }
 

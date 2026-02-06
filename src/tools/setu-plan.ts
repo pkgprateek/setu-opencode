@@ -4,8 +4,16 @@ import { writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { resetProgress } from '../context/active';
 import { ensureSetuDir } from '../context/storage';
-import { sanitizeForPrompt } from '../security/prompt-sanitization';
 import { clearResults } from '../context/results';
+import { getErrorMessage } from '../utils/error-handling';
+import { createPromptSanitizer } from '../utils/sanitization';
+import { debugLog } from '../debug';
+
+// Create sanitizers for different field lengths
+const sanitizeObjective = createPromptSanitizer(500);
+const sanitizeContextSummary = createPromptSanitizer(1000);
+const sanitizeSteps = createPromptSanitizer(10000); // Steps can be longer
+const sanitizeSuccessCriteria = createPromptSanitizer(2000);
 
 export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<typeof tool> => tool({
   description: 'Create execution plan in .setu/PLAN.md. Requires RESEARCH.md to exist. Resets step progress to 0.',
@@ -39,11 +47,12 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
     }
 
     // Sanitize inputs before persisting (content may be injected into prompts later)
+    // Validate null/undefined at API boundaries per guidelines
     const sanitizedArgs = {
-      objective: sanitizeForPrompt(args.objective, 500),
-      contextSummary: sanitizeForPrompt(args.contextSummary, 1000),
-      steps: sanitizeForPrompt(args.steps, 10000), // Steps can be longer
-      successCriteria: sanitizeForPrompt(args.successCriteria, 2000)
+      objective: sanitizeObjective(args.objective),
+      contextSummary: sanitizeContextSummary(args.contextSummary ?? ''),
+      steps: sanitizeSteps(args.steps), // Steps can be longer
+      successCriteria: sanitizeSuccessCriteria(args.successCriteria ?? '')
     };
     
     // Format the plan using template structure
@@ -56,8 +65,7 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
     try {
       await writeFile(join(projectDir, '.setu', 'PLAN.md'), content);
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      throw new Error(`Failed to save plan: ${msg}. Check .setu/ directory permissions.`);
+      throw new Error(`Failed to save plan: ${getErrorMessage(error)}. Check .setu/ directory permissions.`);
     }
     
     // CRITICAL: Reset progress to step 0 — new plan means fresh start
@@ -68,7 +76,7 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
       clearResults(projectDir);
     } catch (error) {
       // Log but don't fail — stale results won't break execution
-      console.warn(`[setu-plan] Failed to clear old results: ${error instanceof Error ? error.message : String(error)}`);
+      debugLog(`Failed to clear old results: ${getErrorMessage(error)}`);
     }
     
     return `Plan created with ${countSteps(content)} steps. Gear shifted: architect → builder. Progress reset to Step 0. Old results cleared. Ready for execution.`;

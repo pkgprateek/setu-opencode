@@ -13,6 +13,7 @@ import {
   type FeedbackEntry 
 } from '../context/feedback';
 import { MAX_FEEDBACK_PER_SESSION } from '../constants';
+import { getErrorMessage } from '../utils/error-handling';
 
 export interface SetuFeedbackResult {
   success: boolean;
@@ -86,7 +87,7 @@ ${rateCheck.reason === 'daily_limit' ? '- Wait until tomorrow, or' : '- Start a 
 Thank you! Saved to \`.setu/feedback.md\`.
 (${rateCheck.remaining} submission${rateCheck.remaining !== 1 ? 's' : ''} remaining this session)`;
       } catch (error) {
-        return `Failed to record feedback: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        return `Failed to record feedback: ${getErrorMessage(error)}`;
       }
     }
   });

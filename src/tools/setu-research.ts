@@ -2,7 +2,14 @@ import { tool } from '@opencode-ai/plugin';
 import { join } from 'path';
 import { writeFile } from 'fs/promises';
 import { ensureSetuDir } from '../context/storage';
-import { sanitizeForPrompt } from '../security/prompt-sanitization';
+import { getErrorMessage } from '../utils/error-handling';
+import { createPromptSanitizer } from '../utils/sanitization';
+
+// Create sanitizers for different field lengths
+const sanitizeSummary = createPromptSanitizer(5000);
+const sanitizeConstraints = createPromptSanitizer(2000);
+const sanitizePatterns = createPromptSanitizer(2000);
+const sanitizeLearningsField = createPromptSanitizer(2000);
 
 export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<typeof tool> => tool({
   description: 'Save research findings to .setu/RESEARCH.md. Call this when you understand the task.',
@@ -14,13 +21,18 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
   },
   async execute(args, _context) {
     const projectDir = getProjectDir();
-    
+
+    // Validate required fields
+    if (!args.summary || typeof args.summary !== 'string' || args.summary.trim().length === 0) {
+      return 'Error: summary is required and cannot be empty. Please provide a research summary before saving.';
+    }
+
     // Sanitize inputs before persisting (content may be injected into prompts later)
     const sanitizedArgs = {
-      summary: sanitizeForPrompt(args.summary, 5000),
-      constraints: args.constraints ? sanitizeForPrompt(args.constraints, 2000) : undefined,
-      patterns: args.patterns ? sanitizeForPrompt(args.patterns, 2000) : undefined,
-      learnings: args.learnings ? sanitizeForPrompt(args.learnings, 2000) : undefined
+      summary: sanitizeSummary(args.summary),
+      constraints: args.constraints ? sanitizeConstraints(args.constraints) : undefined,
+      patterns: args.patterns ? sanitizePatterns(args.patterns) : undefined,
+      learnings: args.learnings ? sanitizeLearningsField(args.learnings) : undefined
     };
     
     const content = formatResearch(sanitizedArgs);
@@ -30,8 +42,7 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
       ensureSetuDir(projectDir);
       await writeFile(join(projectDir, '.setu', 'RESEARCH.md'), content);
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      return `Failed to save research: ${msg}. Check .setu/ directory permissions.`;
+      return `Failed to save research: ${getErrorMessage(error)}. Check .setu/ directory permissions.`;
     }
     
     return `Research saved. Gear shifted: scout → architect. You can now create PLAN.md.`;

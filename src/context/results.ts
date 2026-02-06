@@ -8,35 +8,13 @@
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, renameSync, openSync, writeSync, fsyncSync, closeSync } from 'fs';
-import { join, resolve, normalize } from 'path';
+import { join } from 'path';
 import { randomBytes } from 'crypto';
 import { ensureSetuDir } from './storage';
 import { debugLog } from '../debug';
-
-/**
- * Validate project directory path to prevent directory traversal
- * Ensures the resolved path does not contain traversal patterns
- */
-function validateProjectDir(projectDir: string): void {
-  // Prevent null bytes and control characters
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional control char detection for security
-  if (/[\x00-\x1f]/.test(projectDir)) {
-    throw new Error('Invalid characters in project directory path');
-  }
-
-  // SECURITY: Check for path traversal attempts BEFORE normalization
-  // This catches attempts like "../../../etc/passwd" before resolve() normalizes them
-  if (projectDir.includes('..')) {
-    throw new Error('Invalid projectDir: path traversal detected');
-  }
-
-  const resolved = normalize(resolve(projectDir));
-
-  // Additional check: ensure resolved path doesn't contain '..' (shouldn't happen after resolve, but defense in depth)
-  if (resolved.includes('..')) {
-    throw new Error('Invalid projectDir: path traversal detected after resolution');
-  }
-}
+import { getErrorMessage } from '../utils/error-handling';
+import { validateProjectDir } from '../utils/path-validation';
+import { createYamlSanitizer, createOutputSanitizer, MAX_LENGTHS } from '../utils/sanitization';
 
 export interface StepResult {
   step: number;
@@ -50,14 +28,26 @@ export interface StepResult {
 }
 
 const VALID_STATUSES = ['completed', 'failed', 'skipped'] as const;
+type ValidStatus = typeof VALID_STATUSES[number];
+
+/**
+ * Type predicate to check if a string is a valid status
+ */
+function isValidStatus(s: string | undefined): s is ValidStatus {
+  return typeof s === 'string' && VALID_STATUSES.includes(s as ValidStatus);
+}
 
 /**
  * Parse and validate status string
+ * Returns 'failed' for invalid/corrupted data to make failures visible
  */
 function parseStatus(s: string | undefined): StepResult['status'] {
-  return VALID_STATUSES.includes(s as typeof VALID_STATUSES[number]) 
-    ? (s as StepResult['status']) 
-    : 'completed';
+  if (isValidStatus(s)) {
+    return s;
+  }
+  // Log warning for corrupted/tampered data
+  debugLog(`Warning: Invalid status "${s}" in step result, defaulting to 'failed'`);
+  return 'failed';
 }
 
 /**
@@ -73,49 +63,25 @@ function ensureResultsDir(projectDir: string): string {
   return resultsDir;
 }
 
-/**
- * Sanitize string for YAML frontmatter (defense-in-depth)
- * Prevents YAML injection via control characters, newlines, colons, or comment chars.
- */
-export function sanitizeYamlString(str: string): string {
-  return str
-    // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional control char removal
-    .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
-    .replace(/\\/g, '\\\\') // Escape backslashes first
-    .replace(/"/g, '\\"') // Escape double quotes
-    .replace(/\n/g, ' ')
-    // Only replace colons at line start or after whitespace to preserve URLs
-    .replace(/(^|\s):/g, '$1-')
-    .replace(/#/g, '\\#')
-    .slice(0, 2000)
-    .trim();
-}
+// Create sanitizers for reuse
+const yamlSanitizer = createYamlSanitizer(MAX_LENGTHS.YAML_FIELD);
+const outputSanitizer = createOutputSanitizer();
+const verificationSanitizer = createYamlSanitizer(MAX_LENGTHS.VERIFICATION);
 
 /**
  * Format step result as Markdown with YAML frontmatter
  */
 function formatResultMarkdown(result: StepResult): string {
-  // Sanitize each output entry for YAML safety
-  const sanitizeOutput = (o: string): string => {
-    return o
-      // biome-ignore-next-line lint/suspicious/noControlCharactersInRegex: intentional control char removal
-      .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
-      .replace(/:/g, '\\:') // Escape colons
-      .replace(/\n/g, ' ') // Replace newlines with spaces
-      .trim();
-  };
-
   const outputsList =
     result.outputs.length > 0
-      ? result.outputs.map((o) => `  - ${sanitizeOutput(o)}`).join('\n')
+      ? result.outputs.map((o) => `  - ${outputSanitizer(o)}`).join('\n')
       : '  - (none)';
 
   // Sanitize user-influenced fields for YAML safety
-  const safeObjective = sanitizeYamlString(result.objective);
-  const safeSummary = sanitizeYamlString(result.summary);
+  const safeObjective = yamlSanitizer(result.objective);
+  const safeSummary = yamlSanitizer(result.summary);
   const safeVerification = result.verification
-    // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional control char removal for security
-    ? result.verification.replace(/[\x00-\x1F\x7F]/g, '').slice(0, 10000)
+    ? verificationSanitizer(result.verification)
     : undefined;
 
   return `---
@@ -185,9 +151,88 @@ function parseResultMarkdown(content: string): StepResult | null {
       verification: verificationMatch?.[1]?.trim(),
     };
   } catch (error) {
-    debugLog('Failed to parse step result markdown:', error instanceof Error ? error.message : error);
+    debugLog('Failed to parse step result markdown:', getErrorMessage(error));
     return null;
   }
+}
+
+/**
+ * Enhanced truncation strategy for size limits
+ * 
+ * Priority order for truncation (least important first):
+ * 1. Verification (can be truncated significantly - up to 90%)
+ * 2. Summary (can be truncated moderately - up to 50%)
+ * 3. Objective (truncate only as last resort - up to 20%)
+ * 
+ * Never truncate below MIN_FIELD_LENGTH characters.
+ */
+const MIN_FIELD_LENGTH = 100;
+
+function truncateResultToFit(result: StepResult, formattedContent: string, maxBytes: number): string {
+  let currentContent = formattedContent;
+  
+  // Priority order for truncation (least important first)
+  const truncatePhases: Array<{
+    field: 'verification' | 'summary' | 'objective';
+    maxReduction: number;
+  }> = [
+    { field: 'verification', maxReduction: 0.9 }, // Up to 90%
+    { field: 'summary', maxReduction: 0.5 },      // Up to 50%
+    { field: 'objective', maxReduction: 0.2 },    // Up to 20%
+  ];
+  
+  let truncatedResult = { ...result };
+  
+  for (const phase of truncatePhases) {
+    if (Buffer.byteLength(currentContent, 'utf8') <= maxBytes) {
+      break; // Done, content fits
+    }
+
+    // Safely get field value with type guard
+    const fieldValue = truncatedResult[phase.field];
+    if (typeof fieldValue !== 'string' || fieldValue.length <= MIN_FIELD_LENGTH) {
+      continue; // Can't truncate this field further
+    }
+
+    const currentBytes = Buffer.byteLength(currentContent, 'utf8');
+    const overflow = currentBytes - maxBytes;
+    // Byte-aware truncation for multi-byte UTF-8 content
+    const fieldBytes = Buffer.byteLength(fieldValue, 'utf8');
+    const bytesPerChar = fieldBytes / fieldValue.length;
+    const maxBytesToRemove = Math.floor(fieldBytes * phase.maxReduction);
+    const reductionBytes = Math.min(overflow + 100, maxBytesToRemove);
+
+    if (reductionBytes <= 0) {
+      continue;
+    }
+
+    // Convert byte reduction to character reduction, accounting for multi-byte chars
+    const reductionChars = Math.ceil(reductionBytes / bytesPerChar);
+    const newLength = Math.max(MIN_FIELD_LENGTH, fieldValue.length - reductionChars);
+    // Safe assignment with type-checked field access
+    switch (phase.field) {
+      case 'verification':
+        truncatedResult.verification = fieldValue.slice(0, newLength) + '\n[TRUNCATED]';
+        break;
+      case 'summary':
+        truncatedResult.summary = fieldValue.slice(0, newLength) + '\n[TRUNCATED]';
+        break;
+      case 'objective':
+        truncatedResult.objective = fieldValue.slice(0, newLength) + '\n[TRUNCATED]';
+        break;
+    }
+    currentContent = formatResultMarkdown(truncatedResult);
+  }
+  
+  // Final validation
+  if (Buffer.byteLength(currentContent, 'utf8') > maxBytes) {
+    throw new Error(
+      `Step result exceeds ${maxBytes} bytes limit (${Buffer.byteLength(currentContent, 'utf8')} bytes) even after truncation. ` +
+      'Consider reducing the size of the objective, summary, or verification fields.'
+    );
+  }
+  
+  return currentContent;
 }
 
 /**
@@ -203,33 +248,7 @@ export function writeStepResult(projectDir: string, result: StepResult): void {
   let content = formatResultMarkdown(result);
 
   // Enforce 100KB limit using byte length (UTF-8)
-  const MAX_SIZE = 100 * 1024;
-  if (Buffer.byteLength(content, 'utf8') > MAX_SIZE) {
-    // Iteratively truncate verification field to fit
-    let truncatedResult = { ...result };
-    let attempts = 0;
-    const MAX_ATTEMPTS = 10;
-
-    while (Buffer.byteLength(content, 'utf8') > MAX_SIZE && attempts < MAX_ATTEMPTS) {
-      attempts++;
-      const currentSize = Buffer.byteLength(content, 'utf8');
-      const overflow = currentSize - MAX_SIZE;
-
-      if (truncatedResult.verification && truncatedResult.verification.length > overflow + 100) {
-        // Remove more characters from verification
-        truncatedResult.verification = truncatedResult.verification.slice(0, truncatedResult.verification.length - overflow - 100) + '\n[TRUNCATED]';
-        content = formatResultMarkdown(truncatedResult);
-      } else {
-        // Can't truncate enough, throw error
-        break;
-      }
-    }
-
-    // Final validation
-    if (Buffer.byteLength(content, 'utf8') > MAX_SIZE) {
-      throw new Error(`Step result exceeds 100KB limit (${Buffer.byteLength(content, 'utf8')} bytes) even after truncation`);
-    }
-  }
+  content = truncateResultToFit(result, content, 100 * 1024);
 
   // Atomic write: write to temp file, then rename
   const targetPath = join(resultsDir, `step-${result.step}.md`);
@@ -271,7 +290,7 @@ export function readStepResult(projectDir: string, step: number): StepResult | n
   try {
     return parseResultMarkdown(readFileSync(path, 'utf-8'));
   } catch (error) {
-    debugLog(`Failed to read step result ${step} from ${path}:`, error instanceof Error ? error.message : error);
+    debugLog(`Failed to read step result ${step} from ${path}:`, getErrorMessage(error));
     return null;
   }
 }
@@ -291,7 +310,7 @@ export function listCompletedSteps(projectDir: string): number[] {
       .filter((n) => n > 0)
       .sort((a, b) => a - b);
   } catch (error) {
-    debugLog(`Failed to list completed steps from ${dir}:`, error instanceof Error ? error.message : error);
+    debugLog(`Failed to list completed steps from ${dir}:`, getErrorMessage(error));
     return [];
   }
 }
@@ -310,7 +329,7 @@ export function clearResults(projectDir: string): void {
       unlinkSync(join(dir, f));
     } catch (error) {
       // Log but continue - one failure shouldn't abort cleanup
-      debugLog(`Failed to delete result file ${f}:`, error instanceof Error ? error.message : error);
+      debugLog(`Failed to delete result file ${f}:`, getErrorMessage(error));
     }
   }
 }

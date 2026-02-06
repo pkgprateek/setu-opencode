@@ -16,6 +16,7 @@ import { join } from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { debugLog } from '../debug';
+import { getErrorMessage } from '../utils/error-handling';
 
 const execAsync = promisify(exec);
 
@@ -125,7 +126,7 @@ async function checkGitStatus(projectDir: string): Promise<HealthCheck[]> {
     checks.push({
       name: 'git-check',
       status: 'error',
-      message: `Failed to check git status: ${error instanceof Error ? error.message : 'Unknown error'}`
+      message: `Failed to check git status: ${getErrorMessage(error)}`
     });
   }
   

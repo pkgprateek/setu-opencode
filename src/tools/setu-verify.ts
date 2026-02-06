@@ -9,16 +9,10 @@ import { tool } from "@opencode-ai/plugin";
 import { getStyleVerificationLevel, type SetuStyle } from "../prompts/styles";
 import { detectProjectInfo } from "../context/storage";
 import { logVerification } from "../context/storage";
-import { writeStepResult, sanitizeYamlString } from "../context/results";
+import { writeStepResult } from "../context/results";
+import { sanitizeYamlString } from "../utils/sanitization";
 import { advanceStep, loadActiveTask } from "../context/active";
-
-/**
- * Helper to extract error message consistently
- * Prevents repetitive error instanceof Error checks
- */
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+import { getErrorMessage } from "../utils/error-handling";
 
 /**
  * Build commands per tool/runtime
@@ -323,30 +317,22 @@ ${stepsList}
         // Write result file and advance step (Results Pattern)
         // Reuse projectDirForLog to avoid duplicate logic
         const projectDirForResults = projectDirForLog;
-        let completedStep: number | null = null;
-        let advanceSucceeded = false;
-
-        try {
-          completedStep = advanceStep(projectDirForResults);
-          if (
-            completedStep !== null &&
-            completedStep !== undefined &&
-            completedStep > 0
-          ) {
-            advanceSucceeded = true;
-          }
-        } catch (err) {
+        const advanceResult = advanceStep(projectDirForResults);
+        
+        if (!advanceResult.success) {
           // Log but don't fail verification on step tracking error
+          const errorMessage = advanceResult.error || "unknown error";
           logVerification(
             projectDirForResults,
             "step-advance",
             false,
-            getErrorMessage(err),
+            errorMessage,
           );
         }
 
         // Only write result and report success if advanceStep succeeded
-        if (advanceSucceeded && completedStep !== null && completedStep > 0) {
+        if (advanceResult.success) {
+          const completedStep = advanceResult.step;
           // Build verification summary for result file
           const verificationDetails = results
             .map((r) => `${r.name}: ${r.success ? "PASS" : "FAIL"}`)
