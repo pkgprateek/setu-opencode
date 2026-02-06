@@ -259,7 +259,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
   debugLog('Phase 0 enforcement: ACTIVE');
   debugLog('Context persistence: .setu/ directory');
   debugLog('Tools: setu_verify, setu_context, setu_feedback, setu_task');
-  debugLog('Skills bundled: setu-bootstrap, setu-verification, setu-rules-creation, code-quality, refine-code, commit-helper, pr-review');
+  debugLog('Skills bundled: setu-bootstrap, setu-verification, setu-rules-creation');
   
   return {
     // Set Setu as the default agent

@@ -32,8 +32,17 @@ export function sanitizeForPrompt(input: string, maxLength?: number): string {
   if (input == null || typeof input !== 'string') {
     throw new TypeError('sanitizeForPrompt: input must be a string');
   }
-  if (maxLength !== undefined && maxLength !== MAX_LENGTHS.CONTEXT) {
-    return createPromptSanitizer(maxLength)(input);
+  // Validate maxLength if provided: must be a positive integer
+  if (maxLength !== undefined) {
+    if (typeof maxLength !== 'number' || !Number.isInteger(maxLength) || maxLength <= 0) {
+      throw new TypeError(`sanitizeForPrompt: maxLength must be a positive integer, got ${maxLength}`);
+    }
+    if (maxLength > MAX_LENGTHS.CONTEXT) {
+      throw new RangeError(`sanitizeForPrompt: maxLength exceeds maximum allowed (${MAX_LENGTHS.CONTEXT}), got ${maxLength}`);
+    }
+    if (maxLength !== MAX_LENGTHS.CONTEXT) {
+      return createPromptSanitizer(maxLength)(input);
+    }
   }
   return defaultPromptSanitizer(input);
 }

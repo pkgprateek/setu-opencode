@@ -1,6 +1,6 @@
 {
   "name": "setu-opencode",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Setu - A master craftsman persona for OpenCode that transforms AI into a thoughtful, expert colleague",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -41,7 +41,7 @@
     "README.md"
   ],
   "peerDependencies": {
-    "@opencode-ai/plugin": ">=1.0.0"
+    "@opencode-ai/plugin": "^1.0.0"
   },
   "devDependencies": {
     "@opencode-ai/plugin": "^1.0.0",

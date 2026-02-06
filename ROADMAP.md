@@ -101,7 +101,7 @@
 - [x] Audit logging for security events
 
 **Skills:**
-- [x] 7 bundled skills (bootstrap, verification, rules-creation, code-quality, refine-code, commit-helper, pr-review)
+- [x] 3 bundled skills (bootstrap, verification, rules-creation)
 
 ### Known Limitations
 

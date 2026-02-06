@@ -55,11 +55,7 @@ src/
 skills/               # Bundled skills (loaded on-demand)
 ├── setu-bootstrap/         # Initial context gathering
 ├── setu-verification/      # Build/test/lint protocol
-├── setu-rules-creation/    # AGENTS.md generation
-├── code-quality/           # Code standards enforcement
-├── refine-code/            # Code cleanup and polish
-├── commit-helper/          # Conventional commit messages
-└── pr-review/              # Pull request analysis
+└── setu-rules-creation/    # AGENTS.md generation
 
 .setu/                # Context persistence directory (created per-project)
 ├── context.json            # Machine-parseable for injection

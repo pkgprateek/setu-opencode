@@ -4,6 +4,7 @@ import { writeFile } from 'fs/promises';
 import { ensureSetuDir } from '../context/storage';
 import { getErrorMessage } from '../utils/error-handling';
 import { createPromptSanitizer } from '../utils/sanitization';
+import { validateProjectDir } from '../utils/path-validation';
 
 // Create sanitizers for different field lengths
 const sanitizeSummary = createPromptSanitizer(5000);
@@ -22,9 +23,16 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
   async execute(args, _context) {
     const projectDir = getProjectDir();
 
+    // Validate projectDir to prevent directory traversal
+    try {
+      validateProjectDir(projectDir);
+    } catch (error) {
+      throw new Error(`Invalid project directory: ${getErrorMessage(error)}`);
+    }
+
     // Validate required fields
     if (!args.summary || typeof args.summary !== 'string' || args.summary.trim().length === 0) {
-      return 'Error: summary is required and cannot be empty. Please provide a research summary before saving.';
+      throw new Error('summary is required and cannot be empty. Please provide a research summary before saving.');
     }
 
     // Sanitize inputs before persisting (content may be injected into prompts later)
@@ -42,7 +50,7 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
       ensureSetuDir(projectDir);
       await writeFile(join(projectDir, '.setu', 'RESEARCH.md'), content);
     } catch (error) {
-      return `Failed to save research: ${getErrorMessage(error)}. Check .setu/ directory permissions.`;
+      throw new Error(`Failed to save research: ${getErrorMessage(error)}. Check .setu/ directory permissions.`);
     }
     
     return `Research saved. Gear shifted: scout → architect. You can now create PLAN.md.`;
