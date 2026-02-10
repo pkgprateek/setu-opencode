@@ -10,7 +10,8 @@
  * - tool.execute.after: Tracks verification steps, file reads, searches
  */
 
-import { basename } from 'path';
+import { basename, isAbsolute, normalize, resolve } from 'path';
+import { existsSync } from 'fs';
 import {
   shouldBlockInPhase0,
   createPhase0BlockMessage,
@@ -19,11 +20,23 @@ import {
   createGearBlockMessage,
   type Phase0State
 } from '../enforcement';
-import { classifyToolCapability, evaluatePolicyDecision, type PolicyDecision } from '../enforcement';
-import { type ContextCollector, formatContextForInjection, contextToSummary, logPolicyDecision } from '../context';
+import {
+  type ContextCollector,
+  formatContextForInjection,
+  contextToSummary,
+  logExecutionPhase,
+  getSetuState,
+  setSetuState,
+  transitionSetuPhase,
+  clearQuestionBlocked,
+  clearSetuState,
+  setOverwriteRequirement,
+  getOverwriteRequirement,
+  clearOverwriteRequirement,
+} from '../context';
 import { loadActiveTask, shouldBlockDueToConstraint } from '../context/active';
 import { debugLog } from '../debug';
-import { isString, getStringProp, getCurrentBranch, isProtectedBranch, formatGuidanceMessage, formatPolicyDecisionSummary } from '../utils';
+import { isString, getStringProp, getCurrentBranch, isProtectedBranch, formatGuidanceMessage } from '../utils';
 import { isReadOnlyTool, PARALLEL_BATCH_WINDOW_MS } from '../constants';
 import { 
   detectSecrets, 
@@ -95,14 +108,6 @@ export interface VerificationState {
   stepsRun: Set<VerificationStep>;
 }
 
-interface PolicySessionState {
-  fastPathActive: boolean;
-  lastScore: number;
-  updatedAt: number;
-}
-
-const POLICY_SESSION_TTL_MS = 30 * 60 * 1000;
-
 /**
  * Git commit/push command patterns for interception
  */
@@ -148,6 +153,25 @@ const PACKAGE_MANIFEST_PATTERNS = [
   /\.git\/hooks\//,
 ] as const;
 
+function normalizeForComparison(projectDir: string, filePath: string): string {
+  const resolvedPath = isAbsolute(filePath)
+    ? resolve(filePath)
+    : resolve(projectDir, filePath);
+  return normalize(resolvedPath);
+}
+
+function hasReadTargetFile(collector: ContextCollector | null, projectDir: string, targetFilePath: string): boolean {
+  if (!collector) return false;
+
+  const target = normalizeForComparison(projectDir, targetFilePath);
+  const filesRead = collector.getContext().filesRead;
+
+  return filesRead.some((entry) => {
+    const candidate = normalizeForComparison(projectDir, entry.path);
+    return candidate === target;
+  });
+}
+
 /**
  * Create a before-execution hook that enforces Gearbox rules for tool execution.
  *
@@ -175,29 +199,8 @@ export function createToolExecuteBeforeHook(
   getProjectDir?: () => string,
   getVerificationState?: () => VerificationState
 ): (input: ToolExecuteBeforeInput, output: ToolExecuteBeforeOutput) => Promise<void> {
-  const policySessions = new Map<string, PolicySessionState>();
-
-  const getPolicySessionState = (sessionID: string): PolicySessionState | null => {
-    const state = policySessions.get(sessionID);
-    if (!state) return null;
-    if (Date.now() - state.updatedAt > POLICY_SESSION_TTL_MS) {
-      policySessions.delete(sessionID);
-      return null;
-    }
-    return state;
-  };
-
-  const setFastPathState = (sessionID: string, active: boolean, score: number): void => {
-    policySessions.set(sessionID, {
-      fastPathActive: active,
-      lastScore: score,
-      updatedAt: Date.now(),
-    });
-  };
-
-  const clearFastPathState = (sessionID: string): void => {
-    policySessions.delete(sessionID);
-  };
+  const isMutatingToolName = (toolName: string): boolean =>
+    ['write', 'edit', 'bash', 'patch', 'multiedit', 'apply_patch', 'todowrite'].includes(toolName);
 
   return async (
     input: ToolExecuteBeforeInput,
@@ -209,31 +212,145 @@ export function createToolExecuteBeforeHook(
     if (currentAgent.toLowerCase() !== 'setu') {
       return;
     }
-    
+
     // SECURITY: Sanitize args to prevent control char injection (2.9.2)
     // Removes null bytes and control characters that could bypass parsing
     output.args = sanitizeArgs(output.args);
+    const projectDir = getProjectDir ? getProjectDir() : process.cwd();
+    const collector = getContextCollector ? getContextCollector() : null;
+    const setuState = getSetuState(input.sessionID);
 
-    const sessionState = getPolicySessionState(input.sessionID);
+    if (input.tool === 'question') {
+      clearQuestionBlocked(input.sessionID);
+      logExecutionPhase(projectDir, 'blocked_question', 'complete', 'Clarification answered via question tool');
+      debugLog('Question answered; cleared blocked_question state');
+      return;
+    }
 
-    if ((input.tool === 'setu_research' || input.tool === 'setu_plan') && sessionState?.fastPathActive) {
-      const forceOverride = output.args.force === true;
-      if (!forceOverride) {
-        throw new Error(
-          formatGuidanceMessage(
-            'Research/plan skipped for low-complexity fast path',
-            `Current request was classified as low complexity (score=${sessionState.lastScore.toFixed(2)}).`,
-            'Proceed directly with implementation and quick verification.',
-            'If you explicitly want research/plan anyway, retry with force=true.'
-          )
-        );
+    if (setuState.pendingQuestion || setuState.phase === 'blocked_question') {
+      throw new Error(
+        formatGuidanceMessage(
+          'Clarification required before continuing',
+          setuState.questionReason ?? 'A required implementation decision is still unanswered.',
+          'Answer the active structured question first.',
+          'After clarification, Setu will continue the protocol automatically.'
+        )
+      );
+    }
+
+    if (input.tool === 'setu_task') {
+      const action = getStringProp(output.args, 'action')?.toLowerCase();
+      const status = getStringProp(output.args, 'status')?.toLowerCase();
+
+      if (action === 'create') {
+        setSetuState(input.sessionID, { phase: 'researching', pendingQuestion: false });
+        logExecutionPhase(projectDir, 'researching', 'enter', 'Task created');
+      }
+
+      if (action === 'clear' || (action === 'update' && status === 'completed')) {
+        logExecutionPhase(projectDir, 'done', 'complete', 'Task cleared/completed');
+        clearSetuState(input.sessionID);
       }
     }
 
-    const projectDir = getProjectDir ? getProjectDir() : process.cwd();
-    const activeTask = getProjectDir ? loadActiveTask(projectDir) : null;
+    if (input.tool === 'setu_research') {
+      if (!['received', 'researching'].includes(setuState.phase)) {
+        throw new Error(
+          formatGuidanceMessage(
+            'Research out of sequence',
+            `Current phase is '${setuState.phase}'.`,
+            'Run research during the researching phase.',
+            'Setu chronology is task -> research -> plan -> execute -> verify.'
+          )
+        );
+      }
+      transitionSetuPhase(input.sessionID, 'planning');
+      logExecutionPhase(projectDir, 'researching', 'complete', 'Research artifact saved');
+      logExecutionPhase(projectDir, 'planning', 'enter');
+    }
+
+    if (input.tool === 'setu_plan') {
+      if (setuState.phase !== 'planning') {
+        throw new Error(
+          formatGuidanceMessage(
+            'Plan out of sequence',
+            `Current phase is '${setuState.phase}'.`,
+            'Complete research first, then create plan.',
+            'Setu chronology is task -> research -> plan -> execute -> verify.'
+          )
+        );
+      }
+      transitionSetuPhase(input.sessionID, 'executing');
+      logExecutionPhase(projectDir, 'planning', 'complete', 'Plan artifact saved');
+      logExecutionPhase(projectDir, 'executing', 'enter');
+    }
+
+    if (input.tool === 'setu_verify') {
+      if (!['executing', 'verifying'].includes(setuState.phase)) {
+        throw new Error(
+          formatGuidanceMessage(
+            'Verify out of sequence',
+            `Current phase is '${setuState.phase}'.`,
+            'Run verification after execution.',
+            'Setu chronology is task -> research -> plan -> execute -> verify.'
+          )
+        );
+      }
+      transitionSetuPhase(input.sessionID, 'verifying');
+      logExecutionPhase(projectDir, 'verifying', 'enter');
+    }
+
+    const isMutating = isMutatingToolName(input.tool);
+    if (isMutating && ['received', 'researching', 'planning'].includes(setuState.phase)) {
+      logExecutionPhase(projectDir, setuState.phase, 'blocked', `Blocked tool=${input.tool} before execute phase`);
+      throw new Error(
+        formatGuidanceMessage(
+          'Execution paused by protocol order',
+          `Current phase is '${setuState.phase}'.`,
+          'Complete the remaining protocol phases before implementation actions.',
+          'Setu always follows task -> research -> plan -> execute -> verify.'
+        )
+      );
+    }
+
+    const pendingOverwrite = getOverwriteRequirement(input.sessionID);
+
+    if (pendingOverwrite?.pending) {
+      const requiredPath = pendingOverwrite.filePath;
+      const requiredNormalized = normalizeForComparison(projectDir, requiredPath);
+
+      if (input.tool === 'read') {
+        const readPath = getStringProp(output.args, 'filePath') ?? '';
+        const readNormalized = readPath ? normalizeForComparison(projectDir, readPath) : '';
+
+        if (readNormalized !== requiredNormalized) {
+          throw new Error(
+            formatGuidanceMessage(
+              'Read required before overwrite',
+              `You must read '${requiredPath}' before mutating it.`,
+              `Read '${requiredPath}' now, then continue with the update.`,
+              'Avoid shell workarounds that mutate files before reading.'
+            )
+          );
+        }
+
+        clearOverwriteRequirement(input.sessionID);
+        debugLog(`Overwrite gate cleared after read: ${requiredPath}`);
+      } else {
+        if (isMutating || input.tool === 'task') {
+          throw new Error(
+            formatGuidanceMessage(
+              'Overwrite guard active',
+              `Pending discipline step: read '${requiredPath}' first.`,
+              `Use read on '${requiredPath}' before any further changes.`,
+              'Do not use bash/write/edit to bypass this guard.'
+            )
+          );
+        }
+      }
+    }
+
     const gearStateForPolicy = getProjectDir ? determineGear(projectDir) : null;
-    const capability = classifyToolCapability(input.tool, output.args);
     let skipGearEnforcement = false;
 
     const policyExemptBash = (() => {
@@ -242,61 +359,16 @@ export function createToolExecuteBeforeHook(
       return GIT_COMMIT_PATTERN.test(command) || GIT_PUSH_PATTERN.test(command);
     })();
 
-    if (gearStateForPolicy && capability.final === 'unknown') {
-      clearFastPathState(input.sessionID);
-      throw new Error(
-        formatGuidanceMessage(
-          'Execution paused for unknown tool capability',
-          `Tool '${input.tool}' could not be confidently classified (source=${capability.source}).`,
-          'Confirm the intent and risk of this tool call before proceeding.',
-          'Use read-only tools or Setu-native tools for deterministic behavior.'
-        )
-      );
-    }
-
-    if (gearStateForPolicy && capability.final === 'read_only') {
-      skipGearEnforcement = true;
-      debugLog('POLICY_BYPASS_GEAR_READ_ONLY=true');
-    }
-
-    if (gearStateForPolicy && capability.final === 'mutating' && !policyExemptBash) {
+    if (gearStateForPolicy && !policyExemptBash && isMutating) {
       const safetyDecision = classifyHardSafety(input.tool, output.args);
       if (safetyDecision.hardSafety) {
-        clearFastPathState(input.sessionID);
-        const hardSafetyDecision: PolicyDecision = evaluatePolicyDecision({
-          tool: input.tool,
-          args: output.args,
-          gear: gearStateForPolicy.current,
-          hasActiveTask: !!(activeTask && activeTask.status === 'in_progress'),
-          hardSafety: true,
-          hardSafetyReasons: safetyDecision.reasons,
-          hardSafetyAction: safetyDecision.action,
-        });
-
-        logPolicyDecision(projectDir, {
-          tool: input.tool,
-          capability: capability.final,
-          capabilitySource: capability.source,
-          score: hardSafetyDecision.score,
-          factors: hardSafetyDecision.factors,
-          action: hardSafetyDecision.action,
-          hardSafety: hardSafetyDecision.hardSafety,
-          reason: hardSafetyDecision.reason,
-        });
-
-        debugLog(
-          `[POLICY] decision=${hardSafetyDecision.action} score=${hardSafetyDecision.score.toFixed(2)} ` +
-            `factors=${JSON.stringify(hardSafetyDecision.factors)} hardSafety=${hardSafetyDecision.hardSafety}`
-        );
+        transitionSetuPhase(input.sessionID, 'blocked_safety');
+        logExecutionPhase(projectDir, 'blocked_safety', 'blocked', safetyDecision.reasons.join('; '));
 
         throw new Error(
           formatGuidanceMessage(
             'Execution paused by safety policy',
-            formatPolicyDecisionSummary(
-              hardSafetyDecision.score,
-              hardSafetyDecision.action,
-              hardSafetyDecision.reason
-            ),
+            safetyDecision.reasons.join('; '),
             'Confirm explicitly before running this action.',
             'Use a lower-risk alternative if possible.'
           )
@@ -450,6 +522,27 @@ export function createToolExecuteBeforeHook(
           throw new Error(`🛡️ [Path Security] ${pathValidation.error}`);
         }
       }
+
+      if (input.tool === 'write' && getProjectDir && filePath) {
+        const projectDir = getProjectDir();
+        const fileExists = existsSync(normalizeForComparison(projectDir, filePath));
+        if (fileExists && !hasReadTargetFile(collector, projectDir, filePath)) {
+          setOverwriteRequirement(input.sessionID, {
+            pending: true,
+            filePath,
+            createdAt: Date.now(),
+          });
+
+          throw new Error(
+            formatGuidanceMessage(
+              'Read required before overwrite',
+              `Target file already exists: '${filePath}'.`,
+              `Read '${filePath}' first, then update it.`,
+              'Use edit for in-place updates after reading the file.'
+            )
+          );
+        }
+      }
       
       // SECRETS DETECTION
       // Scan content for accidental secrets before write/edit
@@ -497,56 +590,16 @@ export function createToolExecuteBeforeHook(
       }
     }
 
-    if (gearStateForPolicy && (capability.final === 'mutating' || capability.final === 'orchestration') && !policyExemptBash) {
-      const policyDecision: PolicyDecision = evaluatePolicyDecision({
-        tool: input.tool,
-        args: output.args,
-        gear: gearStateForPolicy.current,
-        hasActiveTask: !!(activeTask && activeTask.status === 'in_progress'),
-        hardSafety: false,
-        hardSafetyReasons: [],
-        hardSafetyAction: 'ask',
-      });
-
-      logPolicyDecision(projectDir, {
-        tool: input.tool,
-        capability: capability.final,
-        capabilitySource: capability.source,
-        score: policyDecision.score,
-        factors: policyDecision.factors,
-        action: policyDecision.action,
-        hardSafety: policyDecision.hardSafety,
-        reason: policyDecision.reason,
-      });
-
-      debugLog(
-        `[POLICY] decision=${policyDecision.action} score=${policyDecision.score.toFixed(2)} ` +
-          `factors=${JSON.stringify(policyDecision.factors)} hardSafety=${policyDecision.hardSafety}`
+    if (isMutating && setuState.phase === 'blocked_safety') {
+      logExecutionPhase(projectDir, 'blocked_safety', 'blocked', `Blocked tool=${input.tool} while safety block active`);
+      throw new Error(
+        formatGuidanceMessage(
+          'Safety block active',
+          'Previous action triggered safety block in this session.',
+          'Address the safety condition before continuing.',
+          'Use safer alternatives or explicitly confirm intent with the user.'
+        )
       );
-
-      if (policyDecision.action !== 'execute') {
-        clearFastPathState(input.sessionID);
-        throw new Error(
-          formatGuidanceMessage(
-            'Execution paused by policy',
-            formatPolicyDecisionSummary(policyDecision.score, policyDecision.action, policyDecision.reason),
-            'Confirm you want to proceed, or use setu_research/setu_plan for structured execution.',
-            'For simple changes, keep scope narrow to reduce complexity.'
-          )
-        );
-      }
-
-      skipGearEnforcement = true;
-      setFastPathState(input.sessionID, policyDecision.score < 3, policyDecision.score);
-      debugLog('POLICY_BYPASS_GEAR=true');
-    }
-
-    if (input.tool === 'setu_task') {
-      const action = getStringProp(output.args, 'action')?.toLowerCase();
-      const status = getStringProp(output.args, 'status')?.toLowerCase();
-      if (action === 'clear' || (action === 'update' && status === 'completed')) {
-        clearFastPathState(input.sessionID);
-      }
     }
     
     // Reserved bypass branch (currently unused; Setu enforces full policy)

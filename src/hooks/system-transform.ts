@@ -20,6 +20,8 @@ import {
   hasProjectRules,
   getJITContextSummary,
   loadActiveTask,
+  getSetuState,
+  getOverwriteRequirement,
 } from '../context';
 import { debugLog } from '../debug';
 import { getErrorMessage } from '../utils/error-handling';
@@ -137,6 +139,46 @@ export function createSystemTransformHook(
       if (stepsNeeded.length > 0) {
         output.system.push(`[Verify before done: ${stepsNeeded.join(', ')}]`);
       }
+    }
+
+    const setuState = getSetuState(_input.sessionID);
+    output.system.unshift(`[SETU: Phase] ${setuState.phase}`);
+
+    if (setuState.phase === 'researching' && !setuState.pendingQuestion) {
+      output.system.unshift(
+        '[SETU: Next Action] Continue silent research and save findings using setu_research before any execution.'
+      );
+    }
+
+    if (setuState.phase === 'planning' && !setuState.pendingQuestion) {
+      output.system.unshift(
+        '[SETU: Next Action] Build atomic plan and save with setu_plan before execution.'
+      );
+    }
+
+    if (setuState.phase === 'executing' && !setuState.pendingQuestion) {
+      output.system.unshift(
+        '[SETU: Next Action] Execute planned steps in order, then run setu_verify.'
+      );
+    }
+
+    if (setuState.pendingQuestion || setuState.phase === 'blocked_question') {
+      output.system.unshift(
+        `[SETU: Clarification Required]\n` +
+          `Your next assistant response must be a single native question tool call.\n` +
+          `Do not ask in plain chat text. Use the native question tool with recommendations first.\n` +
+          `Do not execute implementation tools until the question is answered.`
+      );
+    }
+
+    const overwriteRequirement = getOverwriteRequirement(_input.sessionID);
+    if (overwriteRequirement?.pending) {
+      output.system.unshift(
+        `[SETU: Overwrite Guard]\n` +
+          `Pending requirement: read '${overwriteRequirement.filePath}' before any mutation.\n\n` +
+          `Next action must be read on that file.\n` +
+          `Do not use bash/write/edit as a workaround.`
+      );
     }
 
     // JIT Context Injection: Inject active task context for subagent awareness

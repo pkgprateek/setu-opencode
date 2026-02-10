@@ -168,7 +168,7 @@ export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockR
   switch (gear) {
     case 'scout': {
       // Only read-only tools or approved Setu tools allowed
-      const scoutAllowedSetuTools = new Set(['setu_research', 'setu_doctor']);
+      const scoutAllowedSetuTools = new Set(['setu_task', 'setu_context', 'setu_research', 'setu_doctor', 'setu_feedback']);
       const isScoutAllowedSetuTool = isSetuTool(tool) && scoutAllowedSetuTools.has(tool);
       if (!isReadOnlyTool(tool) && !isScoutAllowedSetuTool) {
         return {

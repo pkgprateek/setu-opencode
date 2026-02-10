@@ -34,7 +34,7 @@ export {
   saveContext,
   createContextCollector,
   logVerification,
-  logPolicyDecision,
+  logExecutionPhase,
   detectProjectInfo,
   ensureSetuDir
 } from './storage';
@@ -105,3 +105,18 @@ export {
   formatRulesForInjection,
   hasProjectRules
 } from './project-rules';
+
+// Setu runtime state
+export type { SetuPhase, SetuSessionState, OverwriteRequirementState } from './setu-state';
+
+export {
+  getSetuState,
+  setSetuState,
+  transitionSetuPhase,
+  setQuestionBlocked,
+  clearQuestionBlocked,
+  clearSetuState,
+  setOverwriteRequirement,
+  getOverwriteRequirement,
+  clearOverwriteRequirement,
+} from './setu-state';

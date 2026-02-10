@@ -250,6 +250,15 @@ export const SetuPlugin: Plugin = async (ctx) => {
   debugLog('Context persistence: .setu/ directory');
   debugLog('Tools: setu_verify, setu_context, setu_feedback, setu_task');
   debugLog('Skills bundled: setu-bootstrap, setu-verification, setu-rules-creation');
+
+  // Create tool.before hook once so session-scoped policy state persists correctly.
+  const beforeHook = createToolExecuteBeforeHook(
+    getPhase0State,
+    getCurrentAgent,
+    getContextCollector,
+    getProjectDir,
+    getVerificationState
+  );
   
   return {
     // Set Setu as the default agent
@@ -305,13 +314,6 @@ export const SetuPlugin: Plugin = async (ctx) => {
       }
       
       // Delegate to the main before hook for Phase 0 enforcement
-      const beforeHook = createToolExecuteBeforeHook(
-        getPhase0State, 
-        getCurrentAgent,
-        getContextCollector,
-        getProjectDir,
-        getVerificationState  // Git Discipline: verification enforcement
-      );
       return beforeHook(input, output);
     },
     
