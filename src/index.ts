@@ -4,7 +4,6 @@
  * A master craftsman persona that transforms AI into a thoughtful, expert colleague.
  * 
  * Features:
- * - Operating profiles: Ultrathink, Quick, Expert, Collab
  * - Enforcement: Phase 0 blocking, verification before completion
  * - Context persistence: .setu/ directory for session continuity
  * - Skills: Bootstrap, verification, rules creation, code quality, and more
@@ -15,7 +14,6 @@
 import type { Plugin } from '@opencode-ai/plugin';
 import { existsSync } from 'fs';
 import { join } from 'path';
-import { type StyleState } from './prompts/styles';
 import {
   createSystemTransformHook,
   createChatMessageHook,
@@ -50,7 +48,6 @@ import { wrapHook } from './utils/error-handling';
 
 // Plugin state
 interface SetuState {
-  style: StyleState;
   currentAgent: string;
   isFirstSession: boolean;
   verificationSteps: Set<VerificationStep>;
@@ -78,7 +75,7 @@ interface SetuState {
  * Uses available hooks from the OpenCode Plugin API:
  * - config: Set default_agent to "setu"
  * - experimental.chat.system.transform: Inject persona into system prompt
- * - chat.message: Detect style keywords in user messages, track current agent
+  * - chat.message: Track current agent
  * - tool.execute.before: Phase 0 enforcement (block side-effects until context confirmed)
  * - tool.execute.after: Track verification steps, file reads, searches
  * - event: Handle session lifecycle, load context on start
@@ -120,10 +117,6 @@ export const SetuPlugin: Plugin = async (ctx) => {
   
   // Initialize state
   const state: SetuState = {
-    style: {
-      current: 'ultrathink',
-      isPersistent: true
-    },
     currentAgent: 'setu', // Default to setu since we set it as default_agent
     isFirstSession: true,
     verificationSteps: new Set(),
@@ -160,9 +153,6 @@ export const SetuPlugin: Plugin = async (ctx) => {
   const activeBatches = createActiveBatchesMap();
   
   // State accessors
-  const getStyleState = () => state.style;
-  const setStyleState = (newState: StyleState) => { state.style = newState; };
-  const getSetuStyle = () => state.style.current;
   
   // Cached file existence checker (silent, no errors)
   // Cache lasts 5 seconds to avoid repeated fs.existsSync calls
@@ -255,7 +245,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
   
   // Log plugin initialization (only in debug mode)
   debugLog('Plugin initialized');
-  debugLog('Default style:', state.style.current);
+  debugLog('Default mindset: Prime');
   debugLog('Phase 0 enforcement: ACTIVE');
   debugLog('Context persistence: .setu/ directory');
   debugLog('Tools: setu_verify, setu_context, setu_feedback, setu_task');
@@ -282,30 +272,24 @@ export const SetuPlugin: Plugin = async (ctx) => {
     'experimental.chat.system.transform': wrapHook(
       'system.transform',
       createSystemTransformHook(
-        getStyleState,
         getVerificationState,
         () => state.setuFilesExist, // Pass file existence for lazy loading
         getCurrentAgent,
         getContextCollector, // Pass context collector for content injection
         getProjectRules,      // Pass project rules for Silent Exploration injection
         () => state.projectDir // Pass project directory for JIT context injection
-        // NOTE: setStyleState removed - transform is pure, chat.message handles persistence
       )
     ),
     
-    // Detect style keywords in user messages and track current agent
+    // Track current agent
     // Wrapped for graceful degradation (2.10)
     'chat.message': wrapHook(
       'chat.message',
-      createChatMessageHook(
-        getStyleState,
-        setStyleState,
-        setCurrentAgent
-      )
+      createChatMessageHook(setCurrentAgent)
     ),
     
     // Phase 0: Block side-effect tools until context is confirmed
-    // Consolidated enforcement (agent + style level)
+    // Consolidated enforcement (agent + policy)
     // Also enforces active task constraints (READ_ONLY, NO_PUSH, etc.)
     // Also enforces Git Discipline (verification before commit/push)
     // Also records tool execution for parallel tracking (audit trail)
@@ -325,7 +309,6 @@ export const SetuPlugin: Plugin = async (ctx) => {
         getPhase0State, 
         getCurrentAgent,
         getContextCollector,
-        getSetuStyle,
         getProjectDir,
         getVerificationState  // Git Discipline: verification enforcement
       );
@@ -375,7 +358,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
     
     // Custom tools
     tool: {
-      setu_verify: createSetuVerifyTool(getStyleState, markVerificationComplete, getProjectDir),
+      setu_verify: createSetuVerifyTool(markVerificationComplete, getProjectDir),
       setu_context: createSetuContextTool(getPhase0State, confirmContext, getContextCollector, getProjectDir),
       setu_feedback: createSetuFeedbackTool(getProjectDir),
       setu_task: createSetuTaskTool(getProjectDir, resetVerificationState),

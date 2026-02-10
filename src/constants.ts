@@ -162,59 +162,8 @@ export const PARALLEL_BATCH_WINDOW_MS = 100;
 export const FILE_CACHE_TTL_MS = 5000;
 
 // ============================================================================
-// Magic Command Patterns
+// Runtime constants
 // ============================================================================
-
-/**
- * Prefix commands (vim/slack style)
- * Format: `:style` at the start of a message
- * 
- * Why colon (:)?
- * - Evokes "command mode" (vim/slack)
- * - Distinct from shell ($) or paths (/)
- */
-export const COMMAND_PREFIX = ':' as const;
-
-/**
- * Valid style names for magic commands
- */
-export const VALID_STYLES = ['ultrathink', 'quick', 'collab'] as const;
-
-/**
- * Style display names for user-facing feedback
- */
-export const STYLE_DISPLAY: Record<typeof VALID_STYLES[number], string> = {
-  ultrathink: 'Ultrathink',
-  quick: 'Quick',
-  collab: 'Collab'
-} as const;
-
-/**
- * Aliases for style names (shorthand convenience)
- */
-export const STYLE_ALIASES: Record<string, typeof VALID_STYLES[number]> = {
-  // Ultrathink aliases
-  'default': 'ultrathink',
-  'full': 'ultrathink',
-  'think': 'ultrathink',
-  
-  // Quick aliases
-  'fast': 'quick',
-  'q': 'quick',
-  
-  // Collab aliases (absorbs expert's use cases)
-  'discuss': 'collab',
-  'collaborate': 'collab',
-  'trust': 'collab',
-  'x': 'collab',
-  'expert': 'collab'
-} as const;
-
-/**
- * Key-value prefixes for natural language style changes
- * Supports: "style: quick", "mode: quick", "preset: quick"
- */
-export const KEY_VALUE_PREFIXES = ['style', 'mode', 'preset'] as const;
 
 // ============================================================================
 // Rate Limits
