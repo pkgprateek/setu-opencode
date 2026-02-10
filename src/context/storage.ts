@@ -35,7 +35,6 @@ export { MAX_INJECTION_SIZE } from './limits';
 
 const CONTEXT_JSON = 'context.json';
 const VERIFICATION_LOG = 'verification.log';
-const EXECUTION_LOG = 'execution.log';
 
 
 // Log rotation settings (from PLAN.md Section 2.9.4)
@@ -474,38 +473,6 @@ export function logVerification(
   }
   
   appendFileSync(logPath, entry, 'utf-8');
-}
-
-export function logExecutionPhase(
-  projectDir: string,
-  phase: string,
-  event: 'enter' | 'complete' | 'blocked',
-  detail?: string
-): void {
-  const setuDir = ensureSetuDir(projectDir);
-  const logPath = join(setuDir, EXECUTION_LOG);
-
-  if (existsSync(logPath)) {
-    try {
-      const stats = statSync(logPath);
-      if (stats.size > MAX_LOG_SIZE) {
-        rotateLog(logPath);
-      }
-    } catch {
-      // Ignore stat errors
-    }
-  }
-
-  if (!existsSync(logPath)) {
-    writeFileSync(logPath, '# Setu Execution Log\n\nChronological protocol events.\n', 'utf-8');
-  }
-
-  const timestamp = new Date().toISOString();
-  const safePhase = String(sanitizeInput(phase));
-  const safeEvent = String(sanitizeInput(event));
-  const safeDetail = detail ? String(sanitizeInput(detail)) : '';
-  const line = `\n- ${timestamp} | phase=${safePhase} | event=${safeEvent}${safeDetail ? ` | detail=${safeDetail}` : ''}`;
-  appendFileSync(logPath, line, 'utf-8');
 }
 
 /**

@@ -1,17 +1,15 @@
-export type SetuPhase =
-  | 'received'
-  | 'researching'
-  | 'planning'
-  | 'executing'
-  | 'verifying'
-  | 'done'
-  | 'blocked_safety'
-  | 'blocked_question';
-
-export interface SetuSessionState {
-  phase: SetuPhase;
-  pendingQuestion: boolean;
+/**
+ * Discipline guards - safety mechanisms that can activate at any gear.
+ * These are NOT workflow phases. Gears handle workflow order.
+ */
+export interface SetuDisciplineState {
+  /** Whether a clarification question must be answered before continuing */
+  questionBlocked: boolean;
+  /** Reason for question block (displayed to agent) */
   questionReason?: string;
+  /** Whether a safety classifier triggered a block */
+  safetyBlocked: boolean;
+  /** When this state was last updated (for TTL) */
   updatedAt: number;
 }
 
@@ -21,7 +19,7 @@ export interface OverwriteRequirementState {
   createdAt: number;
 }
 
-const sessionStates = new Map<string, SetuSessionState>();
+const sessionStates = new Map<string, SetuDisciplineState>();
 const overwriteRequirements = new Map<string, OverwriteRequirementState>();
 const STATE_TTL_MS = 30 * 60 * 1000;
 const OVERWRITE_REQUIREMENT_TTL_MS = 10 * 60 * 1000;
@@ -30,12 +28,12 @@ function isStale(updatedAt: number, ttlMs: number): boolean {
   return Date.now() - updatedAt > ttlMs;
 }
 
-export function getSetuState(sessionID: string): SetuSessionState {
+export function getDisciplineState(sessionID: string): SetuDisciplineState {
   const state = sessionStates.get(sessionID);
   if (!state || isStale(state.updatedAt, STATE_TTL_MS)) {
-    const initial: SetuSessionState = {
-      phase: 'received',
-      pendingQuestion: false,
+    const initial: SetuDisciplineState = {
+      questionBlocked: false,
+      safetyBlocked: false,
       updatedAt: Date.now(),
     };
     sessionStates.set(sessionID, initial);
@@ -45,45 +43,52 @@ export function getSetuState(sessionID: string): SetuSessionState {
   return state;
 }
 
-export function setSetuState(sessionID: string, state: Omit<SetuSessionState, 'updatedAt'>): void {
+export function setDisciplineState(sessionID: string, state: Omit<SetuDisciplineState, 'updatedAt'>): void {
   sessionStates.set(sessionID, {
     ...state,
-    updatedAt: Date.now(),
-  });
-}
-
-export function transitionSetuPhase(sessionID: string, phase: SetuPhase): void {
-  const state = getSetuState(sessionID);
-  sessionStates.set(sessionID, {
-    ...state,
-    phase,
     updatedAt: Date.now(),
   });
 }
 
 export function setQuestionBlocked(sessionID: string, reason: string): void {
-  const state = getSetuState(sessionID);
+  const state = getDisciplineState(sessionID);
   sessionStates.set(sessionID, {
     ...state,
-    phase: 'blocked_question',
-    pendingQuestion: true,
+    questionBlocked: true,
     questionReason: reason,
     updatedAt: Date.now(),
   });
 }
 
 export function clearQuestionBlocked(sessionID: string): void {
-  const state = getSetuState(sessionID);
+  const state = getDisciplineState(sessionID);
   sessionStates.set(sessionID, {
     ...state,
-    pendingQuestion: false,
+    questionBlocked: false,
     questionReason: undefined,
-    phase: state.phase === 'blocked_question' ? 'researching' : state.phase,
     updatedAt: Date.now(),
   });
 }
 
-export function clearSetuState(sessionID: string): void {
+export function setSafetyBlocked(sessionID: string): void {
+  const state = getDisciplineState(sessionID);
+  sessionStates.set(sessionID, {
+    ...state,
+    safetyBlocked: true,
+    updatedAt: Date.now(),
+  });
+}
+
+export function clearSafetyBlocked(sessionID: string): void {
+  const state = getDisciplineState(sessionID);
+  sessionStates.set(sessionID, {
+    ...state,
+    safetyBlocked: false,
+    updatedAt: Date.now(),
+  });
+}
+
+export function clearDisciplineState(sessionID: string): void {
   sessionStates.delete(sessionID);
 }
 

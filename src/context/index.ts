@@ -34,7 +34,6 @@ export {
   saveContext,
   createContextCollector,
   logVerification,
-  logExecutionPhase,
   detectProjectInfo,
   ensureSetuDir
 } from './storage';
@@ -106,16 +105,17 @@ export {
   hasProjectRules
 } from './project-rules';
 
-// Setu runtime state
-export type { SetuPhase, SetuSessionState, OverwriteRequirementState } from './setu-state';
+// Discipline guards (safety, question blocking, overwrite protection)
+export type { SetuDisciplineState, OverwriteRequirementState } from './setu-state';
 
 export {
-  getSetuState,
-  setSetuState,
-  transitionSetuPhase,
+  getDisciplineState,
+  setDisciplineState,
   setQuestionBlocked,
   clearQuestionBlocked,
-  clearSetuState,
+  setSafetyBlocked,
+  clearSafetyBlocked,
+  clearDisciplineState,
   setOverwriteRequirement,
   getOverwriteRequirement,
   clearOverwriteRequirement,
