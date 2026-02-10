@@ -3,6 +3,7 @@ import { validateProjectDir } from '../utils/path-validation';
 import { join } from 'path';
 import { writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
+import { setQuestionBlocked } from '../context';
 import { resetProgress } from '../context/active';
 import { ensureSetuDir } from '../context/storage';
 import { clearResults } from '../context/results';
@@ -72,7 +73,7 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
     steps: tool.schema.string().describe('Full step definitions using the atomic format (see PLAN_TEMPLATE)'),
     successCriteria: tool.schema.string().describe('Truths, artifacts, and key links that prove completion')
   },
-  async execute(args, _context) {
+  async execute(args, context) {
     const projectDir = getProjectDir();
 
     // Validate projectDir to prevent directory traversal
@@ -138,10 +139,18 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
       resultsCleared = false;
     }
     
+    // Trigger user approval before execution begins
+    if (context?.sessionID) {
+      setQuestionBlocked(
+        context.sessionID,
+        `Plan created with ${stepCount} steps. Ask the user to review and approve the plan before executing.`
+      );
+    }
+
     // SECURITY: Log gear transition (architect → builder unlocks write operations)
     debugLog(`[AUDIT] Gear transition: architect → builder. Plan created with ${stepCount} steps. Project: ${projectDir}`);
     
-    return `Plan created with ${stepCount} steps. Gear shifted: architect → builder. Progress reset to Step 0. ${resultsCleared ? 'Old results cleared.' : 'Warning: failed to clear old results.'} Ready for execution.`;
+    return `Plan created with ${stepCount} steps. Gear shifted: architect → builder. Progress reset to Step 0. ${resultsCleared ? 'Old results cleared.' : 'Warning: failed to clear old results.'}\n\n**Action required**: Ask the user to confirm this plan before executing.`;
   }
 });
 

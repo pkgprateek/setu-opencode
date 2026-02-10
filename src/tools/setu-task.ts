@@ -12,6 +12,8 @@
  */
 
 import { tool } from '@opencode-ai/plugin';
+import { appendFileSync, existsSync, readFileSync, unlinkSync } from 'fs';
+import { join } from 'path';
 import {
   createActiveTask,
   saveActiveTask,
@@ -138,6 +140,31 @@ setu_task({
   constraints: ["NO_PUSH"]
 })
 \`\`\``;
+          }
+
+          // Archive old artifacts to reset gear to scout.
+          // New task should not inherit previous task's RESEARCH/PLAN artifacts.
+          const setuDir = join(projectDir, '.setu');
+          const researchPath = join(setuDir, 'RESEARCH.md');
+          const planPath = join(setuDir, 'PLAN.md');
+          const historyPath = join(setuDir, 'HISTORY.md');
+
+          if (existsSync(researchPath)) {
+            const timestamp = new Date().toISOString();
+            const oldResearch = readFileSync(researchPath, 'utf-8');
+            const archiveEntry = `\n---\n## Archived Research (${timestamp})\n\n${oldResearch}\n`;
+            appendFileSync(historyPath, archiveEntry, 'utf-8');
+            unlinkSync(researchPath);
+            debugLog('Archived old RESEARCH.md to HISTORY.md');
+          }
+
+          if (existsSync(planPath)) {
+            const timestamp = new Date().toISOString();
+            const oldPlan = readFileSync(planPath, 'utf-8');
+            const archiveEntry = `\n---\n## Archived Plan (${timestamp})\n\n${oldPlan}\n`;
+            appendFileSync(historyPath, archiveEntry, 'utf-8');
+            unlinkSync(planPath);
+            debugLog('Archived old PLAN.md to HISTORY.md');
           }
           
           const constraints = validateConstraints(args.constraints);

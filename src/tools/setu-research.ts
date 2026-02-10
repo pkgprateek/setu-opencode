@@ -2,6 +2,7 @@ import { tool } from '@opencode-ai/plugin';
 import { join } from 'path';
 import { writeFile } from 'fs/promises';
 import { ensureSetuDir } from '../context/storage';
+import { setQuestionBlocked } from '../context';
 import { getErrorMessage } from '../utils/error-handling';
 import { createPromptSanitizer } from '../utils/sanitization';
 import { validateProjectDir } from '../utils/path-validation';
@@ -11,16 +12,18 @@ const sanitizeSummary = createPromptSanitizer(5000);
 const sanitizeConstraints = createPromptSanitizer(2000);
 const sanitizePatterns = createPromptSanitizer(2000);
 const sanitizeLearningsField = createPromptSanitizer(2000);
+const sanitizeOpenQuestions = createPromptSanitizer(2000);
 
 export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<typeof tool> => tool({
   description: 'Save research findings to .setu/RESEARCH.md. Call this when you understand the task.',
   args: {
-    summary: tool.schema.string().describe('Summary of findings'),
-    constraints: tool.schema.string().optional().describe('Discovered constraints'),
-    patterns: tool.schema.string().optional().describe('Observed patterns'),
-    learnings: tool.schema.string().optional().describe('What worked/failed')
+    summary: tool.schema.string().describe('Research findings in markdown format. Include codebase analysis, patterns found, and relevant context.'),
+    constraints: tool.schema.string().optional().describe('Discovered constraints, limitations, or technical debt'),
+    patterns: tool.schema.string().optional().describe('Observed patterns in the codebase (architecture, naming, testing)'),
+    learnings: tool.schema.string().optional().describe('What worked/failed during research'),
+    openQuestions: tool.schema.string().optional().describe('Unresolved questions needing user input (e.g., stack choice, deployment target)')
   },
-  async execute(args, _context) {
+  async execute(args, context) {
     const projectDir = getProjectDir();
 
     // Validate projectDir to prevent directory traversal
@@ -40,7 +43,8 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
       summary: sanitizeSummary(args.summary),
       constraints: args.constraints ? sanitizeConstraints(args.constraints) : undefined,
       patterns: args.patterns ? sanitizePatterns(args.patterns) : undefined,
-      learnings: args.learnings ? sanitizeLearningsField(args.learnings) : undefined
+      learnings: args.learnings ? sanitizeLearningsField(args.learnings) : undefined,
+      openQuestions: args.openQuestions ? sanitizeOpenQuestions(args.openQuestions) : undefined
     };
     
     const content = formatResearch(sanitizedArgs);
@@ -53,6 +57,14 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
       throw new Error(`Failed to save research: ${getErrorMessage(error)}. Check .setu/ directory permissions.`);
     }
     
+    if (sanitizedArgs.openQuestions && sanitizedArgs.openQuestions.trim().length > 0 && context?.sessionID) {
+      setQuestionBlocked(
+        context.sessionID,
+        `Research has open questions that need answers before planning:\n${sanitizedArgs.openQuestions}`
+      );
+      return 'Research saved. Open questions detected - use the question tool to ask the user before proceeding to setu_plan.';
+    }
+
     return `Research saved. Gear shifted: scout → architect. You can now create PLAN.md.`;
   }
 });
@@ -64,27 +76,41 @@ function formatResearch(args: {
   constraints?: string;
   patterns?: string;
   learnings?: string;
+  openQuestions?: string;
 }): string {
-  return `# Research Summary
+  let content = `# Research Summary
 
 ## Findings
 
 ${args.summary}
+`;
 
+  if (args.constraints) content += `
 ## Constraints
 
-${args.constraints || 'None identified.'}
-
+${args.constraints}
+`;
+  if (args.patterns) content += `
 ## Patterns Observed
 
-${args.patterns || 'None identified.'}
-
+${args.patterns}
+`;
+  if (args.learnings) content += `
 ## Learnings
 
-${args.learnings || 'No specific learnings yet.'}
+${args.learnings}
+`;
+  if (args.openQuestions) content += `
+## Open Questions
 
+${args.openQuestions}
+`;
+
+  content += `
 ## Next Steps
 
 Ready to create PLAN.md.
 `;
+
+  return content;
 }
