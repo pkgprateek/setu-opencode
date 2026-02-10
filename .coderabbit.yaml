@@ -140,15 +140,15 @@ reviews:
         - Response discipline must prevent meta-reasoning leakage
         - Standards section must emphasize safety, architecture, craftsmanship
         - No behavioral instructions (those are enforced by hooks, not prompts)
-        - Color/mode metadata must be correct
+        - Prime mindset metadata must be correct
 
     - path: "src/prompts/**/*.ts"
       instructions: |
         PROMPT INJECTIONS ARE DYNAMIC STATE. Verify:
 
-        - `getStateInjection()` must only inject dynamic content (style, file availability)
+        - `getStateInjection()` must only inject dynamic content (mindset/runtime tag, file availability)
         - Never inject static "efficiency rules" — enforce via hooks
-        - Style prefix `[Style: X]` must be concise
+        - Runtime prefix `[Setu: Prime]` must be concise
         - File availability info must be accurate
         - Keep persona overhead minimal
 
