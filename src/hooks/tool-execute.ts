@@ -19,11 +19,11 @@ import {
   createGearBlockMessage,
   type Phase0State
 } from '../enforcement';
-import { type ContextCollector, formatContextForInjection, contextToSummary } from '../context';
+import { classifyToolCapability, evaluatePolicyDecision, type PolicyDecision } from '../enforcement';
+import { type ContextCollector, formatContextForInjection, contextToSummary, logPolicyDecision } from '../context';
 import { loadActiveTask, shouldBlockDueToConstraint } from '../context/active';
-import { type SetuStyle, getStyleEnforcementLevel } from '../prompts/styles';
 import { debugLog } from '../debug';
-import { isString, getStringProp, getCurrentBranch, isProtectedBranch } from '../utils';
+import { isString, getStringProp, getCurrentBranch, isProtectedBranch, formatGuidanceMessage, formatPolicyDecisionSummary } from '../utils';
 import { isReadOnlyTool, PARALLEL_BATCH_WINDOW_MS } from '../constants';
 import { 
   detectSecrets, 
@@ -32,7 +32,9 @@ import {
   SecurityEventType,
   type SecretMatch
 } from '../security';
+import { classifyHardSafety } from '../security/safety-classifier';
 import { sanitizeArgs } from '../utils/error-handling';
+import { detectEnvironmentConflict } from '../environment/detector';
 
 // ============================================================================
 // Verification Step Tracking
@@ -60,36 +62,21 @@ export interface ToolExecuteBeforeOutput {
 }
 
 /**
- * Enforcement level based on Setu style
+ * Enforcement level for Setu policy
  */
 export type EnforcementLevel = 'full' | 'light' | 'none';
 
 /**
- * Determines enforcement level based on Setu style.
- * Only used when in Setu agent mode.
- *
- * @param setuStyle - The Setu style (ultrathink/quick/collab)
- * @returns The enforcement level for Phase 0
+ * Setu always enforces full policy when active.
  */
-export function getSetuEnforcementLevel(setuStyle: SetuStyle): EnforcementLevel {
-  const styleLevel = getStyleEnforcementLevel(setuStyle);
-  
-  switch (styleLevel) {
-    case 'strict':
-      return 'full';    // Ultrathink: full blocking
-    case 'none':
-      return 'none';    // Quick: no blocking
-    case 'light':
-      return 'light';   // Expert/Collab: warn but don't block
-    default:
-      return 'full';    // Safe default: full enforcement
-  }
+export function getSetuEnforcementLevel(): EnforcementLevel {
+  return 'full';
 }
 
 /**
  * Determines enforcement level based on the current agent.
  * 
- * @deprecated Use getSetuEnforcementLevel with a SetuStyle instead.
+ * @deprecated Use getSetuEnforcementLevel instead.
  * This function returns hardcoded 'full' for 'setu' agent and 'none' otherwise.
  * Kept for backwards compatibility only.
  */
@@ -107,6 +94,14 @@ export interface VerificationState {
   complete: boolean;
   stepsRun: Set<VerificationStep>;
 }
+
+interface PolicySessionState {
+  fastPathActive: boolean;
+  lastScore: number;
+  updatedAt: number;
+}
+
+const POLICY_SESSION_TTL_MS = 30 * 60 * 1000;
 
 /**
  * Git commit/push command patterns for interception
@@ -169,7 +164,6 @@ const PACKAGE_MANIFEST_PATTERNS = [
  * @param getPhase0State - Accessor that returns the current Phase 0 state (kept for backwards compat)
  * @param getCurrentAgent - Optional accessor for the current agent identifier; defaults to "setu" when omitted
  * @param getContextCollector - Optional accessor for a ContextCollector used to obtain and format confirmed context for injection
- * @param getSetuStyle - Optional accessor for the current Setu style (used for style-level enforcement when in Setu mode)
  * @param getProjectDir - Optional accessor for project directory (used for constraint loading and gear determination)
  * @param getVerificationState - Optional accessor for verification state (used for git discipline enforcement)
  * @returns A hook function invoked before tool execution that enforces Gearbox rules and may throw an Error when a tool is blocked
@@ -178,10 +172,33 @@ export function createToolExecuteBeforeHook(
   getPhase0State: () => Phase0State,
   getCurrentAgent?: () => string,
   getContextCollector?: () => ContextCollector | null,
-  getSetuStyle?: () => SetuStyle,
   getProjectDir?: () => string,
   getVerificationState?: () => VerificationState
 ): (input: ToolExecuteBeforeInput, output: ToolExecuteBeforeOutput) => Promise<void> {
+  const policySessions = new Map<string, PolicySessionState>();
+
+  const getPolicySessionState = (sessionID: string): PolicySessionState | null => {
+    const state = policySessions.get(sessionID);
+    if (!state) return null;
+    if (Date.now() - state.updatedAt > POLICY_SESSION_TTL_MS) {
+      policySessions.delete(sessionID);
+      return null;
+    }
+    return state;
+  };
+
+  const setFastPathState = (sessionID: string, active: boolean, score: number): void => {
+    policySessions.set(sessionID, {
+      fastPathActive: active,
+      lastScore: score,
+      updatedAt: Date.now(),
+    });
+  };
+
+  const clearFastPathState = (sessionID: string): void => {
+    policySessions.delete(sessionID);
+  };
+
   return async (
     input: ToolExecuteBeforeInput,
     output: ToolExecuteBeforeOutput
@@ -196,9 +213,98 @@ export function createToolExecuteBeforeHook(
     // SECURITY: Sanitize args to prevent control char injection (2.9.2)
     // Removes null bytes and control characters that could bypass parsing
     output.args = sanitizeArgs(output.args);
+
+    const sessionState = getPolicySessionState(input.sessionID);
+
+    if ((input.tool === 'setu_research' || input.tool === 'setu_plan') && sessionState?.fastPathActive) {
+      const forceOverride = output.args.force === true;
+      if (!forceOverride) {
+        throw new Error(
+          formatGuidanceMessage(
+            'Research/plan skipped for low-complexity fast path',
+            `Current request was classified as low complexity (score=${sessionState.lastScore.toFixed(2)}).`,
+            'Proceed directly with implementation and quick verification.',
+            'If you explicitly want research/plan anyway, retry with force=true.'
+          )
+        );
+      }
+    }
+
+    const projectDir = getProjectDir ? getProjectDir() : process.cwd();
+    const activeTask = getProjectDir ? loadActiveTask(projectDir) : null;
+    const gearStateForPolicy = getProjectDir ? determineGear(projectDir) : null;
+    const capability = classifyToolCapability(input.tool, output.args);
+    let skipGearEnforcement = false;
+
+    const policyExemptBash = (() => {
+      if (input.tool !== 'bash') return false;
+      const command = getStringProp(output.args, 'command') ?? '';
+      return GIT_COMMIT_PATTERN.test(command) || GIT_PUSH_PATTERN.test(command);
+    })();
+
+    if (gearStateForPolicy && capability.final === 'unknown') {
+      clearFastPathState(input.sessionID);
+      throw new Error(
+        formatGuidanceMessage(
+          'Execution paused for unknown tool capability',
+          `Tool '${input.tool}' could not be confidently classified (source=${capability.source}).`,
+          'Confirm the intent and risk of this tool call before proceeding.',
+          'Use read-only tools or Setu-native tools for deterministic behavior.'
+        )
+      );
+    }
+
+    if (gearStateForPolicy && capability.final === 'read_only') {
+      skipGearEnforcement = true;
+      debugLog('POLICY_BYPASS_GEAR_READ_ONLY=true');
+    }
+
+    if (gearStateForPolicy && capability.final === 'mutating' && !policyExemptBash) {
+      const safetyDecision = classifyHardSafety(input.tool, output.args);
+      if (safetyDecision.hardSafety) {
+        clearFastPathState(input.sessionID);
+        const hardSafetyDecision: PolicyDecision = evaluatePolicyDecision({
+          tool: input.tool,
+          args: output.args,
+          gear: gearStateForPolicy.current,
+          hasActiveTask: !!(activeTask && activeTask.status === 'in_progress'),
+          hardSafety: true,
+          hardSafetyReasons: safetyDecision.reasons,
+          hardSafetyAction: safetyDecision.action,
+        });
+
+        logPolicyDecision(projectDir, {
+          tool: input.tool,
+          capability: capability.final,
+          capabilitySource: capability.source,
+          score: hardSafetyDecision.score,
+          factors: hardSafetyDecision.factors,
+          action: hardSafetyDecision.action,
+          hardSafety: hardSafetyDecision.hardSafety,
+          reason: hardSafetyDecision.reason,
+        });
+
+        debugLog(
+          `[POLICY] decision=${hardSafetyDecision.action} score=${hardSafetyDecision.score.toFixed(2)} ` +
+            `factors=${JSON.stringify(hardSafetyDecision.factors)} hardSafety=${hardSafetyDecision.hardSafety}`
+        );
+
+        throw new Error(
+          formatGuidanceMessage(
+            'Execution paused by safety policy',
+            formatPolicyDecisionSummary(
+              hardSafetyDecision.score,
+              hardSafetyDecision.action,
+              hardSafetyDecision.reason
+            ),
+            'Confirm explicitly before running this action.',
+            'Use a lower-risk alternative if possible.'
+          )
+        );
+      }
+    }
     
-    const setuStyle = getSetuStyle ? getSetuStyle() : 'ultrathink';
-    const enforcementLevel = getSetuEnforcementLevel(setuStyle);
+    const enforcementLevel = getSetuEnforcementLevel();
     
     // Context injection for task tool (subagent prompts)
     if (input.tool === 'task' && getContextCollector) {
@@ -225,6 +331,18 @@ export function createToolExecuteBeforeHook(
     // This applies in Setu mode regardless of gear state
     if (input.tool === 'bash' && getVerificationState) {
       const command = getStringProp(output.args, 'command') ?? '';
+      const envConflict = detectEnvironmentConflict(command);
+      if (envConflict.hasConflict) {
+        throw new Error(
+          formatGuidanceMessage(
+            'Potential environment conflict',
+            envConflict.reason ?? 'Command can conflict with active development processes.',
+            'Stop the dev server first, then run build/verification commands.',
+            'If you must continue, run the command manually after confirming local state.'
+          )
+        );
+      }
+
       const verificationState = getVerificationState();
       
       // Check for git commit - enhanced pre-commit checklist
@@ -378,8 +496,60 @@ export function createToolExecuteBeforeHook(
         }
       }
     }
+
+    if (gearStateForPolicy && (capability.final === 'mutating' || capability.final === 'orchestration') && !policyExemptBash) {
+      const policyDecision: PolicyDecision = evaluatePolicyDecision({
+        tool: input.tool,
+        args: output.args,
+        gear: gearStateForPolicy.current,
+        hasActiveTask: !!(activeTask && activeTask.status === 'in_progress'),
+        hardSafety: false,
+        hardSafetyReasons: [],
+        hardSafetyAction: 'ask',
+      });
+
+      logPolicyDecision(projectDir, {
+        tool: input.tool,
+        capability: capability.final,
+        capabilitySource: capability.source,
+        score: policyDecision.score,
+        factors: policyDecision.factors,
+        action: policyDecision.action,
+        hardSafety: policyDecision.hardSafety,
+        reason: policyDecision.reason,
+      });
+
+      debugLog(
+        `[POLICY] decision=${policyDecision.action} score=${policyDecision.score.toFixed(2)} ` +
+          `factors=${JSON.stringify(policyDecision.factors)} hardSafety=${policyDecision.hardSafety}`
+      );
+
+      if (policyDecision.action !== 'execute') {
+        clearFastPathState(input.sessionID);
+        throw new Error(
+          formatGuidanceMessage(
+            'Execution paused by policy',
+            formatPolicyDecisionSummary(policyDecision.score, policyDecision.action, policyDecision.reason),
+            'Confirm you want to proceed, or use setu_research/setu_plan for structured execution.',
+            'For simple changes, keep scope narrow to reduce complexity.'
+          )
+        );
+      }
+
+      skipGearEnforcement = true;
+      setFastPathState(input.sessionID, policyDecision.score < 3, policyDecision.score);
+      debugLog('POLICY_BYPASS_GEAR=true');
+    }
+
+    if (input.tool === 'setu_task') {
+      const action = getStringProp(output.args, 'action')?.toLowerCase();
+      const status = getStringProp(output.args, 'status')?.toLowerCase();
+      if (action === 'clear' || (action === 'update' && status === 'completed')) {
+        clearFastPathState(input.sessionID);
+      }
+    }
     
-    // Quick profile bypasses Gearbox enforcement (but NOT constraints or safety checks above)
+    // Reserved bypass branch (currently unused; Setu enforces full policy)
     if (enforcementLevel === 'none') {
       return;
     }
@@ -390,20 +560,27 @@ export function createToolExecuteBeforeHook(
     // - Architect: Has RESEARCH.md but no PLAN.md → .setu/ writes only
     // - Builder: Has both → all allowed (verification gate is separate)
     if (getProjectDir) {
-      const projectDir = getProjectDir();
-      const gearState = determineGear(projectDir);
+      const projectDirForGear = getProjectDir();
+      const gearState = determineGear(projectDirForGear);
       const gearBlockResult = shouldBlockByGear(gearState.current, input.tool, output.args);
       
-      if (gearBlockResult.blocked) {
+      if (!skipGearEnforcement && gearBlockResult.blocked) {
         if (enforcementLevel === 'full') {
           debugLog(`Gearbox BLOCKED: ${input.tool} in ${gearState.current} gear`);
           logSecurityEvent(
-            projectDir,
+            projectDirForGear,
             SecurityEventType.GEAR_BLOCKED,
             `Blocked ${input.tool} in ${gearState.current} gear (${gearBlockResult.reason || 'no reason'})`,
             { sessionId: input.sessionID, tool: input.tool }
           );
-          throw new Error(createGearBlockMessage(gearBlockResult));
+          throw new Error(
+            formatGuidanceMessage(
+              'Execution paused by gear policy',
+              createGearBlockMessage(gearBlockResult),
+              'Create required artifacts or confirm a reduced-scope request.',
+              'Use setu_research first, then setu_plan when needed.'
+            )
+          );
         } else {
           // Light enforcement: warn but don't block
           debugLog(`Gearbox WARNING: ${input.tool} in ${gearState.current} gear - ${gearBlockResult.reason}`);
