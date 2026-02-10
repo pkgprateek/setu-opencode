@@ -14,6 +14,12 @@ describe('safety classifier', () => {
     expect(result.action).toBe('ask');
   });
 
+  test('asks for shell file mutation commands', () => {
+    const result = classifyHardSafety('bash', { command: 'touch hello.txt' });
+    expect(result.hardSafety).toBe(true);
+    expect(result.action).toBe('ask');
+  });
+
   test('asks for sensitive file writes', () => {
     const result = classifyHardSafety('write', { filePath: '.env.local', content: 'TOKEN=x' });
     expect(result.hardSafety).toBe(true);

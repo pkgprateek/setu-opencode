@@ -16,6 +16,12 @@ const DESTRUCTIVE_BASH_PATTERNS: RegExp[] = [
   /\bdd\b\s+if=/i,
 ];
 
+const FILE_MUTATION_BASH_PATTERNS: RegExp[] = [
+  /\btouch\b\s+[^\n]+/i,
+  /(^|\s)(?:>|>>)\s*[^\s]+/i,
+  /\btruncate\b\s+[^\n]+/i,
+];
+
 const PRODUCTION_BASH_PATTERNS: RegExp[] = [
   /\bnpm\s+publish\b/i,
   /\bpnpm\s+publish\b/i,
@@ -49,6 +55,13 @@ export function classifyHardSafety(tool: string, args: Record<string, unknown>):
     for (const pattern of PRODUCTION_BASH_PATTERNS) {
       if (pattern.test(command)) {
         reasons.push('Production-impacting command detected');
+        break;
+      }
+    }
+
+    for (const pattern of FILE_MUTATION_BASH_PATTERNS) {
+      if (pattern.test(command)) {
+        reasons.push('Filesystem mutation via shell detected');
         break;
       }
     }
