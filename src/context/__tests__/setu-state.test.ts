@@ -1,39 +1,42 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  getSetuState,
-  setSetuState,
-  transitionSetuPhase,
+  getDisciplineState,
   setQuestionBlocked,
   clearQuestionBlocked,
-  clearSetuState,
+  setSafetyBlocked,
+  clearSafetyBlocked,
+  clearDisciplineState,
   setOverwriteRequirement,
   getOverwriteRequirement,
   clearOverwriteRequirement,
 } from '../setu-state';
 
-describe('setu runtime state', () => {
-  test('initializes state on first access', () => {
+describe('discipline guards', () => {
+  test('initializes with clean state', () => {
     const sessionID = 'state-init';
-    const state = getSetuState(sessionID);
-    expect(state.phase).toBe('received');
-    expect(state.pendingQuestion).toBe(false);
-    clearSetuState(sessionID);
+    const state = getDisciplineState(sessionID);
+    expect(state.questionBlocked).toBe(false);
+    expect(state.safetyBlocked).toBe(false);
+    clearDisciplineState(sessionID);
   });
 
-  test('transitions phase and question block lifecycle', () => {
-    const sessionID = 'state-transition';
-    setSetuState(sessionID, { phase: 'researching', pendingQuestion: false });
-    transitionSetuPhase(sessionID, 'planning');
-    expect(getSetuState(sessionID).phase).toBe('planning');
-
+  test('question block lifecycle', () => {
+    const sessionID = 'state-question';
     setQuestionBlocked(sessionID, 'Need DB preference');
-    expect(getSetuState(sessionID).pendingQuestion).toBe(true);
-    expect(getSetuState(sessionID).phase).toBe('blocked_question');
-
+    expect(getDisciplineState(sessionID).questionBlocked).toBe(true);
+    expect(getDisciplineState(sessionID).questionReason).toBe('Need DB preference');
     clearQuestionBlocked(sessionID);
-    expect(getSetuState(sessionID).pendingQuestion).toBe(false);
-    expect(getSetuState(sessionID).phase).toBe('researching');
-    clearSetuState(sessionID);
+    expect(getDisciplineState(sessionID).questionBlocked).toBe(false);
+    clearDisciplineState(sessionID);
+  });
+
+  test('safety block lifecycle', () => {
+    const sessionID = 'state-safety';
+    setSafetyBlocked(sessionID);
+    expect(getDisciplineState(sessionID).safetyBlocked).toBe(true);
+    clearSafetyBlocked(sessionID);
+    expect(getDisciplineState(sessionID).safetyBlocked).toBe(false);
+    clearDisciplineState(sessionID);
   });
 
   test('stores and clears overwrite requirement', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test, mock } from 'bun:test';
 import { createToolExecuteBeforeHook } from '../tool-execute';
-import { setQuestionBlocked, getSetuState, clearSetuState } from '../../context';
+import { setQuestionBlocked, getDisciplineState, clearDisciplineState } from '../../context';
 
 mock.module('../../debug', () => ({
   debugLog: () => {},
@@ -14,7 +14,6 @@ describe('tool-execute before hook protocol gating', () => {
     setQuestionBlocked(sessionID, 'Need architecture clarification');
 
     const hook = createToolExecuteBeforeHook(
-      () => ({ sessionId: 's-1', startedAt: Date.now(), contextConfirmed: true, attempts: 1, blockedTools: new Set() }),
       () => 'setu'
     );
 
@@ -25,7 +24,7 @@ describe('tool-execute before hook protocol gating', () => {
       )
     ).rejects.toThrow('Clarification required before continuing');
 
-    clearSetuState(sessionID);
+    clearDisciplineState(sessionID);
   });
 
   test('question tool clears pending protocol state', async () => {
@@ -33,7 +32,6 @@ describe('tool-execute before hook protocol gating', () => {
     setQuestionBlocked(sessionID, 'Need architecture clarification');
 
     const hook = createToolExecuteBeforeHook(
-      () => ({ sessionId: 's-2', startedAt: Date.now(), contextConfirmed: true, attempts: 1, blockedTools: new Set() }),
       () => 'setu'
     );
 
@@ -54,7 +52,7 @@ describe('tool-execute before hook protocol gating', () => {
       }
     );
 
-    expect(getSetuState(sessionID).pendingQuestion).toBe(false);
-    clearSetuState(sessionID);
+    expect(getDisciplineState(sessionID).questionBlocked).toBe(false);
+    clearDisciplineState(sessionID);
   });
 });
