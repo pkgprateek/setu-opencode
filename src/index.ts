@@ -25,7 +25,7 @@ import {
   recordToolExecution,
   type VerificationStep
 } from './hooks';
-import { type Phase0State, createEnhancedAttemptTracker } from './enforcement';
+import { createEnhancedAttemptTracker } from './enforcement';
 import { recordFailedApproach } from './context';
 import { createSetuVerifyTool } from './tools/setu-verify';
 import { createSetuContextTool } from './tools/setu-context';
@@ -52,7 +52,11 @@ interface SetuState {
   isFirstSession: boolean;
   verificationSteps: Set<VerificationStep>;
   verificationComplete: boolean;
-  phase0: Phase0State;
+  phase0: {
+    contextConfirmed: boolean;
+    sessionId: string;
+    startedAt: number;
+  };
   contextCollector: ContextCollector | null;
   projectRules: ProjectRules | null;  // Silent Exploration: loaded on session start
   projectDir: string;  // Project root directory for JIT context injection
@@ -253,7 +257,6 @@ export const SetuPlugin: Plugin = async (ctx) => {
 
   // Create tool.before hook once so session-scoped policy state persists correctly.
   const beforeHook = createToolExecuteBeforeHook(
-    getPhase0State,
     getCurrentAgent,
     getContextCollector,
     getProjectDir,
