@@ -17,12 +17,3 @@ export function formatGuidanceMessage(
 
   return lines.join('\n');
 }
-
-export function formatPolicyDecisionSummary(
-  score: number,
-  action: 'execute' | 'ask' | 'block',
-  reason: string[]
-): string {
-  const decision = action === 'execute' ? 'execute now' : action === 'ask' ? 'ask first' : 'block';
-  return `Policy decision: ${decision} (score=${score.toFixed(2)}). ${reason.join('; ')}`;
-}

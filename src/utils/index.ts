@@ -44,6 +44,5 @@ export {
 export { PROTECTED_BRANCHES } from '../constants';
 
 export {
-  formatGuidanceMessage,
-  formatPolicyDecisionSummary
+  formatGuidanceMessage
 } from './messaging';
