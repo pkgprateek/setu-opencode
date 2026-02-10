@@ -20,7 +20,6 @@ import {
   clearActiveTask,
   type ActiveTask,
   type ConstraintType,
-  type SetuMode,
   type TaskStatus,
   CONSTRAINT_TYPES
 } from '../context/active';
@@ -30,11 +29,6 @@ import { debugLog } from '../debug';
  * Valid constraint names for input validation
  */
 const VALID_CONSTRAINTS = Object.values(CONSTRAINT_TYPES);
-
-/**
- * Valid modes for input validation
- */
-const VALID_MODES: SetuMode[] = ['ultrathink', 'quick', 'collab'];
 
 /**
  * Valid statuses for input validation
@@ -49,16 +43,6 @@ function validateConstraints(input: string[] | undefined): ConstraintType[] {
   return input.filter((c): c is ConstraintType => 
     VALID_CONSTRAINTS.includes(c as ConstraintType)
   );
-}
-
-/**
- * Validates mode, returns default if invalid
- */
-function validateMode(input: string | undefined): SetuMode {
-  if (input && VALID_MODES.includes(input as SetuMode)) {
-    return input as SetuMode;
-  }
-  return 'ultrathink';
 }
 
 /**
@@ -84,7 +68,6 @@ function formatTask(task: ActiveTask): string {
     : '';
   
   return `**Task:** ${task.task}
-**Mode:** ${task.mode}
 **Status:** ${task.status}
 **Constraints:** ${constraintList}
 **Started:** ${task.startedAt}${refList}`;
@@ -127,9 +110,6 @@ Active tasks persist to \`.setu/active.json\` and survive:
       task: tool.schema.string().optional().describe(
         'Task description (required for create)'
       ),
-      mode: tool.schema.string().optional().describe(
-        'Operational mode: ultrathink, quick, collab (default: ultrathink)'
-      ),
       constraints: tool.schema.array(tool.schema.string()).optional().describe(
         'Constraints to apply: READ_ONLY, NO_PUSH, NO_DELETE, SANDBOX'
       ),
@@ -155,17 +135,15 @@ Example:
 setu_task({
   action: "create",
   task: "Implement user authentication",
-  mode: "ultrathink",
   constraints: ["NO_PUSH"]
 })
 \`\`\``;
           }
           
-          const mode = validateMode(args.mode);
           const constraints = validateConstraints(args.constraints);
           
           // Create and save the task
-          const newTask = createActiveTask(args.task, mode, constraints);
+          const newTask = createActiveTask(args.task, constraints);
           
           // Add references if provided
           if (args.references && args.references.length > 0) {
