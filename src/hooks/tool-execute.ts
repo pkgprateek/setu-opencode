@@ -3,7 +3,7 @@
  * 
  * Uses: tool.execute.before, tool.execute.after
  * 
- * - tool.execute.before: Phase 0 blocking (pre-emptive enforcement)
+ * - tool.execute.before: Discipline and gear enforcement
  *   Context injection for subagent prompts (task tool)
  *   Constraint enforcement (READ_ONLY, NO_PUSH, etc.)
  *   Secrets detection for write/edit operations
@@ -13,23 +13,18 @@
 import { basename, isAbsolute, normalize, resolve } from 'path';
 import { existsSync } from 'fs';
 import {
-  shouldBlockInPhase0,
-  createPhase0BlockMessage,
   determineGear,
   shouldBlock as shouldBlockByGear,
-  createGearBlockMessage,
-  type Phase0State
+  createGearBlockMessage
 } from '../enforcement';
 import {
   type ContextCollector,
   formatContextForInjection,
   contextToSummary,
-  logExecutionPhase,
-  getSetuState,
-  setSetuState,
-  transitionSetuPhase,
+  getDisciplineState,
+  setSafetyBlocked,
   clearQuestionBlocked,
-  clearSetuState,
+  clearSafetyBlocked,
   setOverwriteRequirement,
   getOverwriteRequirement,
   clearOverwriteRequirement,
@@ -72,32 +67,6 @@ export interface ToolExecuteBeforeInput {
  */
 export interface ToolExecuteBeforeOutput {
   args: Record<string, unknown>;
-}
-
-/**
- * Enforcement level for Setu policy
- */
-export type EnforcementLevel = 'full' | 'light' | 'none';
-
-/**
- * Setu always enforces full policy when active.
- */
-export function getSetuEnforcementLevel(): EnforcementLevel {
-  return 'full';
-}
-
-/**
- * Determines enforcement level based on the current agent.
- * 
- * @deprecated Use getSetuEnforcementLevel instead.
- * This function returns hardcoded 'full' for 'setu' agent and 'none' otherwise.
- * Kept for backwards compatibility only.
- */
-export function getEnforcementLevel(currentAgent: string): EnforcementLevel {
-  if (currentAgent.toLowerCase() === 'setu') {
-    return 'full';
-  }
-  return 'none';
 }
 
 /**
@@ -185,7 +154,6 @@ function hasReadTargetFile(collector: ContextCollector | null, projectDir: strin
  * Also enforces active task constraints (READ_ONLY, NO_PUSH, etc.)
  * Also enforces Git Discipline: requires verification before commit/push.
  *
- * @param getPhase0State - Accessor that returns the current Phase 0 state (kept for backwards compat)
  * @param getCurrentAgent - Optional accessor for the current agent identifier; defaults to "setu" when omitted
  * @param getContextCollector - Optional accessor for a ContextCollector used to obtain and format confirmed context for injection
  * @param getProjectDir - Optional accessor for project directory (used for constraint loading and gear determination)
@@ -193,14 +161,13 @@ function hasReadTargetFile(collector: ContextCollector | null, projectDir: strin
  * @returns A hook function invoked before tool execution that enforces Gearbox rules and may throw an Error when a tool is blocked
  */
 export function createToolExecuteBeforeHook(
-  getPhase0State: () => Phase0State,
   getCurrentAgent?: () => string,
   getContextCollector?: () => ContextCollector | null,
   getProjectDir?: () => string,
   getVerificationState?: () => VerificationState
 ): (input: ToolExecuteBeforeInput, output: ToolExecuteBeforeOutput) => Promise<void> {
   const isMutatingToolName = (toolName: string): boolean =>
-    ['write', 'edit', 'bash', 'patch', 'multiedit', 'apply_patch', 'todowrite'].includes(toolName);
+    ['write', 'edit', 'bash', 'patch', 'multiedit', 'apply_patch'].includes(toolName);
 
   return async (
     input: ToolExecuteBeforeInput,
@@ -218,97 +185,33 @@ export function createToolExecuteBeforeHook(
     output.args = sanitizeArgs(output.args);
     const projectDir = getProjectDir ? getProjectDir() : process.cwd();
     const collector = getContextCollector ? getContextCollector() : null;
-    const setuState = getSetuState(input.sessionID);
+    const disciplineState = getDisciplineState(input.sessionID);
+    const isMutating = isMutatingToolName(input.tool);
 
     if (input.tool === 'question') {
       clearQuestionBlocked(input.sessionID);
-      logExecutionPhase(projectDir, 'blocked_question', 'complete', 'Clarification answered via question tool');
       debugLog('Question answered; cleared blocked_question state');
       return;
     }
 
-    if (setuState.pendingQuestion || setuState.phase === 'blocked_question') {
+    if (disciplineState.questionBlocked) {
       throw new Error(
         formatGuidanceMessage(
           'Clarification required before continuing',
-          setuState.questionReason ?? 'A required implementation decision is still unanswered.',
+          disciplineState.questionReason ?? 'A required implementation decision is still unanswered.',
           'Answer the active structured question first.',
           'After clarification, Setu will continue the protocol automatically.'
         )
       );
     }
 
-    if (input.tool === 'setu_task') {
-      const action = getStringProp(output.args, 'action')?.toLowerCase();
-      const status = getStringProp(output.args, 'status')?.toLowerCase();
-
-      if (action === 'create') {
-        setSetuState(input.sessionID, { phase: 'researching', pendingQuestion: false });
-        logExecutionPhase(projectDir, 'researching', 'enter', 'Task created');
-      }
-
-      if (action === 'clear' || (action === 'update' && status === 'completed')) {
-        logExecutionPhase(projectDir, 'done', 'complete', 'Task cleared/completed');
-        clearSetuState(input.sessionID);
-      }
-    }
-
-    if (input.tool === 'setu_research') {
-      if (!['received', 'researching'].includes(setuState.phase)) {
-        throw new Error(
-          formatGuidanceMessage(
-            'Research out of sequence',
-            `Current phase is '${setuState.phase}'.`,
-            'Run research during the researching phase.',
-            'Setu chronology is task -> research -> plan -> execute -> verify.'
-          )
-        );
-      }
-      transitionSetuPhase(input.sessionID, 'planning');
-      logExecutionPhase(projectDir, 'researching', 'complete', 'Research artifact saved');
-      logExecutionPhase(projectDir, 'planning', 'enter');
-    }
-
-    if (input.tool === 'setu_plan') {
-      if (setuState.phase !== 'planning') {
-        throw new Error(
-          formatGuidanceMessage(
-            'Plan out of sequence',
-            `Current phase is '${setuState.phase}'.`,
-            'Complete research first, then create plan.',
-            'Setu chronology is task -> research -> plan -> execute -> verify.'
-          )
-        );
-      }
-      transitionSetuPhase(input.sessionID, 'executing');
-      logExecutionPhase(projectDir, 'planning', 'complete', 'Plan artifact saved');
-      logExecutionPhase(projectDir, 'executing', 'enter');
-    }
-
-    if (input.tool === 'setu_verify') {
-      if (!['executing', 'verifying'].includes(setuState.phase)) {
-        throw new Error(
-          formatGuidanceMessage(
-            'Verify out of sequence',
-            `Current phase is '${setuState.phase}'.`,
-            'Run verification after execution.',
-            'Setu chronology is task -> research -> plan -> execute -> verify.'
-          )
-        );
-      }
-      transitionSetuPhase(input.sessionID, 'verifying');
-      logExecutionPhase(projectDir, 'verifying', 'enter');
-    }
-
-    const isMutating = isMutatingToolName(input.tool);
-    if (isMutating && ['received', 'researching', 'planning'].includes(setuState.phase)) {
-      logExecutionPhase(projectDir, setuState.phase, 'blocked', `Blocked tool=${input.tool} before execute phase`);
+    if (isMutating && disciplineState.safetyBlocked) {
       throw new Error(
         formatGuidanceMessage(
-          'Execution paused by protocol order',
-          `Current phase is '${setuState.phase}'.`,
-          'Complete the remaining protocol phases before implementation actions.',
-          'Setu always follows task -> research -> plan -> execute -> verify.'
+          'Safety block active',
+          'Previous action triggered safety block in this session.',
+          'Address the safety condition before continuing.',
+          'Use safer alternatives or explicitly confirm intent with the user.'
         )
       );
     }
@@ -350,20 +253,10 @@ export function createToolExecuteBeforeHook(
       }
     }
 
-    const gearStateForPolicy = getProjectDir ? determineGear(projectDir) : null;
-    let skipGearEnforcement = false;
-
-    const policyExemptBash = (() => {
-      if (input.tool !== 'bash') return false;
-      const command = getStringProp(output.args, 'command') ?? '';
-      return GIT_COMMIT_PATTERN.test(command) || GIT_PUSH_PATTERN.test(command);
-    })();
-
-    if (gearStateForPolicy && !policyExemptBash && isMutating) {
+    if (isMutating) {
       const safetyDecision = classifyHardSafety(input.tool, output.args);
       if (safetyDecision.hardSafety) {
-        transitionSetuPhase(input.sessionID, 'blocked_safety');
-        logExecutionPhase(projectDir, 'blocked_safety', 'blocked', safetyDecision.reasons.join('; '));
+        setSafetyBlocked(input.sessionID);
 
         throw new Error(
           formatGuidanceMessage(
@@ -374,9 +267,9 @@ export function createToolExecuteBeforeHook(
           )
         );
       }
+
+      clearSafetyBlocked(input.sessionID);
     }
-    
-    const enforcementLevel = getSetuEnforcementLevel();
     
     // Context injection for task tool (subagent prompts)
     if (input.tool === 'task' && getContextCollector) {
@@ -590,23 +483,6 @@ export function createToolExecuteBeforeHook(
       }
     }
 
-    if (isMutating && setuState.phase === 'blocked_safety') {
-      logExecutionPhase(projectDir, 'blocked_safety', 'blocked', `Blocked tool=${input.tool} while safety block active`);
-      throw new Error(
-        formatGuidanceMessage(
-          'Safety block active',
-          'Previous action triggered safety block in this session.',
-          'Address the safety condition before continuing.',
-          'Use safer alternatives or explicitly confirm intent with the user.'
-        )
-      );
-    }
-    
-    // Reserved bypass branch (currently unused; Setu enforces full policy)
-    if (enforcementLevel === 'none') {
-      return;
-    }
-    
     // GEARBOX ENFORCEMENT
     // Determines gear based on artifact existence:
     // - Scout: No RESEARCH.md → read-only tools only
@@ -616,58 +492,26 @@ export function createToolExecuteBeforeHook(
       const projectDirForGear = getProjectDir();
       const gearState = determineGear(projectDirForGear);
       const gearBlockResult = shouldBlockByGear(gearState.current, input.tool, output.args);
-      
-      if (!skipGearEnforcement && gearBlockResult.blocked) {
-        if (enforcementLevel === 'full') {
-          debugLog(`Gearbox BLOCKED: ${input.tool} in ${gearState.current} gear`);
-          logSecurityEvent(
-            projectDirForGear,
-            SecurityEventType.GEAR_BLOCKED,
-            `Blocked ${input.tool} in ${gearState.current} gear (${gearBlockResult.reason || 'no reason'})`,
-            { sessionId: input.sessionID, tool: input.tool }
-          );
-          throw new Error(
-            formatGuidanceMessage(
-              'Execution paused by gear policy',
-              createGearBlockMessage(gearBlockResult),
-              'Create required artifacts or confirm a reduced-scope request.',
-              'Use setu_research first, then setu_plan when needed.'
-            )
-          );
-        } else {
-          // Light enforcement: warn but don't block
-          debugLog(`Gearbox WARNING: ${input.tool} in ${gearState.current} gear - ${gearBlockResult.reason}`);
-          return;
-        }
+
+      if (gearBlockResult.blocked) {
+        debugLog(`Gearbox BLOCKED: ${input.tool} in ${gearState.current} gear`);
+        logSecurityEvent(
+          projectDirForGear,
+          SecurityEventType.GEAR_BLOCKED,
+          `Blocked ${input.tool} in ${gearState.current} gear (${gearBlockResult.reason || 'no reason'})`,
+          { sessionId: input.sessionID, tool: input.tool }
+        );
+        throw new Error(
+          formatGuidanceMessage(
+            'Execution paused by gear policy',
+            createGearBlockMessage(gearBlockResult),
+            'Create required artifacts or confirm a reduced-scope request.',
+            'Use setu_research first, then setu_plan when needed.'
+          )
+        );
       }
-      
-      if (enforcementLevel === 'full') {
-        debugLog(`Gearbox ALLOWED: ${input.tool} in ${gearState.current} gear`);
-      }
-    } else {
-      // Fallback to Phase 0 if no project directory (shouldn't happen)
-      // Context confirmed - allow all tools (Phase 0 complete)
-      const state = getPhase0State();
-      if (state.contextConfirmed) {
-        return;
-      }
-      
-      // Check Phase 0 blocking rules
-      const { blocked, reason, details } = shouldBlockInPhase0(input.tool, output.args);
-      
-      if (blocked && reason) {
-        if (enforcementLevel === 'full') {
-          debugLog(`Phase 0 BLOCKED: ${input.tool}`);
-          throw new Error(createPhase0BlockMessage(reason, details));
-        } else {
-          debugLog(`Phase 0 WARNING: ${input.tool} - ${reason}`);
-          return;
-        }
-      }
-      
-      if (enforcementLevel === 'full') {
-        debugLog(`Phase 0 ALLOWED: ${input.tool}`);
-      }
+
+      debugLog(`Gearbox ALLOWED: ${input.tool} in ${gearState.current} gear`);
     }
   };
 }
@@ -844,92 +688,6 @@ export function createToolExecuteAfterHook(
     // It cannot be auto-detected from bash commands
   };
 }
-
-/**
- * Attempt tracker for the "2 attempts then ask" pattern
- * 
- * Tracks failed attempts at solving a problem and suggests asking
- * for guidance after 2 failures.
- */
-export interface AttemptState {
-  taskId: string;
-  attempts: number;
-  approaches: string[];
-}
-
-export function createAttemptTracker(): {
-  recordAttempt: (taskId: string, approach: string) => number;
-  getAttempts: (taskId: string) => AttemptState | undefined;
-  shouldAskForGuidance: (taskId: string) => boolean;
-  getGuidanceMessage: (taskId: string) => string | null;
-  reset: (taskId: string) => void;
-  clearAll: () => void;
-} {
-  const attempts = new Map<string, AttemptState>();
-  
-  return {
-    /**
-     * Record an attempt at solving a task
-     */
-    recordAttempt: (taskId: string, approach: string): number => {
-      const state = attempts.get(taskId) || { taskId, attempts: 0, approaches: [] };
-      state.attempts++;
-      state.approaches.push(approach);
-      attempts.set(taskId, state);
-      return state.attempts;
-    },
-    
-    /**
-     * Get attempt state for a task
-     */
-    getAttempts: (taskId: string): AttemptState | undefined => {
-      return attempts.get(taskId);
-    },
-    
-    /**
-     * Check if we should ask for guidance (2+ attempts)
-     */
-    shouldAskForGuidance: (taskId: string): boolean => {
-      const state = attempts.get(taskId);
-      return state ? state.attempts >= 2 : false;
-    },
-    
-    /**
-     * Get a formatted guidance message
-     */
-    getGuidanceMessage: (taskId: string): string | null => {
-      const state = attempts.get(taskId);
-      if (!state || state.attempts < 2) return null;
-      
-      const approachList = state.approaches
-        .slice(-2)
-        .map((a, i) => `${i + 1}. ${a}`)
-        .join('\n');
-      
-      return `I've tried ${state.attempts} approaches without success:
-
-${approachList}
-
-Would you like me to try a different approach, or do you have guidance?`;
-    },
-    
-    /**
-     * Reset attempts for a task (on success or user intervention)
-     */
-    reset: (taskId: string): void => {
-      attempts.delete(taskId);
-    },
-    
-    /**
-     * Clear all attempt tracking
-     */
-    clearAll: (): void => {
-      attempts.clear();
-    }
-  };
-}
-
-export type AttemptTracker = ReturnType<typeof createAttemptTracker>;
 
 // ============================================================================
 // Parallel Execution Tracking
