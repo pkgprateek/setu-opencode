@@ -118,6 +118,35 @@ setu_context({
 
 ---
 
+#### `setu_task` - Task Management
+
+Create, update, or clear active tasks. Archives old artifacts on new task creation.
+
+```typescript
+setu_task({
+  action: 'create' | 'update' | 'clear',
+  task?: string,         // For 'create': task description
+  constraints?: string[] // e.g., ['READ_ONLY', 'NO_DELETE']
+});
+```
+
+**On `create`**:
+1. Archives existing RESEARCH.md and PLAN.md to `.setu/HISTORY.md`
+2. Deletes the original files (gear resets to scout)
+3. Creates new active task
+
+**Example**:
+```typescript
+setu_task({
+  action: 'create',
+  task: 'Implement dark mode toggle',
+  constraints: ['use_existing_patterns']
+});
+// Result: Old artifacts archived, gear reset to scout
+```
+
+---
+
 #### `setu_research` - Parallel Research
 
 Research with multiple subagents working in parallel.
@@ -125,7 +154,8 @@ Research with multiple subagents working in parallel.
 ```typescript
 setu_research({
   task: string,           // What to research
-  focus?: string[]        // Specific areas: ['security', 'patterns', 'testing']
+  focus?: string[],       // Specific areas: ['security', 'patterns', 'testing']
+  openQuestions?: string[] // Unresolved questions requiring user input
 });
 ```
 
@@ -133,7 +163,8 @@ setu_research({
 1. Spawns 3 parallel subagents
 2. Each researches different aspect
 3. Results merged into RESEARCH.md
-4. Gear advances: Scout → Architect
+4. If openQuestions provided, triggers question blocking (user must answer)
+5. Gear advances: Scout → Architect
 
 **Example**:
 ```typescript
@@ -164,7 +195,8 @@ setu_plan({
 2. Creates implementation plan
 3. Spawns reviewer subagent to validate
 4. Writes PLAN.md
-5. Gear advances: Architect → Builder
+5. Triggers user approval (question blocking)
+6. Gear advances: Architect → Builder (after approval)
 
 **Example**:
 ```typescript
@@ -347,19 +379,21 @@ src/
 │   └── setu-agent.ts     # Agent persona
 ├── hooks/
 │   ├── chat-message.ts   # Agent tracking
-│   ├── system-transform.ts # Context injection
+│   ├── system-transform.ts # Context injection (gear-based)
 │   └── tool-execute.ts   # Enforcement (core moat)
 ├── enforcement/
-│   ├── gears.ts          # Gear state machine
+│   ├── gears.ts          # Gear state machine (single workflow authority)
 │   └── attempts.ts       # Ghost loop prevention
 ├── context/
 │   ├── storage.ts        # Read/write .setu/
 │   ├── active.ts         # Task management
+│   ├── setu-state.ts     # Discipline guards (question/safety/overwrite)
 │   └── cleanse.ts        # JIT context
 ├── tools/
 │   ├── setu-context.ts   # Session management
-│   ├── setu-research.ts  # Parallel research
-│   ├── setu-plan.ts      # Plan creation
+│   ├── setu-task.ts      # Task creation with artifact archiving
+│   ├── setu-research.ts  # Parallel research (with open questions)
+│   ├── setu-plan.ts      # Plan creation (with user approval)
 │   ├── setu-verify.ts    # Verification
 │   └── setu-doctor.ts    # Environment checks
 └── environment/
@@ -393,6 +427,7 @@ src/
 ├── active.json           # Current task, constraints
 ├── RESEARCH.md           # Research findings
 ├── PLAN.md               # Implementation plan
+├── HISTORY.md            # Archived artifacts from previous tasks
 ├── verification.log      # Audit trail
 └── feedback.md           # User feedback
 ```

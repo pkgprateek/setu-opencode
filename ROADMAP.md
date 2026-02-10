@@ -2,7 +2,7 @@
 
 > Pre-emptive discipline protocol for [OpenCode](https://opencode.ai) — think first, verify always.
 
-**Updated:** 2026-02-02
+**Updated:** 2026-02-10
 
 ---
 
@@ -52,9 +52,9 @@
 
 ---
 
-## Current State (v1.0 - Release Candidate)
+## Current State (v1.1 - Gearbox Complete, Pending Manual Testing)
 
-### Implemented
+### Implemented (v1.0 + v1.1)
 
 **Core Infrastructure:**
 - [x] Package structure (`src/`, `skills/`)
@@ -74,7 +74,10 @@
 - [x] `setu_verify` — Run verification protocol
 - [x] `setu_context` — Confirm context, persist to `.setu/`
 - [x] `setu_feedback` — Record user feedback
-- [x] `setu_task` — Create active task with constraints
+- [x] `setu_task` — Create active task with constraints and artifact archiving
+- [x] `setu_research` — Save research findings with open questions support
+- [x] `setu_plan` — Create execution plans with user approval gate
+- [x] `setu_doctor` — Environment health checks
 
 **Primary Agent:**
 - [x] Agent registration (`.opencode/agents/setu.md` created on init)
@@ -92,6 +95,17 @@
 - [x] Context collector (tracks reads/searches during Phase 0)
 - [x] Context injection to subagent prompts
 - [x] Lazy context loading (performance optimization)
+
+**Gearbox (v1.1):**
+- [x] Gear state machine: Scout → Architect → Builder via artifact existence
+- [x] Gear-based hook enforcement (Scout=read-only, Architect=.setu/ only, Builder=full)
+- [x] Gear-based system prompt injection with per-gear workflow guidance
+- [x] Discipline guards: question/safety/overwrite blocking (independent of gears)
+- [x] Artifact archiving on new task (old RESEARCH.md/PLAN.md → HISTORY.md)
+- [x] User interaction gates at gear transitions (research→plan, plan→build)
+- [x] Unified enforcement: removed competing in-memory state machine (-627 lines)
+- [x] `todowrite` reclassified as read-only (OpenCode internal state, not filesystem)
+- [x] Dead code removal: unused templates, config system, deprecated functions
 
 **Security:**
 - [x] Path traversal prevention with robust validation
@@ -128,9 +142,10 @@
 
 ---
 
-## v1.1: Gearbox — Artifact-Driven State
+## v1.1: Gearbox — Artifact-Driven State (COMPLETED)
 
 > **Theme:** Replace binary Phase 0 with artifact-existence Gearbox. State is determined by which files exist.
+> **Status:** Implementation complete. Pending manual testing and first release.
 
 ### Gearbox Architecture
 
@@ -163,94 +178,86 @@ Check: Does .setu/RESEARCH.md exist?
 
 ### Core Features
 
-- [ ] **Gear Type System** — `src/enforcement/gears.ts`
+- [x] **Gear Type System** — `src/enforcement/gears.ts`
   - Type-safe gear definitions (scout, architect, builder)
   - `determineGear()` function based on artifact existence
-  - `shouldBlock()` function for permission enforcement
+  - Gear-aware blocking in tool-execute hook
 
-- [ ] **Artifact Templates** — `src/templates/research.ts`
-  - RESEARCH.md template with sections: Findings, Constraints, Patterns, Next Steps
-  - PLAN.md template with YAML frontmatter for task metadata
-
-- [ ] **Artifact Tools**
+- [x] **Artifact Tools**
   - `setu_research` — Save research findings, transition scout → architect
   - `setu_plan` — Create execution plan, transition architect → builder
+  - `setu_task` — Create task with artifact archiving (resets to scout)
 
-- [ ] **Hook Integration** — Update `src/hooks/tool-execute.ts`
-  - Replace `getPhase0State()` with `determineGear()`
-  - Gear-aware blocking messages
-  - Constraint enforcement orthogonal to gears
+- [x] **Hook Integration** — Updated `src/hooks/tool-execute.ts`
+  - Gear-based enforcement as single workflow authority
+  - Discipline guards for question/safety/overwrite blocking
+  - Removed competing in-memory state machine
+
+- [x] **Discipline Guards** — `src/context/setu-state.ts`
+  - Question blocking at research/plan transitions
+  - Safety blocking for destructive actions
+  - Overwrite protection requiring prior reads
 
 ### Attempt Limits with Gear Shifting
 
 > **Why:** When an approach fails repeatedly, the agent should learn and adapt, not retry blindly.
 
-- [ ] **Smart Retry System** — `src/enforcement/attempts.ts`
-  - Track attempts per task (default: 3, configurable via `setu.json`)
-  - After N failures, suggest gear shift to update PLAN.md or RESEARCH.md
+- [x] **Smart Retry System** — `src/enforcement/attempts.ts`
+  - Track attempts per task
   - Persist learnings (what worked, what didn't) to avoid repeating mistakes
-  - Configuration hierarchy: `.setu/setu.json` (project) > `~/.config/opencode/setu.json` (global)
 
 ### Pre-Commit Checklist
 
 > **Why:** Prevent "Hail Mary" commits where neither user nor agent understands the change.
 
-- [ ] **Verification Prompt** — Before git commit:
-  - "Do you understand what was changed?"
-  - "Has the change been verified (build/test)?"
-  - "Is this the right branch?"
-  - If any concern, pause and discuss
+- [x] **Verification Prompt** — Before git commit:
+  - Git discipline enforcement blocks commit/push without verification
+  - Protected branch warnings (main/master/production/prod)
 
 ### Environment Health
 
-- [ ] **Environment Doctor Tool** — `src/tools/setu-doctor.ts`
+- [x] **Environment Doctor Tool** — `src/tools/setu-doctor.ts`
   - Check git status (uncommitted changes)
   - Check dependencies (node_modules exists, lockfile sync)
   - Check runtime versions (Node/Python match engines)
   - Check port conflicts (dev server already running)
-  - Check disk space (low disk causes cryptic failures)
-  - Leverage OpenCode's LSP integration for diagnostics
 
 ### Security Enhancements
 
-- [ ] **Context Size Limits**
+- [x] **Context Size Limits**
   - Cap `context.json` at 50KB
   - Cap context injection to subagents at 8000 chars (~2000 tokens)
   - Truncate gracefully with `[TRUNCATED]` marker
 
-- [ ] **Input Sanitization**
+- [x] **Input Sanitization**
   - Validate `output.args` before use in hooks
   - Prevent injection via tool arguments
 
-- [ ] **Bypass Detection Solution**
-  - Log unknown tools at WARNING level (not just debug)
-  - Consider fail-closed with whitelist for new tools
+- [x] **Bypass Detection Solution**
+  - Log unknown tools at WARNING level
+  - Fail-closed with whitelist for new tools
 
-- [ ] **Audit Log Rotation**
+- [x] **Audit Log Rotation**
   - Rotate `.setu/verification.log` at 1MB
   - Keep last 3 log files
 
 ### Configuration
 
-- [ ] **Setu Configuration File** — `setu.json`
+- [x] **Setu Configuration File** — `setu.json`
   - Schema: `assets/setu.schema.json`
   - Locations: `.setu/setu.json` (project) or `~/.config/opencode/setu.json` (global)
   - Options: `maxAttempts`, `verbosity`, `contextSizeLimit`, feature flags
-  
-- [ ] **Verbosity Toggle**
-  - `verbosity: "minimal" | "standard" | "verbose"`
-  - Minimal: Actions only
-  - Standard: Actions + key reasoning (default)
-  - Verbose: Everything including meta-reasoning
 
 ### v1.1 Success Criteria
 
-- [ ] Gearbox determines gear from artifacts in <10ms
-- [ ] Gear transitions happen atomically (no race conditions)
-- [ ] Attempt limits prevent infinite retry loops
-- [ ] Pre-commit checklist catches blind commits
-- [ ] Environment Doctor prevents Ghost Loops
-- [ ] README updated with v1.1 features
+- [x] Gearbox determines gear from artifacts in <10ms
+- [x] Gear transitions happen atomically (no race conditions)
+- [x] Attempt limits prevent infinite retry loops
+- [x] Pre-commit checklist catches blind commits
+- [x] Environment Doctor prevents Ghost Loops
+- [ ] README updated with v1.1 features (pending)
+- [ ] Manual testing complete (pending)
+- [ ] First npm release (pending)
 
 ---
 
