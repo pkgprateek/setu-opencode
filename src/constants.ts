@@ -22,7 +22,8 @@ export const SETU_TOOLS = [
   'setu_research',
   'setu_plan',
   'setu_reset',
-  'setu_doctor'
+  'setu_doctor',
+  'setu_task'
 ] as const;
 
 /**
@@ -39,7 +40,7 @@ export const SETU_TOOLS = [
  * - webfetch: Fetch web content
  * - todoread: Read todo list
  */
-export const READ_ONLY_TOOLS = ['read', 'glob', 'grep', 'list', 'webfetch', 'todoread'] as const;
+export const READ_ONLY_TOOLS = ['read', 'glob', 'grep', 'list', 'webfetch', 'todoread', 'todowrite'] as const;
 
 /**
  * Side-effect tools that are blocked in Phase 0.
@@ -50,9 +51,8 @@ export const READ_ONLY_TOOLS = ['read', 'glob', 'grep', 'list', 'webfetch', 'tod
  * - edit: Modify existing files
  * - patch: Apply patches to files
  * - multiedit: Batch edits across files
- * - todowrite: Modify todo list
  */
-export const SIDE_EFFECT_TOOLS = ['write', 'edit', 'patch', 'multiedit', 'todowrite'] as const;
+export const SIDE_EFFECT_TOOLS = ['write', 'edit', 'patch', 'multiedit'] as const;
 
 /**
  * All tools that should be blocked in Phase 0 (for prompt guidance).
@@ -128,13 +128,6 @@ export function isSetuTool(toolName: string): toolName is SetuTool {
  */
 export function isReadOnlyTool(toolName: string): toolName is ReadOnlyTool {
   return READ_ONLY_TOOLS.includes(toolName as ReadOnlyTool);
-}
-
-/**
- * @deprecated Use isReadOnlyTool instead
- */
-export function isReadOnlyToolName(toolName: string): toolName is ReadOnlyTool {
-  return isReadOnlyTool(toolName);
 }
 
 /**
