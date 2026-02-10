@@ -36,6 +36,23 @@ export { MAX_INJECTION_SIZE } from './limits';
 const CONTEXT_JSON = 'context.json';
 const VERIFICATION_LOG = 'verification.log';
 
+export interface PolicyDecisionLogEntry {
+  tool: string;
+  capability?: string;
+  capabilitySource?: string;
+  score: number;
+  factors: {
+    taskScope: number;
+    repoSurface: number;
+    riskSurface: number;
+    uncertainty: number;
+    blastRadius: number;
+  };
+  action: 'execute' | 'ask' | 'block';
+  hardSafety: boolean;
+  reason: string[];
+}
+
 // Log rotation settings (from PLAN.md Section 2.9.4)
 const MAX_LOG_SIZE = 1024 * 1024;    // 1MB
 const MAX_LOG_FILES = 3;
@@ -472,6 +489,28 @@ export function logVerification(
   }
   
   appendFileSync(logPath, entry, 'utf-8');
+}
+
+export function logPolicyDecision(projectDir: string, entry: PolicyDecisionLogEntry): void {
+  const setuDir = ensureSetuDir(projectDir);
+  const logPath = join(setuDir, VERIFICATION_LOG);
+
+  if (!existsSync(logPath)) {
+    writeFileSync(logPath, '# Setu Verification Log\n\nAudit trail of build/test/lint results.\n', 'utf-8');
+  }
+
+  const timestamp = new Date().toISOString();
+  const line =
+    `\n## ${timestamp} - POLICY [${entry.action.toUpperCase()}]` +
+    `\nTool: ${sanitizeInput(entry.tool)}` +
+    `${entry.capability ? `\nCapability: ${sanitizeInput(entry.capability)}` : ''}` +
+    `${entry.capabilitySource ? `\nCapabilitySource: ${sanitizeInput(entry.capabilitySource)}` : ''}` +
+    `\nScore: ${entry.score.toFixed(2)}` +
+    `\nFactors: ${JSON.stringify(entry.factors)}` +
+    `\nHardSafety: ${entry.hardSafety}` +
+    `\nReason: ${entry.reason.map((r) => sanitizeInput(r)).join('; ')}\n`;
+
+  appendFileSync(logPath, line, 'utf-8');
 }
 
 /**

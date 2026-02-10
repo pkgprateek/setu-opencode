@@ -34,6 +34,7 @@ export {
   saveContext,
   createContextCollector,
   logVerification,
+  logPolicyDecision,
   detectProjectInfo,
   ensureSetuDir
 } from './storage';
