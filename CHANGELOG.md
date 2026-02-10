@@ -59,13 +59,13 @@
 - Type safety: `wrapHook` return type includes undefined for error cases
 - Empty catch blocks now discriminate ENOENT from other errors
 - SetuError prototype chain fixed for post-transpilation instanceof checks
-- Style detection regex escapes properly (`\\s`, `\\w`)
+- Command detection regex escapes properly (`\\s`, `\\w`)
 
 ### Changed
 - **Persona optimization**: Reduced token overhead from ~1,100 to ~400 tokens (64% reduction)
 - Agent version updated to 2.7.0
-- Removed `expert` style, merged into `collab` (now 3 styles: ultrathink, quick, collab)
-- Style guidance changed to descriptive-only (removed behavioral directives)
+- Removed legacy preset system; consolidated to a single default behavior
+- Runtime guidance changed to descriptive-only (removed behavioral directives)
 - Removed parallel execution guidance from persona (enforcement via hooks instead)
 
 ### Security
@@ -116,7 +116,7 @@
 
 ### Changed
 - Reduced agent persona from ~800 to ~400 tokens (50% reduction)
-- Consolidated styles from 4 to 3 (removed `expert`, merged into `collab`)
+- Consolidated legacy preset system before single-default rollout
 - Moved unit tests to `src/hooks/__tests__/` (Jest/Vitest convention)
 - Centralized security logging through `logSecurityEvent()` API
 - Enhanced tool execute hook with secrets detection, path validation, and audit logging
@@ -127,7 +127,7 @@
 ### Fixed
 - Removed duplicate path logic in `validateFilePath`
 - Removed double redaction in debug logging (50% reduction in overhead)
-- Fixed `Profile` → `Style` terminology in persona prefix
+- Fixed runtime terminology in persona prefix
 - Added constraint bypass detection for bash commands (`$`, backticks, `eval`, etc.)
 - Removed duplicate tool classification constants
 - Removed unused exports from `persona.ts`
@@ -136,7 +136,7 @@
 
 ## [1.0.0-rc.3] - 2025-01-28
 
-- Renamed Profile to Style (ultrathink, quick, expert, collab)
+- Renamed runtime terminology (legacy release note)
 - Eliminated meta-reasoning in agent responses
 - Added file-based debug logging with `SETU_DEBUG=true`
 
@@ -144,7 +144,7 @@
 
 - Fixed context loading on session start (was detected but not loaded)
 - Added constraints survival across restarts
-- Enforced `[Style: X]` prefix in all responses
+- Enforced runtime prefix in all responses
 - Added glob-first and parallel read guidance
 
 ## [1.0.0-rc.1] - 2025-01-28
@@ -160,6 +160,6 @@
 - Phase 0 blocking enforcement
 - Context persistence (`.setu/context.md`, `.setu/context.json`)
 - Setu as primary agent
-- 4 operational styles: Ultrathink, Quick, Expert, Collab
+- Initial multi-preset runtime (legacy)
 - Custom tools: `setu_verify`, `setu_context`, `setu_feedback`
 - 7 bundled skills

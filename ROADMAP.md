@@ -35,7 +35,7 @@
 | Term | Scope | Meaning | Examples |
 |------|-------|---------|----------|
 | **Mode** | OpenCode | IDE-level agent selection via Tab | Plan, Build, Setu |
-| **Style** | Setu | Operational preset within Setu | ultrathink, quick, collab |
+| **Mindset** | Setu | Single disciplined runtime behavior | Prime |
 | **Gear** | Setu v1.1+ | State determined by artifact existence | scout, architect, builder |
 
 ---
@@ -64,7 +64,7 @@
 **Hooks:**
 - [x] `config` hook — Sets Setu as default agent
 - [x] `system-transform` hook — Injects lean persona (~500 tokens)
-- [x] `chat.message` hook — Style detection, agent tracking
+- [x] `chat.message` hook — Agent tracking
 - [x] `tool.execute.before` hook — Phase 0 blocking, context injection
 - [x] `tool.execute.after` hook — Verification tracking, context collection
 - [x] `event` hook — Session lifecycle, context loading
@@ -113,7 +113,7 @@
 - [x] Context persistence (`.setu/context.json`, `.setu/active.json`)
 - [x] Verification logging (`.setu/verification.log`)
 - [x] DAG execution guidance in persona
-- [x] System directive prefix (`[Style: X]`)
+- [x] System directive prefix (`[Setu: Prime]`)
 - [x] Mode-aware enforcement (don't conflict with Plan mode)
 - [x] Agent file contains ONLY soul (no behavioral instructions)
 - [x] Plugin hooks enforce behavior
@@ -122,7 +122,7 @@
 - [x] Security: Constraint bypass detection with warnings
 - [ ] Build and test plugin end-to-end
 - [ ] Publish to npm as `setu-opencode`
-- [ ] Test all 3 styles (ultrathink, quick, collab)
+- [ ] Test Prime mindset flow end-to-end
 - [ ] Documentation (usage examples, configuration options)
 - [ ] Update README with quick start guide
 
@@ -464,7 +464,7 @@ interface VerificationProof {
   - Take screenshots, analyze accessibility
   - E2E testing for web projects
 
-- [ ] **Scratchpad Style**
+- [ ] **Scratchpad Bypass**
   - Bypass all enforcement for disposable scripts
   - Still tracks context for future reference
 

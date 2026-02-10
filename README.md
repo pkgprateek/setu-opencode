@@ -61,34 +61,24 @@ AI coding agents are fast. But speed without discipline creates problems:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Styles (Operational Presets): Match Rigor to Risk
+### Prime Way: Match Rigor to Risk Automatically
 
-**Why this matters:** Not every task needs the same level of verification. A typo fix doesn't need full test runs. A new feature does.
+**Why this matters:** Not every task needs the same level of ceremony. A typo fix should move fast. A risky change should pause for alignment.
 
-**What Setu does:** Three styles that match verification level to task risk.
+**What Setu does:** Setu runs one disciplined way (the Prime way) and decides execution depth automatically.
 
-| Style | When to Use | What Happens |
-| ------- | ------------- | -------------- |
-| **Ultrathink** | Features, refactoring | Deep analysis, full verification (default) |
-| **Quick** | Typos, comments | Skip ceremony, just do it |
-| **Collab** | Architecture decisions | Discuss before implementing, trust user |
+Execution behavior:
+- straightforward work executes directly,
+- complex/high-risk work asks before proceeding,
+- destructive/sensitive actions always require explicit confirmation.
 
-**Switch styles** by mentioning them in your message:
-```text
-:ultrathink implement the auth system
-:quick fix the typo in line 42
-:collab let's design the API together
-```
-
-**Aliases:** `:trust` and `:x` now map to collab for backward compatibility.
-
-The system prompt shows the current style so you always know what level of rigor is active.
+No style switching commands are required.
 
 ### Verification Before "Done"
 
 **Why this matters:** "Done" should mean "verified working," not "I think it's done."
 
-**What Setu does:** In **Ultrathink** style (default), before claiming completion:
+**What Setu does:** Before claiming completion:
 
 1. **Build** — Runs build, checks exit code, captures only errors
 2. **Tests** — Runs test suite, captures only failures
@@ -254,7 +244,7 @@ Setu's persona is lean. Skills load on-demand, not upfront.
 | Skill | Purpose |
 | ------- | --------- |
 | `setu-bootstrap` | Project setup that follows the discipline protocol |
-| `setu-verification` | Style-specific verification steps |
+| `setu-verification` | Verification and release checks |
 | `setu-rules-creation` | Create effective AGENTS.md files |
 
 Skills load when relevant, not at startup.
@@ -269,7 +259,7 @@ Setu is named after the bridge in mythology — built not by force, but by disci
 1. **Think before acting** — Phase 0 prevents wrong assumptions
 2. **Verify before claiming** — Tests prove correctness
 3. **Ask before spinning** — Attempt limits prevent waste
-4. **Adapt to context** — Styles match rigor to risk
+4. **Adapt to context** — Setu scales rigor to risk automatically
 
 ---
 
