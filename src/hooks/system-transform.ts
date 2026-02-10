@@ -20,9 +20,10 @@ import {
   hasProjectRules,
   getJITContextSummary,
   loadActiveTask,
-  getSetuState,
+  getDisciplineState,
   getOverwriteRequirement,
 } from '../context';
+import { determineGear } from '../enforcement';
 import { debugLog } from '../debug';
 import { getErrorMessage } from '../utils/error-handling';
 
@@ -141,28 +142,33 @@ export function createSystemTransformHook(
       }
     }
 
-    const setuState = getSetuState(_input.sessionID);
-    output.system.unshift(`[SETU: Phase] ${setuState.phase}`);
+    if (getProjectDir) {
+      const projectDir = getProjectDir();
+      const gearState = determineGear(projectDir);
 
-    if (setuState.phase === 'researching' && !setuState.pendingQuestion) {
-      output.system.unshift(
-        '[SETU: Next Action] Continue silent research and save findings using setu_research before any execution.'
-      );
+      output.system.unshift(`[SETU: Gear] ${gearState.current}`);
+
+      switch (gearState.current) {
+        case 'scout':
+          output.system.unshift(
+            '[SETU: Workflow] Research the codebase and task. Save findings with setu_research.'
+          );
+          break;
+        case 'architect':
+          output.system.unshift(
+            '[SETU: Workflow] Create an implementation plan. Save with setu_plan. Ask user to confirm before executing.'
+          );
+          break;
+        case 'builder':
+          output.system.unshift(
+            '[SETU: Workflow] Execute the plan step by step. Run setu_verify before declaring done.'
+          );
+          break;
+      }
     }
 
-    if (setuState.phase === 'planning' && !setuState.pendingQuestion) {
-      output.system.unshift(
-        '[SETU: Next Action] Build atomic plan and save with setu_plan before execution.'
-      );
-    }
-
-    if (setuState.phase === 'executing' && !setuState.pendingQuestion) {
-      output.system.unshift(
-        '[SETU: Next Action] Execute planned steps in order, then run setu_verify.'
-      );
-    }
-
-    if (setuState.pendingQuestion || setuState.phase === 'blocked_question') {
+    const disciplineState = getDisciplineState(_input.sessionID);
+    if (disciplineState.questionBlocked) {
       output.system.unshift(
         `[SETU: Clarification Required]\n` +
           `Your next assistant response must be a single native question tool call.\n` +
