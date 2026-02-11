@@ -66,7 +66,7 @@ PLAN.md exists → BUILDER gear
 
 | Gear | Can Read | Can Write .setu/ | Can Write src/ | How to Advance |
 |------|----------|------------------|----------------|----------------|
-| **Scout** | All | RESEARCH.md only | No | `setu_research` |
+| **Scout** | All | RESEARCH.md only (via `setu_research`) | No | `setu_research` |
 | **Architect** | All | Any file | No | `setu_plan` |
 | **Builder** | All | Any | Yes | N/A (final) |
 

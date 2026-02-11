@@ -140,7 +140,7 @@ reviews:
         - Response discipline must prevent meta-reasoning leakage
         - Standards section must emphasize safety, architecture, craftsmanship
         - No behavioral instructions (those are enforced by hooks, not prompts)
-        - Prime mindset metadata must be correct
+        - Persona metadata must be correct
 
     - path: "src/prompts/**/*.ts"
       instructions: |
@@ -148,7 +148,7 @@ reviews:
 
         - `getStateInjection()` must only inject dynamic content (mindset/runtime tag, file availability)
         - Never inject static "efficiency rules" — enforce via hooks
-        - Runtime prefix `[Setu: Prime]` must be concise
+        - Runtime prefix `[Setu]` must be concise
         - File availability info must be accurate
         - Keep persona overhead minimal
 

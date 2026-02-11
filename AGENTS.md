@@ -184,28 +184,31 @@ Create PLAN.md with implementation steps.
 
 ```typescript
 setu_plan({
-  task: string,           // What to implement
-  findings?: string,      // Key findings from research
-  steps?: string[]        // Optional: predefined steps
+  objective: string,        // One sentence: what this plan accomplishes
+  contextSummary?: string,  // 2-3 sentences from RESEARCH.md for subagent context
+  steps: string,            // Full step definitions in markdown (headings, numbered, or bullets)
+  successCriteria?: string  // Truths, artifacts, and key links that prove completion
 });
 ```
 
 **What happens**:
-1. Analyzes findings
-2. Creates implementation plan
-3. Spawns reviewer subagent to validate
-4. Writes PLAN.md
+1. Validates RESEARCH.md exists (precondition)
+2. Normalizes and counts steps (max 100)
+3. Writes PLAN.md to `.setu/`
+4. Resets step progress to 0
 5. Triggers user approval (question blocking)
 6. Gear advances: Architect → Builder (after approval)
 
 **Example**:
 ```typescript
 setu_plan({
-  task: 'Implement JWT authentication',
-  findings: 'Use jose library, existing middleware pattern in src/middleware/'
+  objective: 'Implement JWT authentication',
+  contextSummary: 'Uses jose library. Existing middleware pattern in src/middleware/.',
+  steps: '## Step 1: Add jose dependency\n- Install jose via npm\n\n## Step 2: Create auth middleware\n- Add JWT validation in src/middleware/auth.ts',
+  successCriteria: 'All auth routes return 401 without valid JWT. Tests pass.'
 });
 
-// Result: PLAN.md created, now in Builder gear
+// Result: PLAN.md created, user approval required, then Builder gear
 ```
 
 ---
@@ -216,19 +219,20 @@ Run build, test, and lint verification.
 
 ```typescript
 setu_verify({
-  scope?: 'full' | 'incremental'  // Default: 'full'
+  steps?: string[],      // Specific steps to run: 'build', 'test', 'lint', 'typecheck', 'visual'
+  skipSteps?: string[]   // Steps to skip
 });
 ```
 
-**Always runs**:
-1. Build check
-2. Test check  
-3. Lint check
+**Default behavior** (no args): Runs all required steps (build, test, lint). Typecheck runs if available. Visual is deferred to user.
 
 **Example**:
 ```typescript
-setu_verify({ scope: 'full' });
-// Result: All checks passed, recorded in verification.log
+setu_verify({ steps: ['build', 'test'] });
+// Result: Build and test checks run, recorded in verification.log
+
+setu_verify({ skipSteps: ['lint'] });
+// Result: All steps except lint
 ```
 
 ---
@@ -239,20 +243,20 @@ Check environment health and detect issues.
 
 ```typescript
 setu_doctor({
-  check?: 'all' | 'environment' | 'git' | 'dependencies'
+  verbose?: boolean  // Include healthy checks in output, not just issues (default: false)
 });
 ```
 
 **Checks**:
-- Dev server running (would break build)
-- Uncommitted changes
-- Missing dependencies
-- Configuration issues
+- Git status (uncommitted changes, detached HEAD)
+- Dependencies (missing node_modules, lockfile sync)
+- Runtime (Node.js version, TypeScript availability)
+- Dev server conflicts (would break build)
 
 **Example**:
 ```typescript
-setu_doctor({ check: 'all' });
-// Result: Warnings about dev server on port 3000
+setu_doctor({ verbose: true });
+// Result: Full report including healthy checks, warnings, and errors
 ```
 
 ---
