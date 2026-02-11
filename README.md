@@ -93,9 +93,9 @@ Before claiming completion:
 
 ### Attempt Limits: Prevent Infinite Loops
 
-After 2 failed attempts at the same problem:
+After 3 failed attempts at the same problem (configurable):
 
-> "I've tried X and Y. Would you like me to try Z, or do you have guidance?"
+> "I've tried X, Y, and Z. Would you like me to try a different approach, or do you have guidance?"
 
 ### Three Modes, One Purpose Each
 
