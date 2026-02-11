@@ -77,7 +77,7 @@
 - **Renamed state API**: `getSetuState` → `getDisciplineState`, `setSetuState` → `setDisciplineState`, `clearSetuState` → `clearDisciplineState` to reflect actual purpose
 - **System transform uses gear-based guidance**: Replaced in-memory state injections with gear-aware workflow instructions from `determineGear()`
 - **Persona optimization**: Reduced token overhead from ~1,100 to ~400 tokens (64% reduction)
-- Agent version updated to 2.7.0
+- Agent version aligned to package version (1.2.0)
 - Removed legacy preset system; consolidated to a single default behavior
 - Runtime guidance changed to descriptive-only (removed behavioral directives)
 - Removed parallel execution guidance from persona (enforcement via hooks instead)
