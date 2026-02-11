@@ -9,14 +9,15 @@ export interface SafetyDecision {
 }
 
 const DESTRUCTIVE_BASH_PATTERNS: RegExp[] = [
-  // Covers: rm -rf, rm -r -f, rm --recursive --force, rm -fr, etc.
-  /\brm\b(?:\s+(?:-\w*[rf]\w*|--(?:recursive|force)))+/i,
+  // Covers: rm with -r/-f/--recursive/--force anywhere on the line, even with intervening flags
+  /\brm\b(?=.*(?:-\w*[rf]|--recursive|--force))/i,
   /\bgit\s+reset\s+--hard\b/i,
   /\bgit\s+clean\b[^\n]*\s-(?:[^\n]*f|[^\n]*d|[^\n]*x)/i,
   /\bmkfs\b/i,
   /\bdd\b\s+if=/i,
-  // Pipe-to-shell: curl/wget piped to sh/bash (remote code execution)
-  /\b(?:curl|wget)\b[^\n|]*\|\s*(?:sudo\s+)?(?:ba)?sh\b/i,
+  // Pipe-to-shell: curl/wget eventually piped to sh/bash/zsh/dash (remote code execution)
+  // Handles multi-stage pipelines: curl url | cat | sudo sh -c "..."
+  /\b(?:curl|wget)\b[^\n]*\|[^\n]*\b(?:sudo\s+)?(?:ba|z|da)?sh\b/i,
 ];
 
 const FILE_MUTATION_BASH_PATTERNS: RegExp[] = [

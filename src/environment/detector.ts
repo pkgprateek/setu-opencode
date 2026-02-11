@@ -1,4 +1,5 @@
-import { exec } from 'child_process';
+import { exec, type ExecException } from 'child_process';
+import { debugLog } from '../debug';
 
 export interface EnvironmentConflict {
   hasConflict: boolean;
@@ -12,16 +13,22 @@ const DEV_PROCESS_QUERY = 'pgrep -f "([v]ite|[n]ext dev|npm run dev|pnpm dev|yar
 
 function hasActiveDevServer(): Promise<boolean> {
   return new Promise((resolve) => {
-    const child = exec(DEV_PROCESS_QUERY, { timeout: 1500 }, (error, stdout) => {
+    const child = exec(DEV_PROCESS_QUERY, { timeout: 1500 }, (error: ExecException | null, stdout) => {
       if (error) {
-        // pgrep exits non-zero when no match found — not an error
-        resolve(false);
+        // pgrep exit code 1 = no match found — safe, no dev server
+        if (error.code === 1) {
+          resolve(false);
+          return;
+        }
+        // Timeout, exec failure, or unexpected exit code — fail-closed
+        // Assume dev server may exist to prevent unsafe builds
+        debugLog('Dev server check failed (fail-closed):', error.message);
+        resolve(true);
         return;
       }
       resolve(stdout.trim().length > 0);
     });
-    // Ensure we don't leak child processes
-    child.unref?.();
+    child.unref();
   });
 }
 
