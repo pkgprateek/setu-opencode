@@ -9,10 +9,17 @@ Before declaring a task complete, verify using targeted extraction.
 
 ## When to Verify
 
-Verification runs in **Builder gear** (after research and planning are complete).
+Verification runs in **Builder gear** — the state where both `.setu/RESEARCH.md` and `.setu/PLAN.md` exist, meaning research and planning are complete and implementation has started.
 
-- **Full scope** (default): All steps — build, test, lint, type check
-- **Incremental scope**: Only steps relevant to changed files
+**Precondition check:** If RESEARCH.md or PLAN.md are missing, you are not in Builder gear. Complete the RPI workflow first:
+- Missing RESEARCH.md → use `setu_research` to advance from Scout to Architect
+- Missing PLAN.md → use `setu_plan` to advance from Architect to Builder
+
+**Scope selection:**
+- **Full scope** (default): All steps — build, test, lint, type check. Use when logic, dependencies, or configuration changed, or when changes span multiple modules/files.
+- **Incremental scope**: Only steps relevant to changed files. Use only when the user explicitly requests it, or changes are isolated to a single module with no cross-cutting impact (e.g., updating a single component's styling).
+
+When in doubt, use Full scope.
 
 ## Verification Steps
 
