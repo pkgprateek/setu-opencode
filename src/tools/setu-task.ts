@@ -26,6 +26,7 @@ import {
   CONSTRAINT_TYPES
 } from '../context/active';
 import { debugLog } from '../debug';
+import { getErrorMessage } from '../utils/error-handling';
 
 /**
  * Valid constraint names for input validation
@@ -149,22 +150,32 @@ setu_task({
           const planPath = join(setuDir, 'PLAN.md');
           const historyPath = join(setuDir, 'HISTORY.md');
 
-          if (existsSync(researchPath)) {
-            const timestamp = new Date().toISOString();
-            const oldResearch = readFileSync(researchPath, 'utf-8');
-            const archiveEntry = `\n---\n## Archived Research (${timestamp})\n\n${oldResearch}\n`;
-            appendFileSync(historyPath, archiveEntry, 'utf-8');
-            unlinkSync(researchPath);
-            debugLog('Archived old RESEARCH.md to HISTORY.md');
+          try {
+            if (existsSync(researchPath)) {
+              const timestamp = new Date().toISOString();
+              const oldResearch = readFileSync(researchPath, 'utf-8');
+              const archiveEntry = `\n---\n## Archived Research (${timestamp})\n\n${oldResearch}\n`;
+              appendFileSync(historyPath, archiveEntry, 'utf-8');
+              unlinkSync(researchPath);
+              debugLog('Archived old RESEARCH.md to HISTORY.md');
+            }
+          } catch (archiveError) {
+            debugLog(`Failed to archive RESEARCH.md: ${getErrorMessage(archiveError)}`);
+            // Continue — partial archive failure should not block task creation
           }
 
-          if (existsSync(planPath)) {
-            const timestamp = new Date().toISOString();
-            const oldPlan = readFileSync(planPath, 'utf-8');
-            const archiveEntry = `\n---\n## Archived Plan (${timestamp})\n\n${oldPlan}\n`;
-            appendFileSync(historyPath, archiveEntry, 'utf-8');
-            unlinkSync(planPath);
-            debugLog('Archived old PLAN.md to HISTORY.md');
+          try {
+            if (existsSync(planPath)) {
+              const timestamp = new Date().toISOString();
+              const oldPlan = readFileSync(planPath, 'utf-8');
+              const archiveEntry = `\n---\n## Archived Plan (${timestamp})\n\n${oldPlan}\n`;
+              appendFileSync(historyPath, archiveEntry, 'utf-8');
+              unlinkSync(planPath);
+              debugLog('Archived old PLAN.md to HISTORY.md');
+            }
+          } catch (archiveError) {
+            debugLog(`Failed to archive PLAN.md: ${getErrorMessage(archiveError)}`);
+            // Continue — partial archive failure should not block task creation
           }
           
           const constraints = validateConstraints(args.constraints);

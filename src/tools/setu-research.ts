@@ -57,12 +57,16 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
       throw new Error(`Failed to save research: ${getErrorMessage(error)}. Check .setu/ directory permissions.`);
     }
     
-    if (sanitizedArgs.openQuestions && sanitizedArgs.openQuestions.trim().length > 0 && context?.sessionID) {
-      setQuestionBlocked(
-        context.sessionID,
-        `Research has open questions that need answers before planning:\n${sanitizedArgs.openQuestions}`
-      );
-      return 'Research saved. Open questions detected - use the question tool to ask the user before proceeding to setu_plan.';
+    if (sanitizedArgs.openQuestions && sanitizedArgs.openQuestions.trim().length > 0) {
+      if (context?.sessionID) {
+        setQuestionBlocked(
+          context.sessionID,
+          `Research has open questions that need answers before planning:\n${sanitizedArgs.openQuestions}`
+        );
+        return 'Research saved. Open questions detected - use the question tool to ask the user before proceeding to setu_plan.';
+      } else {
+        return 'Research saved. WARNING: Open questions detected but session ID unavailable — questions were not gated. Use the question tool to resolve before proceeding to setu_plan.';
+      }
     }
 
     return `Research saved. Gear shifted: scout → architect. You can now create PLAN.md.`;

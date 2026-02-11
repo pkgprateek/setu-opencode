@@ -190,7 +190,8 @@ export function createToolExecuteBeforeHook(
 
     if (input.tool === 'question') {
       clearQuestionBlocked(input.sessionID);
-      debugLog('Question answered; cleared blocked_question state');
+      clearSafetyBlocked(input.sessionID);
+      debugLog('Question/safety answered; cleared blocked states');
       return;
     }
 
@@ -226,19 +227,11 @@ export function createToolExecuteBeforeHook(
         const readPath = getStringProp(output.args, 'filePath') ?? '';
         const readNormalized = readPath ? normalizeForComparison(projectDir, readPath) : '';
 
-        if (readNormalized !== requiredNormalized) {
-          throw new Error(
-            formatGuidanceMessage(
-              'Read required before overwrite',
-              `You must read '${requiredPath}' before mutating it.`,
-              `Read '${requiredPath}' now, then continue with the update.`,
-              'Avoid shell workarounds that mutate files before reading.'
-            )
-          );
+        if (readNormalized === requiredNormalized) {
+          clearOverwriteRequirement(input.sessionID);
+          debugLog(`Overwrite gate cleared after read: ${requiredPath}`);
         }
-
-        clearOverwriteRequirement(input.sessionID);
-        debugLog(`Overwrite gate cleared after read: ${requiredPath}`);
+        // Allow all reads to pass through — only the required read clears the gate
       } else {
         if (isMutating || input.tool === 'task') {
           throw new Error(
@@ -296,7 +289,7 @@ export function createToolExecuteBeforeHook(
     // This applies in Setu mode regardless of gear state
     if (input.tool === 'bash' && getVerificationState) {
       const command = getStringProp(output.args, 'command') ?? '';
-      const envConflict = detectEnvironmentConflict(command);
+      const envConflict = await detectEnvironmentConflict(command);
       if (envConflict.hasConflict) {
         throw new Error(
           formatGuidanceMessage(

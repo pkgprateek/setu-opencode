@@ -31,9 +31,12 @@ function isStale(updatedAt: number, ttlMs: number): boolean {
 export function getDisciplineState(sessionID: string): SetuDisciplineState {
   const state = sessionStates.get(sessionID);
   if (!state || isStale(state.updatedAt, STATE_TTL_MS)) {
+    // Preserve safetyBlocked across TTL expiry — safety decisions
+    // must be explicitly cleared, never silently lapsed
+    const preservedSafetyBlocked = state?.safetyBlocked ?? false;
     const initial: SetuDisciplineState = {
       questionBlocked: false,
-      safetyBlocked: false,
+      safetyBlocked: preservedSafetyBlocked,
       updatedAt: Date.now(),
     };
     sessionStates.set(sessionID, initial);
@@ -90,6 +93,7 @@ export function clearSafetyBlocked(sessionID: string): void {
 
 export function clearDisciplineState(sessionID: string): void {
   sessionStates.delete(sessionID);
+  overwriteRequirements.delete(sessionID);
 }
 
 export function setOverwriteRequirement(sessionID: string, state: OverwriteRequirementState): void {
