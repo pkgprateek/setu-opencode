@@ -9,15 +9,18 @@ export interface SafetyDecision {
 }
 
 const DESTRUCTIVE_BASH_PATTERNS: RegExp[] = [
-  // Covers: rm with -r/-f/--recursive/--force anywhere on the line, even with intervening flags
-  /\brm\b(?=.*(?:-\w*[rf]|--recursive|--force))/i,
+  // Covers: rm with dangerous flags anywhere on line, including escaped/prefixed invocations
+  // Bounded to prevent ReDoS on adversarial input
+  /(?:\\?rm|command\s+rm)\b[^\n]{0,500}(?:-\w*[rf]|--recursive|--force|--no-preserve-root)/i,
   /\bgit\s+reset\s+--hard\b/i,
   /\bgit\s+clean\b[^\n]*\s-(?:[^\n]*f|[^\n]*d|[^\n]*x)/i,
   /\bmkfs\b/i,
   /\bdd\b\s+if=/i,
-  // Pipe-to-shell: curl/wget eventually piped to sh/bash/zsh/dash (remote code execution)
-  // Handles multi-stage pipelines: curl url | cat | sudo sh -c "..."
-  /\b(?:curl|wget)\b[^\n]*\|[^\n]*\b(?:sudo\s+)?(?:ba|z|da)?sh\b/i,
+  // Pipe-to-shell: curl/wget piped to shell (RCE vector)
+  // Bounded to prevent ReDoS; covers sh/bash/zsh/dash across multi-stage pipelines
+  /\b(?:curl|wget)\b[^\n]{0,500}\|[^\n]{0,500}\b(?:sudo\s+)?(?:ba|z|da)?sh\b/i,
+  // Process substitution: sh <(curl ...) or bash <(wget ...)
+  /\b(?:ba|z|da)?sh\b\s+<\(\s*(?:curl|wget)\b/i,
 ];
 
 const FILE_MUTATION_BASH_PATTERNS: RegExp[] = [
