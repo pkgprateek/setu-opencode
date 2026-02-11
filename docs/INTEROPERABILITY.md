@@ -55,7 +55,7 @@ This means the agent **CANNOT** freely edit - OpenCode enforces this.
 |------|---------|
 | `system-transform` | Injects lean persona (~500 tokens) |
 | `chat.message` | Tracks current agent for mode-aware behavior |
-| `tool.execute.before` | Phase 0 blocking (until context confirmed) |
+| `tool.execute.before` | Phase 0 context gate + gear-based enforcement |
 | `tool.execute.after` | Tracks verification steps |
 | `config` | Sets Setu as default agent, creates agent file |
 | `event` | Handles session lifecycle, context loading |
@@ -72,7 +72,7 @@ Setu adapts based on which mode the user is in:
 
 | Mode | Setu Behavior |
 |------|---------------|
-| **Setu** | Full enforcement: Phase 0 + verification + context persistence |
+| **Setu** | Full enforcement: Phase 0 + gears + discipline guards + verification + context persistence |
 | **Build** | Light enforcement: Verification reminders, context tracking |
 | **Plan** | Deferred: OpenCode handles blocking, Setu tracks context only |
 
@@ -93,7 +93,8 @@ When other discipline plugins are detected, Setu enters **minimal mode**:
 |---------|-------------------|---------|
 | Context injection | **Disabled** (other plugin handles) | Enabled |
 | Auto-inject AGENTS.md | **Disabled** | Enabled |
-| Phase 0 blocking | Enabled | Enabled |
+| Phase 0 context gate | Enabled | Enabled |
+| Gear enforcement | Enabled | Enabled |
 | Verification enforcement | Enabled | Enabled |
 | Context persistence | Enabled (uses `.setu/`) | Enabled |
 
@@ -122,10 +123,14 @@ Setu persists context to `.setu/` directory:
 
 ```
 .setu/
-├── context.json   # Machine-parseable for injection
-├── active.json    # Current task, mode, constraints
-├── feedback.md    # User feedback
-└── verification.log  # Build/test/lint results
+├── context.json      # Machine-parseable for injection
+├── active.json       # Current task, mode, constraints
+├── RESEARCH.md       # Research findings (gear: scout → architect)
+├── PLAN.md           # Implementation plan (gear: architect → builder)
+├── HISTORY.md        # Archived artifacts from previous tasks
+├── feedback.md       # User feedback
+├── verification.log  # Build/test/lint results
+└── results/          # Per-step result files
 ```
 
 This directory is independent and doesn't conflict with other plugins.
@@ -148,7 +153,7 @@ npm install -g agent-browser
 agent-browser install  # Download Chromium
 ```
 
-**How Setu uses it (v2.1+):**
+**How Setu uses it (future):**
 - Setu auto-detects if agent-browser is installed
 - If detected, visual verification becomes available
 - Token-efficient: Uses a subagent to handle screenshots
