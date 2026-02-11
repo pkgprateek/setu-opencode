@@ -249,7 +249,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
   
   // Log plugin initialization (only in debug mode)
   debugLog('Plugin initialized');
-  debugLog('Default mindset: Prime');
+  debugLog('Default mode: Setu (discipline layer)');
   debugLog('Phase 0 enforcement: ACTIVE');
   debugLog('Context persistence: .setu/ directory');
   debugLog('Tools: setu_verify, setu_context, setu_feedback, setu_task');

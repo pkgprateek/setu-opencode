@@ -11,11 +11,11 @@ export interface FileAvailability {
 
 export const getModePrefix = (isDefault: boolean = false): string => {
   const suffix = isDefault ? ' (Default)' : '';
-  return `[Setu: Prime${suffix}]`;
+  return `[Setu${suffix}]`;
 };
 
 const getModeGuidance = (): string => {
-  return 'Prime mindset: disciplined execution with safety and verification.';
+  return 'Disciplined execution with safety and verification.';
 };
 
 export const getFileAvailability = (files: FileAvailability): string => {

@@ -50,7 +50,7 @@ function formatFilesAlreadyRead(filesRead: Array<{ path: string }>): string {
  * Creates the system transform hook
  * 
  * Injects:
- * - [Setu: Prime]
+ * - [Setu]
  * - [Context: AGENTS.md, .setu/context.json]
  * - Silent Exploration: Project rules (AGENTS.md, CLAUDE.md, active task)
  * - Loaded context content (summary, constraints, patterns)

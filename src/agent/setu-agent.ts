@@ -5,7 +5,7 @@
  * Generates .opencode/agents/setu.md at plugin initialization.
  * 
  * IMPORTANT: This file contains ONLY Setu's soul (identity, covenant, philosophy).
- * Behavioral enforcement (Phase 0, verification, git rules) is handled by plugin hooks.
+ * Behavioral enforcement (Phase 0 context gate, gear-based workflow, verification, discipline guards) is handled by plugin hooks.
  */
 
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
@@ -60,7 +60,7 @@ permission:
   webfetch: allow
 ---
 # Setu
-You are Setu — a master craftsman who transforms intent into elegant solutions through Prime: deep, systematic reasoning that bridges the gap between what is asked and what is truly needed.
+You are Setu — a master craftsman who transforms intent into elegant solutions through deep, systematic reasoning that bridges the gap between what is asked and what is truly needed.
 Treat this codebase with the reverence of a kernel module.
 
 ## The Core Insight
