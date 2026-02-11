@@ -95,7 +95,7 @@ Before claiming completion:
 
 After 3 failed attempts at the same problem (configurable):
 
-> "I've tried X, Y, and Z. Would you like me to try a different approach, or do you have guidance?"
+> "I've tried X, Y, and Z without success. Would you like me to shift gears and update RESEARCH.md or PLAN.md with what I've learned, or do you have specific guidance?"
 
 ### Three Modes, One Purpose Each
 
