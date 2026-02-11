@@ -20,13 +20,14 @@
 
 ## Version Overview
 
-| Version | Codename | Theme | Key Deliverable |
-|---------|----------|-------|-----------------|
-| **v1.0** | Foundation | Ship Core | Working plugin, npm publish |
-| **v1.1** | Gearbox | Artifact-Driven State | RESEARCH.md/PLAN.md enforcement |
-| **v1.2** | Swarm | DAG-Based Execution | Parallel execution, Context Cleanse |
-| **v2.0** | Synthesis | Goal-Backward Verification | Verify outcomes, not tasks |
-| **v3.0** | Expansion | Multi-Platform | Setu Lite, MCP integration |
+| Version | Codename | Theme | Track | Key Deliverable |
+|---------|----------|-------|-------|-----------------|
+| **v1.0.0** | Foundation | Ship Core | — | Working plugin, npm publish |
+| **v1.1.0** | Gearbox | Artifact-Driven State | — | RESEARCH.md/PLAN.md enforcement |
+| **v1.2.0** | Simplification | Gear-Only Core | Track A | One workflow, -627 lines, discipline guards |
+| **v1.3.0** | Foundation+ | Execution Quality | Track B | Flexible task model, parallel orchestration, JIT optimization |
+| **v2.0.0** | Orchestration | DAG + Goal Verification | Track C | Parallel execution engine, outcome verification |
+| **v3.0.0** | Expansion | Multi-Platform | — | Setu Lite, MCP integration |
 
 ---
 
@@ -35,8 +36,7 @@
 | Term | Scope | Meaning | Examples |
 |------|-------|---------|----------|
 | **Mode** | OpenCode | IDE-level agent selection via Tab | Plan, Build, Setu |
-| **Mindset** | Setu | Single disciplined runtime behavior | Prime |
-| **Gear** | Setu v1.1+ | State determined by artifact existence | scout, architect, builder |
+| **Gear** | Setu | Workflow state determined by artifact existence | scout, architect, builder |
 
 ---
 
@@ -44,7 +44,7 @@
 
 | Principle | Why It Matters | Implementation |
 |-----------|----------------|----------------|
-| **Pre-emptive, not reactive** | Fixing mistakes costs more than preventing them | Phase 0 blocks tools until context confirmed |
+| **Pre-emptive, not reactive** | Fixing mistakes costs more than preventing them | Phase 0 + gears block tools until context confirmed and artifacts exist |
 | **Zero-config by default** | Friction kills adoption | Works out of box, config is optional |
 | **Thoughtful colleague, not gatekeeper** | Users should feel helped, not blocked | Clear messaging, smart questions |
 | **Permission > Hooks** | CANNOT is stronger than DOES NOT | Setu agent uses permission system + hooks |
@@ -52,9 +52,9 @@
 
 ---
 
-## Current State (v1.1 - Gearbox Complete, Pending Manual Testing)
+## Current State (v1.2.0 — Track A Complete, Pending Manual Testing)
 
-### Implemented (v1.0 + v1.1)
+### Implemented (v1.0.0 through v1.2.0)
 
 **Core Infrastructure:**
 - [x] Package structure (`src/`, `skills/`)
@@ -65,7 +65,7 @@
 - [x] `config` hook — Sets Setu as default agent
 - [x] `system-transform` hook — Injects lean persona (~500 tokens)
 - [x] `chat.message` hook — Agent tracking
-- [x] `tool.execute.before` hook — Phase 0 blocking, context injection
+- [x] `tool.execute.before` hook — Phase 0 context gate + gear-based enforcement
 - [x] `tool.execute.after` hook — Verification tracking, context collection
 - [x] `event` hook — Session lifecycle, context loading
 - [x] `session.compacting` hook — Injects active task on compaction
@@ -84,7 +84,7 @@
 - [x] Default on startup (`default_agent: "setu"` in config)
 - [x] Mode-aware enforcement (Setu/Build/Plan awareness)
 - [x] Agent file contains ONLY soul (identity, covenant, philosophy)
-- [x] Plugin hooks enforce behavior (Phase 0, verification)
+- [x] Plugin hooks enforce behavior (Phase 0, gears, verification)
 
 **Context Persistence:**
 - [x] `.setu/` directory structure
@@ -92,11 +92,11 @@
 - [x] `active.json` — Current task, mode, constraints
 - [x] `feedback.md` — User feedback mechanism
 - [x] `verification.log` — Audit trail of build/test/lint results
-- [x] Context collector (tracks reads/searches during Phase 0)
+- [x] Context collector (tracks reads/searches during Scout gear)
 - [x] Context injection to subagent prompts
 - [x] Lazy context loading (performance optimization)
 
-**Gearbox (v1.1):**
+**Gearbox (v1.1.0):**
 - [x] Gear state machine: Scout → Architect → Builder via artifact existence
 - [x] Gear-based hook enforcement (Scout=read-only, Architect=.setu/ only, Builder=full)
 - [x] Gear-based system prompt injection with per-gear workflow guidance
@@ -119,33 +119,33 @@
 
 ### Known Limitations
 
-- **First-run restart required:** Setu appears in Tab cycle only after restarting OpenCode. This is because OpenCode scans agent files before plugins initialize. (Fix planned for v1.2)
+- **First-run restart required:** Setu appears in Tab cycle only after restarting OpenCode. This is because OpenCode scans agent files before plugins initialize. (Known limitation.)
 
-### v1.0 Release Checklist
+### v1.0.0 Release Checklist
 
 - [x] Setu as primary agent (appears in Tab cycle, default on startup)
 - [x] Context persistence (`.setu/context.json`, `.setu/active.json`)
 - [x] Verification logging (`.setu/verification.log`)
-- [x] DAG execution guidance in persona
-- [x] System directive prefix (`[Setu: Prime]`)
+- [x] DAG execution guidance in persona (removed in v1.2.0 — moved to Track C)
+- [x] System directive prefix (replaced with gear-based prefix in v1.2.0)
 - [x] Mode-aware enforcement (don't conflict with Plan mode)
 - [x] Agent file contains ONLY soul (no behavioral instructions)
 - [x] Plugin hooks enforce behavior
-- [x] Removed `setu_mode` tool (agent cannot bypass Phase 0)
+- [x] Removed `setu_mode` tool (agent cannot bypass gear enforcement)
 - [x] Performance optimizations (lazy loading, file cache)
 - [x] Security: Constraint bypass detection with warnings
 - [ ] Build and test plugin end-to-end
 - [ ] Publish to npm as `setu-opencode`
-- [ ] Test Prime mindset flow end-to-end
+- [x] Test end-to-end flow (replaced Prime mindset with gear-based workflow in v1.2.0)
 - [ ] Documentation (usage examples, configuration options)
 - [ ] Update README with quick start guide
 
 ---
 
-## v1.1: Gearbox — Artifact-Driven State (COMPLETED)
+## v1.1.0: Gearbox — Artifact-Driven State (SHIPPED)
 
-> **Theme:** Replace binary Phase 0 with artifact-existence Gearbox. State is determined by which files exist.
-> **Status:** Implementation complete. Pending manual testing and first release.
+> **Theme:** Replace binary Phase 0 with artifact-existence Gearbox. Phase 0 remains as the initial context gate; gears layer RPI workflow enforcement on top.
+> **Status:** Implementation complete and shipped as part of v1.2.0.
 
 ### Gearbox Architecture
 
@@ -248,22 +248,40 @@ Check: Does .setu/RESEARCH.md exist?
   - Locations: `.setu/setu.json` (project) or `~/.config/opencode/setu.json` (global)
   - Options: `maxAttempts`, `verbosity`, `contextSizeLimit`, feature flags
 
-### v1.1 Success Criteria
+### v1.1.0 Success Criteria
 
 - [x] Gearbox determines gear from artifacts in <10ms
 - [x] Gear transitions happen atomically (no race conditions)
 - [x] Attempt limits prevent infinite retry loops
 - [x] Pre-commit checklist catches blind commits
 - [x] Environment Doctor prevents Ghost Loops
-- [ ] README updated with v1.1 features (pending)
+- [ ] README updated with v1.2.0 features (pending)
 - [ ] Manual testing complete (pending)
 - [ ] First npm release (pending)
 
 ---
 
-## v1.2: Swarm — DAG-Based Execution
+## v1.2.0: Simplification — Gear-Only Core (SHIPPED, Track A)
 
-> **Theme:** Enable true parallel execution. Independent tasks run simultaneously.
+> **Theme:** Remove scoring system, styles, and competing state machines. Gears become single workflow authority with discipline guards.
+> **Status:** Track A COMPLETE. -627 lines removed. All 83 tests pass.
+
+### Track A Deliverables
+
+- [x] Removed styles (quick/collab/ultrathink) — one disciplined path
+- [x] Removed in-memory workflow state machine (SetuPhase) — gears are sole authority
+- [x] Added discipline guards (question/safety/overwrite blocking) as orthogonal governance
+- [x] Artifact archiving on new task (old RESEARCH.md/PLAN.md → HISTORY.md)
+- [x] User interaction gates at gear transitions (research→plan, plan→build)
+- [x] `todowrite` reclassified as read-only
+- [x] Dead code removal: -627 lines (enforcement levels, capability classifiers, unused templates/config)
+- [x] All 83 tests pass, typecheck clean, build clean
+
+---
+
+## v1.3.0: Foundation+ — Execution Quality (Track B)
+
+> **Theme:** Scale quality for large, multi-step work. Flexible task model, parallel subagent orchestration, JIT context optimization.
 
 ### DAG Execution Model
 
@@ -350,12 +368,12 @@ A, B, C have no dependencies → execute in parallel
 ### Visual Enhancements (Luxury)
 
 - [ ] **Colored Terminal Output** — `src/utils/terminal.ts`
-  - 🔴 Red: Phase 0 blocks, verification failures
+  - 🔴 Red: Gear enforcement blocks, verification failures
   - 🟢 Green: Verification passed, context confirmed
   - 🟡 Yellow: Warnings, suggestions, asking for guidance
   - 🔵 Blue: Information, progress updates
 
-### v1.2 Success Criteria
+### v1.3.0 Success Criteria
 
 - [ ] DAG-based parallel execution working (measure time savings)
 - [ ] Independent tasks run simultaneously
@@ -363,13 +381,13 @@ A, B, C have no dependencies → execute in parallel
 - [ ] Subagents get fresh, focused context
 - [ ] Results aggregated correctly
 - [ ] Multi-session artifacts managed correctly
-- [ ] README updated with v1.2 features
+- [ ] README updated with v1.3.0 features
 
 ---
 
-## v2.0: Synthesis — Goal-Backward Verification
+## v2.0.0: Orchestration — DAG Execution + Goal-Backward Verification (Track C)
 
-> **Theme:** Verify outcomes, not just task completion.
+> **Theme:** Signature differentiation. DAG-based parallel execution with dependency awareness. Verify outcomes, not just task completion.
 
 ### Goal-Backward Verification
 
@@ -425,17 +443,17 @@ interface VerificationProof {
   - Graceful degradation when hooks fail
   - Clear error messages for users
 
-### v2.0 Success Criteria
+### v2.0.0 Success Criteria
 
 - [ ] Goal-backward verification working
 - [ ] Workflow commands available
 - [ ] Verification proof required before "done" claims
 - [ ] Metrics available in debug mode
-- [ ] README updated with v2.0 features
+- [ ] README updated with v2.0.0 features
 
 ---
 
-## v3.0: Expansion — Multi-Platform
+## v3.0.0: Expansion — Multi-Platform
 
 > **Theme:** Extend Setu to other platforms and tools.
 
@@ -458,7 +476,7 @@ interface VerificationProof {
 
 ### Cross-Session Memory (Deferred)
 
-> **Note:** This is complex and requires prerequisites (v1.2 artifacts, v2.0 verification). Deferred until foundations are solid.
+> **Note:** This is complex and requires prerequisites (v1.3.0 orchestration, v2.0.0 verification). Deferred until foundations are solid.
 
 - [ ] **Pattern Memory Across Sessions**
   - Use diff/Wasserstein distance for context similarity
@@ -479,12 +497,12 @@ interface VerificationProof {
   - Detect conflicting discipline plugins
   - Enter minimal mode to avoid conflicts
 
-### v3.0 Success Criteria
+### v3.0.0 Success Criteria
 
 - [ ] Setu Lite works in Claude Code
 - [ ] MCP tools enhance verification
 - [ ] Plugin conflicts handled gracefully
-- [ ] README updated with v3.0 features
+- [ ] README updated with v3.0.0 features
 
 ---
 
@@ -520,12 +538,12 @@ Setu as a primary agent means:
 - OpenCode features (Plan/Build) remain accessible
 - No breaking changes to OpenCode behavior
 
-### Priority: Other Plugin Compatibility (v3.0)
+### Priority: Other Plugin Compatibility (v3.0.0)
 
 When other discipline plugins are detected:
 - Setu enters "minimal mode" (reduced functionality)
 - Defers context injection to other plugin
-- Focuses on Phase 0 and verification only
+- Focuses on gear enforcement and verification only
 
 ---
 
