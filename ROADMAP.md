@@ -52,7 +52,7 @@
 
 ---
 
-## Current State (v1.2.0 — Track A Complete, Pending Manual Testing)
+## Current State (v1.2.0 — Track A Code Complete, Unit Tests Pass, E2E Pending)
 
 ### Implemented (v1.0.0 through v1.2.0)
 
@@ -264,7 +264,7 @@ Check: Does .setu/RESEARCH.md exist?
 ## v1.2.0: Simplification — Gear-Only Core (SHIPPED, Track A)
 
 > **Theme:** Remove scoring system, styles, and competing state machines. Gears become single workflow authority with discipline guards.
-> **Status:** Track A COMPLETE. -627 lines removed. All 83 tests pass.
+> **Status:** Track A code complete. -627 lines removed. All 83 unit tests pass. E2E/manual testing and npm publish pending.
 
 ### Track A Deliverables
 
@@ -476,7 +476,7 @@ interface VerificationProof {
 
 ### Cross-Session Memory (Deferred)
 
-> **Note:** This is complex and requires prerequisites (v1.3.0 orchestration, v2.0.0 verification). Deferred until foundations are solid.
+> **Note:** This is complex and requires prerequisites (v2.0.0 orchestration and goal-backward verification). Deferred until foundations are solid.
 
 - [ ] **Pattern Memory Across Sessions**
   - Use diff/Wasserstein distance for context similarity
