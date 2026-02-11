@@ -1,20 +1,18 @@
 ---
 name: setu-verification
-description: Run verification protocol before completing tasks. Checks build, tests, lint based on mode. Use when finishing a task, before claiming completion, or asked to "verify", "validate", "check", "test", or "run tests".
+description: Run verification protocol before completing tasks. Checks build, tests, lint. Use when finishing a task, before claiming completion, or asked to "verify", "validate", "check", "test", or "run tests".
 ---
 
 # Verification Protocol
 
 Before declaring a task complete, verify using targeted extraction.
 
-## Mode-Specific Behavior
+## When to Verify
 
-| Mode | Verification Level | What to Run |
-|------|-------------------|-------------|
-| **Ultrathink** | Full | All steps: build, test, lint, visual, edge cases |
-| **Quick** | Minimal | Build only if risky changes (new deps, config) |
-| **Expert** | User-driven | Suggest steps, let user decide |
-| **Collab** | Discuss | Ask what verification is needed |
+Verification runs in **Builder gear** (after research and planning are complete).
+
+- **Full scope** (default): All steps — build, test, lint, type check
+- **Incremental scope**: Only steps relevant to changed files
 
 ## Verification Steps
 
@@ -124,13 +122,13 @@ npm run lint 2>&1 | grep -c "error" && npm run lint 2>&1 | grep "error" | head -
 
 ## When to Skip Verification
 
-In Quick mode, skip verification for:
+Skip verification for:
 - Comment changes only
 - Documentation updates
 - Whitespace/formatting fixes
 - Renaming variables (after LSP rename)
 
-Still verify in Quick mode for:
+Always verify for:
 - New dependencies added
 - Configuration changes
 - Any logic changes

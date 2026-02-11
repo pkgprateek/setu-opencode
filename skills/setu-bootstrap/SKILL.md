@@ -7,7 +7,7 @@ description: Initialize Setu for a new project. Discovers project structure, cre
 
 On first run in any project, establish the foundation.
 
-## Phase 0: Initial Acknowledgment
+## Step 0: Initial Acknowledgment
 
 When starting work on a new project:
 
@@ -20,7 +20,7 @@ When starting work on a new project:
 
 *This ensures no tokens are wasted on analysis that misses critical context.*
 
-## Phase 1: Discovery
+## Step 1: Discovery
 
 Perform exploration to understand the project:
 
@@ -37,7 +37,7 @@ Perform exploration to understand the project:
 - Existing skills in `.opencode/skills/` or `.claude/skills/`
 - Codebase structure (technology stack, architecture patterns, conventions)
 
-## Phase 1.5: Setu Context Initialization
+## Step 1.5: Setu Context Initialization
 
 If `.setu/` directory doesn't exist, create it:
 
@@ -51,7 +51,7 @@ If `.setu/` directory doesn't exist, create it:
 
 If `.setu/context.json` exists, load it and verify it's still accurate.
 
-## Phase 2: Infrastructure Initialization
+## Step 2: Infrastructure Initialization
 
 Handle all five scenarios (checked in order — first match wins):
 
@@ -85,7 +85,7 @@ Handle all five scenarios (checked in order — first match wins):
 3. If active task exists, ask: "Continue with [task] or start something new?"
 4. Proceed with task, leveraging existing context
 
-## Phase 2.5: Project Inception (For New Projects Only)
+## Step 2.5: Project Inception (For New Projects Only)
 
 When Scenario A is triggered and user has provided project vision:
 
@@ -110,11 +110,11 @@ When Scenario A is triggered and user has provided project vision:
    - Create initial `.opencode/skills/project-patterns/` if patterns are established
    - Commit with: `feat: initial project scaffold`
 
-## Phase 3: Rules File Creation
+## Step 3: Rules File Creation
 
 Load the `setu-rules-creation` skill for detailed guidance on creating AGENTS.md.
 
-## Phase 4: Project Skills Creation
+## Step 4: Project Skills Creation
 
 Create `.opencode/skills/project-patterns/SKILL.md` with:
 - Directory structure documentation
@@ -127,26 +127,26 @@ Create `.opencode/skills/project-patterns/SKILL.md` with:
 ```
 Bootstrap Flow:
 ┌─────────────────┐
-│ Phase 0: Ask    │ ← Check active.json, "Any additional context?"
+│ Step 0: Ask     │ ← Check active.json, "Any additional context?"
 └────────┬────────┘
          ▼
 ┌─────────────────┐
-│ Phase 1: Detect │ ← Find project root, check existing setup
+│ Step 1: Detect  │ ← Find project root, check existing setup
 └────────┬────────┘
          ▼
 ┌─────────────────┐
-│ Phase 1.5: Setu │ ← Create/load .setu/ directory
+│ Step 1.5: Setu  │ ← Create/load .setu/ directory
 └────────┬────────┘
          ▼
 ┌─────────────────┐
-│ Phase 2: Init   │ ← Scenario A/B/C/D/E/F
+│ Step 2: Init    │ ← Scenario A/B/C/D/E/F
 └────────┬────────┘
          ▼
 ┌─────────────────┐
-│ Phase 3: Rules  │ ← Create AGENTS.md if approved
+│ Step 3: Rules   │ ← Create AGENTS.md if approved
 └────────┬────────┘
          ▼
 ┌─────────────────┐
-│ Phase 4: Skills │ ← Create project skills if approved
+│ Step 4: Skills  │ ← Create project skills if approved
 └─────────────────┘
 ```
