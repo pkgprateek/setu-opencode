@@ -180,7 +180,7 @@ export function createToolExecuteBeforeHook(
       return;
     }
 
-    // SECURITY: Sanitize args to prevent control char injection (2.9.2)
+    // SECURITY: Sanitize args to prevent control char injection
     // Removes null bytes and control characters that could bypass parsing
     output.args = sanitizeArgs(output.args);
     const projectDir = getProjectDir ? getProjectDir() : process.cwd();

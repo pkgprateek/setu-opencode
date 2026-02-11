@@ -240,7 +240,7 @@ export function contextToSummary(context: SetuContext): SetuContextSummary {
 /**
  * Format a SetuContextSummary into a multi-line block suitable for prompt injection.
  * 
- * Security (PLAN.md 2.9.1): Enforces MAX_INJECTION_SIZE (~8000 chars / 2000 tokens)
+ * Security: Enforces MAX_INJECTION_SIZE (~8000 chars / 2000 tokens)
  *
  * @param summary - The compact context summary to include in the formatted block
  * @returns The formatted multi-line string enclosed by "[SETU CONTEXT]" and "[/SETU CONTEXT]". Includes a "Project: ..." line, an optional "Files already read: ..." line listing up to 10 file paths (with " (+N more)" if truncated), an optional "Patterns: ..." line, and an optional "Task: ..." line.
@@ -267,7 +267,7 @@ export function formatContextForInjection(summary: SetuContextSummary): string {
   
   let injection = [header, ...bodyLines, footer].join('\n');
   
-  // Enforce injection size limit (PLAN.md 2.9.1)
+  // Enforce injection size limit (prevents token bloat in system prompt)
   // CRITICAL: Always preserve the closing tag to maintain boundary integrity
   if (injection.length > MAX_INJECTION_SIZE) {
     const marker = '[TRUNCATED]';

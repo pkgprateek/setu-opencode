@@ -1,10 +1,8 @@
 /**
  * Context size limits (shared module to avoid circular dependencies)
  * 
- * This module exists to break the circular dependency between types.ts and storage.ts.
- * Both modules need these constants, so they're extracted here.
- * 
- * @see PLAN.md Section 2.9.1 (Context Size Limits)
+ * Shared module to break circular dependency between types.ts and storage.ts.
+ * Defines context size limits to prevent token bloat and unbounded growth.
  */
 
 /** Maximum size of context.json in bytes (50KB - prevents token bloat) */

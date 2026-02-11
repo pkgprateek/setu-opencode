@@ -6,8 +6,6 @@
  * - Git status (uncommitted changes, detached HEAD)
  * - Dependencies (node_modules, lockfile sync)
  * - Runtime issues (missing binaries, wrong versions)
- * 
- * @see PLAN.md Section 2.7
  */
 
 import { tool } from '@opencode-ai/plugin';

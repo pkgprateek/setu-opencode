@@ -16,7 +16,7 @@ export {
 
 export { debounce, CONTEXT_SAVE_DEBOUNCE_MS } from './debounce';
 
-// Error handling (PLAN.md Section 2.10)
+// Error handling (graceful degradation layer)
 export {
   SetuError,
   ErrorCodes,
@@ -35,7 +35,7 @@ export {
   isFileSystemError
 } from './error-handling';
 
-// Git utilities (PLAN.md Section 2.6)
+// Git utilities
 export {
   getCurrentBranch,
   isProtectedBranch

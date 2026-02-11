@@ -224,7 +224,7 @@ Automatically detects project build tool (npm/yarn/pnpm/bun for JS/TS, cargo for
       }
 
       // Execute verification steps when possible
-      // Runtime type guard for exec function (PLAN.md security fix)
+      // Runtime type guard for exec function (ensures type safety)
       type ExecResult = { stdout?: string; stderr?: string; exitCode?: number };
       type ExecFn = (command: string) => Promise<ExecResult>;
 

@@ -1,10 +1,7 @@
 /**
  * Error Handling Layer for Setu
  * 
- * Provides graceful degradation when things go wrong.
- * Key principle: Setu failures should never break OpenCode.
- * 
- * @see PLAN.md Section 2.10
+ * Provides graceful degradation — Setu failures should never break OpenCode.
  */
 
 import { errorLog, debugLog } from '../debug';
@@ -245,8 +242,7 @@ export function isFileSystemError(error: unknown): boolean {
 
 /**
  * Input sanitization: Remove null bytes and control characters
- * 
- * @see PLAN.md Section 2.9.2
+ * Prevents log injection and control-char bypass attacks.
  */
 export function sanitizeInput(value: unknown): unknown {
   if (typeof value === 'string') {

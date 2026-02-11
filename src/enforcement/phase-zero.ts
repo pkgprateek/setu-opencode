@@ -12,7 +12,7 @@
  * - Prioritization: Safe → Contextual → Efficient → Helpful
  * - Hard constraints as bright lines, soft guidance for judgment
  *
- * Security (PLAN.md Section 2.9.3):
+ * Security (fail-closed model):
  * - FAIL-CLOSED for unknown tools (block by default, whitelist safe tools)
  * - This prevents new/unknown tools from bypassing Phase 0
  *
@@ -108,7 +108,7 @@ export interface Phase0BlockResult {
 /**
  * Known safe tools that are always allowed in Phase 0.
  * 
- * FAIL-CLOSED SECURITY (PLAN.md 2.9.3):
+ * FAIL-CLOSED SECURITY:
  * Unknown tools are blocked by default. Add tools here to whitelist them.
  * This prevents new/unknown tools from bypassing Phase 0.
  * 
@@ -136,7 +136,7 @@ function isKnownSafeTool(toolName: string): boolean {
 /**
  * Decide whether a tool invocation should be blocked by Phase 0 safeguards.
  * 
- * SECURITY: Uses FAIL-CLOSED model (PLAN.md 2.9.3)
+ * SECURITY: Uses FAIL-CLOSED model — unknown tools blocked by default.
  * Unknown tools are blocked by default and must be whitelisted.
  *
  * @param toolName - Name of the tool being invoked
@@ -184,7 +184,7 @@ export function shouldBlockInPhase0(
     };
   }
 
-  // FAIL-CLOSED: Block unknown tools (PLAN.md 2.9.3)
+  // FAIL-CLOSED: Block unknown tools (prevents bypass via new/unrecognized tools)
   // Log warning to help identify tools that should be whitelisted
   debugLog(`Unknown tool '${toolName}' - blocking by default (fail-closed). Add to KNOWN_SAFE_TOOLS if safe.`);
   return {
