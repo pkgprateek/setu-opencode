@@ -65,7 +65,8 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
         );
         return 'Research saved. Open questions detected - use the question tool to ask the user before proceeding to setu_plan.';
       } else {
-        return 'Research saved. WARNING: Open questions detected but session ID unavailable — questions were not gated. Use the question tool to resolve before proceeding to setu_plan.';
+        // Fail-closed: open questions exist but cannot be gated without sessionID
+        throw new Error('Cannot save research with open questions: session ID unavailable for gating. This is a bug — please report it.');
       }
     }
 

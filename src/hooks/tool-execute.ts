@@ -190,8 +190,7 @@ export function createToolExecuteBeforeHook(
 
     if (input.tool === 'question') {
       clearQuestionBlocked(input.sessionID);
-      clearSafetyBlocked(input.sessionID);
-      debugLog('Question/safety answered; cleared blocked states');
+      debugLog('Question answered; cleared question block');
       return;
     }
 
