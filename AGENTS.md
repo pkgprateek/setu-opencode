@@ -224,7 +224,7 @@ setu_verify({
 });
 ```
 
-**Default behavior** (no args): Runs all required steps (build, test, lint). Typecheck runs if available. Visual is deferred to user.
+**Default behavior** (no args): Runs all required steps (build, test, lint). Typecheck runs if available. Visual checks are not run automatically — the user is prompted to verify UI manually after other steps pass.
 
 **Example**:
 ```typescript

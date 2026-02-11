@@ -53,5 +53,5 @@ export const getStateInjection = (
   const fileInfo = getFileAvailability(files);
   const guidance = getModeGuidance();
 
-  return `${modePrefix}\n${fileInfo}\n${guidance}`;
+  return `[SETU:] ${modePrefix}\n${fileInfo}\n${guidance}`;
 };
