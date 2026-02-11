@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { exec } from 'child_process';
 
 export interface EnvironmentConflict {
   hasConflict: boolean;
@@ -6,27 +6,31 @@ export interface EnvironmentConflict {
 }
 
 const BUILD_PATTERN = /\b(npm|pnpm|yarn|bun)\s+(run\s+)?build\b|\bcargo\s+build\b|\bgo\s+build\b/i;
-const DEV_PROCESS_QUERY = 'pgrep -f "(vite|next dev|npm run dev|pnpm dev|yarn dev|bun dev)"';
 
-function hasActiveDevServer(): boolean {
-  try {
-    const output = execSync(DEV_PROCESS_QUERY, {
-      stdio: ['ignore', 'pipe', 'ignore'],
-      encoding: 'utf-8',
-      timeout: 1500,
-    }).trim();
-    return output.length > 0;
-  } catch {
-    return false;
-  }
+// Character-class trick: [v]ite prevents pgrep from matching its own process
+const DEV_PROCESS_QUERY = 'pgrep -f "([v]ite|[n]ext dev|npm run dev|pnpm dev|yarn dev|bun dev)"';
+
+function hasActiveDevServer(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const child = exec(DEV_PROCESS_QUERY, { timeout: 1500 }, (error, stdout) => {
+      if (error) {
+        // pgrep exits non-zero when no match found — not an error
+        resolve(false);
+        return;
+      }
+      resolve(stdout.trim().length > 0);
+    });
+    // Ensure we don't leak child processes
+    child.unref?.();
+  });
 }
 
-export function detectEnvironmentConflict(command: string): EnvironmentConflict {
+export async function detectEnvironmentConflict(command: string): Promise<EnvironmentConflict> {
   if (!BUILD_PATTERN.test(command)) {
     return { hasConflict: false };
   }
 
-  if (!hasActiveDevServer()) {
+  if (!(await hasActiveDevServer())) {
     return { hasConflict: false };
   }
 
