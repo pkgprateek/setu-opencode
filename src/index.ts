@@ -79,7 +79,7 @@ interface SetuState {
  * Uses available hooks from the OpenCode Plugin API:
  * - config: Set default_agent to "setu"
  * - experimental.chat.system.transform: Inject persona into system prompt
-  * - chat.message: Track current agent
+ * - chat.message: Track current agent
  * - tool.execute.before: Phase 0 enforcement (block side-effects until context confirmed)
  * - tool.execute.after: Track verification steps, file reads, searches
  * - event: Handle session lifecycle, load context on start
