@@ -2,6 +2,8 @@
  * Chat message hook - tracks active agent only.
  */
 
+import { debugLog } from '../debug';
+
 /**
  * Agent state tracking
  */
@@ -10,18 +12,29 @@ export interface AgentState {
   isSetuActive: boolean;
 }
 
+/** Hook signature returned by createChatMessageHook */
+type ChatMessageHook = (
+  input: { sessionID: string; agent?: string; messageID?: string },
+  output: { message: { id: string }; parts: Array<{ type: string; content?: string }> }
+) => Promise<void>;
+
 /**
  * Creates a chat-message processing hook that tracks active agent.
  */
 export function createChatMessageHook(
   setAgentState?: (agent: string) => void
-) {
+): ChatMessageHook {
   return async (
     input: { sessionID: string; agent?: string; messageID?: string },
     _output: { message: { id: string }; parts: Array<{ type: string; content?: string }> }
   ): Promise<void> => {
     if (input.agent && setAgentState) {
-      setAgentState(input.agent);
+      try {
+        setAgentState(input.agent);
+      } catch (error) {
+        // Graceful degradation: agent tracking is non-critical
+        debugLog('Failed to set agent state:', error);
+      }
     }
   };
 }

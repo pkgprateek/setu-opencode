@@ -142,49 +142,60 @@ export function createSystemTransformHook(
       }
     }
 
-    if (getProjectDir) {
-      const projectDir = getProjectDir();
-      const gearState = determineGear(projectDir);
+    // Gear, discipline, and overwrite injection — wrapped for graceful degradation
+    // I/O errors here (e.g., determineGear reads filesystem) should not crash the hook
+    try {
+      if (getProjectDir) {
+        const projectDir = getProjectDir();
+        const gearState = determineGear(projectDir);
 
-      output.system.unshift(`[SETU: Gear] ${gearState.current}`);
+        output.system.unshift(`[SETU: Gear] ${gearState.current}`);
 
-      switch (gearState.current) {
-        case 'scout':
-          output.system.unshift(
-            '[SETU: Workflow] Research the codebase and task. Save findings with setu_research.'
-          );
-          break;
-        case 'architect':
-          output.system.unshift(
-            '[SETU: Workflow] Create an implementation plan. Save with setu_plan. Ask user to confirm before executing.'
-          );
-          break;
-        case 'builder':
-          output.system.unshift(
-            '[SETU: Workflow] Execute the plan step by step. Run setu_verify before declaring done.'
-          );
-          break;
+        switch (gearState.current) {
+          case 'scout':
+            output.system.unshift(
+              '[SETU: Workflow] Research the codebase and task. Save findings with setu_research.'
+            );
+            break;
+          case 'architect':
+            output.system.unshift(
+              '[SETU: Workflow] Create an implementation plan. Save with setu_plan. Ask user to confirm before executing.'
+            );
+            break;
+          case 'builder':
+            output.system.unshift(
+              '[SETU: Workflow] Execute the plan step by step. Run setu_verify before declaring done.'
+            );
+            break;
+        }
       }
-    }
 
-    const disciplineState = getDisciplineState(_input.sessionID);
-    if (disciplineState.questionBlocked) {
-      output.system.unshift(
-        `[SETU: Clarification Required]\n` +
-          `Your next assistant response must be a single native question tool call.\n` +
-          `Do not ask in plain chat text. Use the native question tool with recommendations first.\n` +
-          `Do not execute implementation tools until the question is answered.`
-      );
-    }
+      const disciplineState = getDisciplineState(_input.sessionID);
+      if (disciplineState.questionBlocked) {
+        output.system.unshift(
+          `[SETU: Clarification Required]\n` +
+            `Your next assistant response must be a single native question tool call.\n` +
+            `Do not ask in plain chat text. Use the native question tool with recommendations first.\n` +
+            `Do not execute implementation tools until the question is answered.`
+        );
+      }
 
-    const overwriteRequirement = getOverwriteRequirement(_input.sessionID);
-    if (overwriteRequirement?.pending) {
-      output.system.unshift(
-        `[SETU: Overwrite Guard]\n` +
-          `Pending requirement: read '${overwriteRequirement.filePath}' before any mutation.\n\n` +
-          `Next action must be read on that file.\n` +
-          `Do not use bash/write/edit as a workaround.`
-      );
+      const overwriteRequirement = getOverwriteRequirement(_input.sessionID);
+      if (overwriteRequirement?.pending) {
+        // Sanitize filePath before interpolation: strip control chars and newlines
+        const safePath = (overwriteRequirement.filePath ?? '')
+          .replace(/[\x00-\x1f\x7f]/g, '')
+          .replace(/\n/g, ' ');
+        output.system.unshift(
+          `[SETU: Overwrite Guard]\n` +
+            `Pending requirement: read '${safePath}' before any mutation.\n\n` +
+            `Next action must be read on that file.\n` +
+            `Do not use bash/write/edit as a workaround.`
+        );
+      }
+    } catch (error) {
+      // Graceful degradation: gear/discipline injection is enhancement, not critical
+      debugLog('Gear/discipline injection failed:', getErrorMessage(error));
     }
 
     // JIT Context Injection: Inject active task context for subagent awareness
