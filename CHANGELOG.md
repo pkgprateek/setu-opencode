@@ -1,6 +1,19 @@
 # Changelog
 
-## [Unreleased]
+## [1.2.1] - 2025-02-12
+
+### Fixed
+- **Phase 0 enforcement now active** — Side-effect tools (write, edit, bash) are properly gated until context is confirmed via `setu_context`
+- **Read-before-write protection extended to edit** — Agent must read existing files before editing them, not just before writing
+- **Safety confirmation flow implemented** — Production-impacting commands (npm publish, kubectl apply, etc.) now prompt for user confirmation instead of being hard-blocked
+- **Question resolution moved to after hook** — Safety approvals/denials are now properly parsed from question tool responses after the question completes
+
+### Added
+- **Comprehensive test coverage** — 10 new unit tests for Phase 0, safety flow, and read-before-write guards (83 → 93 tests)
+- **Action fingerprinting** — Safety confirmations are matched to specific actions and consumed after single use
+- **Debug observability** — Added logging for enforcement decisions and safety classifications
+
+## [1.2.0] - 2025-02-10
 
 ### Added
 - **Discipline guards**: Lightweight question/safety/overwrite blocking that operates independently of gears

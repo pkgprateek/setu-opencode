@@ -15,7 +15,7 @@ const sanitizeLearningsField = createPromptSanitizer(2000);
 const sanitizeOpenQuestions = createPromptSanitizer(2000);
 
 export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<typeof tool> => tool({
-  description: 'Save research findings to .setu/RESEARCH.md. Call after initial research, even with open questions.',
+  description: 'Save research findings to .setu/RESEARCH.md. Call this when you understand the task.',
   args: {
     summary: tool.schema.string().describe('Research findings in markdown format. Include codebase analysis, patterns found, and relevant context.'),
     constraints: tool.schema.string().optional().describe('Discovered constraints, limitations, or technical debt'),
@@ -60,7 +60,7 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
       throw new Error(`Failed to save research: ${getErrorMessage(error)}. Check .setu/ directory permissions.`);
     }
     
-    if (sanitizedArgs.openQuestions) {
+    if (sanitizedArgs.openQuestions && sanitizedArgs.openQuestions.trim().length > 0) {
       if (context?.sessionID) {
         setQuestionBlocked(
           context.sessionID,

@@ -1,5 +1,5 @@
 import { describe, expect, test, mock } from 'bun:test';
-import { createToolExecuteBeforeHook } from '../tool-execute';
+import { createToolExecuteBeforeHook, createToolExecuteAfterHook } from '../tool-execute';
 import { setQuestionBlocked, getDisciplineState, clearDisciplineState } from '../../context';
 
 mock.module('../../debug', () => ({
@@ -27,15 +27,20 @@ describe('tool-execute before hook protocol gating', () => {
     clearDisciplineState(sessionID);
   });
 
-  test('question tool clears pending protocol state', async () => {
+  test('question completion clears pending protocol state in after hook', async () => {
     const sessionID = 'protocol-question-session';
     setQuestionBlocked(sessionID, 'Need architecture clarification');
 
-    const hook = createToolExecuteBeforeHook(
+    const beforeHook = createToolExecuteBeforeHook(
       () => 'setu'
     );
+    const afterHook = createToolExecuteAfterHook(
+      () => {},
+      () => 'setu',
+      () => null
+    );
 
-    await hook(
+    await beforeHook(
       { tool: 'question', sessionID, callID: 'call-2' },
       {
         args: {
@@ -50,6 +55,14 @@ describe('tool-execute before hook protocol gating', () => {
           ],
         },
       }
+    );
+
+    // Before hook should allow question but not clear state yet.
+    expect(getDisciplineState(sessionID).questionBlocked).toBe(true);
+
+    await afterHook(
+      { tool: 'question', sessionID, callID: 'call-2', args: {} },
+      { title: 'Question', output: 'Answered', metadata: null }
     );
 
     expect(getDisciplineState(sessionID).questionBlocked).toBe(false);

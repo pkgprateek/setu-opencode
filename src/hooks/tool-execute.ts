@@ -14,20 +14,27 @@ import { basename, isAbsolute, normalize, resolve } from 'path';
 import { existsSync } from 'fs';
 import {
   determineGear,
+  shouldBlockInPhase0,
+  createPhase0BlockMessage,
   shouldBlock as shouldBlockByGear,
-  createGearBlockMessage
+  createGearBlockMessage,
+  type Phase0State,
 } from '../enforcement';
 import {
   type ContextCollector,
   formatContextForInjection,
   contextToSummary,
   getDisciplineState,
-  setSafetyBlocked,
+  setQuestionBlocked,
   clearQuestionBlocked,
-  clearSafetyBlocked,
   setOverwriteRequirement,
   getOverwriteRequirement,
   clearOverwriteRequirement,
+  setPendingSafetyConfirmation,
+  getPendingSafetyConfirmation,
+  approvePendingSafetyConfirmation,
+  denyPendingSafetyConfirmation,
+  clearPendingSafetyConfirmation,
 } from '../context';
 import { loadActiveTask, shouldBlockDueToConstraint } from '../context/active';
 import { debugLog } from '../debug';
@@ -141,6 +148,53 @@ function hasReadTargetFile(collector: ContextCollector | null, projectDir: strin
   });
 }
 
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(',')}]`;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, val]) => `${JSON.stringify(key)}:${stableStringify(val)}`);
+  return `{${entries.join(',')}}`;
+}
+
+function createActionFingerprint(tool: string, args: Record<string, unknown>): string {
+  return `${tool}:${stableStringify(args)}`;
+}
+
+type QuestionDecision = 'approved' | 'denied' | 'unknown';
+
+function stringifyUnknown(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return '';
+  }
+}
+
+function getQuestionDecision(output: { title: string; output: string; metadata: unknown }): QuestionDecision {
+  const content = `${output.title}\n${output.output}\n${stringifyUnknown(output.metadata)}`.toLowerCase();
+
+  if (content.includes('proceed - i understand the risk')) {
+    return 'approved';
+  }
+
+  if (content.includes('cancel - use a safer alternative')) {
+    return 'denied';
+  }
+
+  return 'unknown';
+}
+
 /**
  * Create a before-execution hook that enforces Gearbox rules for tool execution.
  *
@@ -164,7 +218,8 @@ export function createToolExecuteBeforeHook(
   getCurrentAgent?: () => string,
   getContextCollector?: () => ContextCollector | null,
   getProjectDir?: () => string,
-  getVerificationState?: () => VerificationState
+  getVerificationState?: () => VerificationState,
+  getPhase0State?: () => Phase0State
 ): (input: ToolExecuteBeforeInput, output: ToolExecuteBeforeOutput) => Promise<void> {
   // Direct mutation tools only. 'task' is intentionally excluded: it's not a
   // direct mutator, but launches subagents that may mutate. It receives partial
@@ -190,10 +245,9 @@ export function createToolExecuteBeforeHook(
     const collector = getContextCollector ? getContextCollector() : null;
     const disciplineState = getDisciplineState(input.sessionID);
     const isMutating = isMutatingToolName(input.tool);
+    const actionFingerprint = createActionFingerprint(input.tool, output.args);
 
     if (input.tool === 'question') {
-      clearQuestionBlocked(input.sessionID);
-      debugLog('Question answered; cleared question block');
       return;
     }
 
@@ -208,15 +262,11 @@ export function createToolExecuteBeforeHook(
       );
     }
 
-    if (isMutating && disciplineState.safetyBlocked) {
-      throw new Error(
-        formatGuidanceMessage(
-          'Safety block active',
-          'Previous action triggered safety block in this session.',
-          'Address the safety condition before continuing.',
-          'Use safer alternatives or explicitly confirm intent with the user.'
-        )
-      );
+    if (getPhase0State && !getPhase0State().contextConfirmed) {
+      const phase0Result = shouldBlockInPhase0(input.tool, output.args);
+      if (phase0Result.blocked) {
+        throw new Error(createPhase0BlockMessage(phase0Result.reason, phase0Result.details));
+      }
     }
 
     const pendingOverwrite = getOverwriteRequirement(input.sessionID);
@@ -249,21 +299,64 @@ export function createToolExecuteBeforeHook(
     }
 
     if (isMutating) {
+      let consumedApproval = false;
+      const pendingSafety = getPendingSafetyConfirmation(input.sessionID);
+      if (pendingSafety) {
+        if (pendingSafety.status === 'approved' && pendingSafety.actionFingerprint === actionFingerprint) {
+          // One-time approval: consume it now. Next retry requires fresh approval.
+          clearPendingSafetyConfirmation(input.sessionID);
+          consumedApproval = true;
+        } else if (pendingSafety.status === 'pending' && pendingSafety.actionFingerprint === actionFingerprint) {
+          throw new Error(
+            formatGuidanceMessage(
+              'Safety confirmation required',
+              pendingSafety.reasons.join('; '),
+              'Ask the user using question tool with options: Proceed - I understand the risk / Cancel - use a safer alternative.',
+              'Use a lower-risk alternative if possible.'
+            )
+          );
+        } else if (pendingSafety.status === 'denied' && pendingSafety.actionFingerprint === actionFingerprint) {
+          throw new Error(
+            formatGuidanceMessage(
+              'Safety confirmation denied',
+              pendingSafety.reasons.join('; '),
+              'Do not execute this action. Choose a safer alternative or re-ask for explicit approval.',
+              'Prefer a local, non-production, non-destructive path.'
+            )
+          );
+        }
+      }
+
       const safetyDecision = classifyHardSafety(input.tool, output.args);
-      if (safetyDecision.hardSafety) {
-        setSafetyBlocked(input.sessionID);
+      if (!consumedApproval && safetyDecision.hardSafety) {
+        if (safetyDecision.action === 'ask') {
+          setPendingSafetyConfirmation(input.sessionID, {
+            actionFingerprint,
+            reasons: safetyDecision.reasons,
+          });
+          setQuestionBlocked(
+            input.sessionID,
+            `Safety confirmation needed: ${safetyDecision.reasons.join('; ')}`
+          );
+          throw new Error(
+            formatGuidanceMessage(
+              'Safety confirmation required',
+              safetyDecision.reasons.join('; '),
+              'Ask the user using question tool with options: Proceed - I understand the risk / Cancel - use a safer alternative.',
+              'Use a lower-risk alternative if possible.'
+            )
+          );
+        }
 
         throw new Error(
           formatGuidanceMessage(
             'Execution paused by safety policy',
             safetyDecision.reasons.join('; '),
-            'Confirm explicitly before running this action.',
+            'Do not execute this action. Choose a safer alternative.',
             'Use a lower-risk alternative if possible.'
           )
         );
       }
-
-      clearSafetyBlocked(input.sessionID);
     }
     
     // Context injection for task tool (subagent prompts)
@@ -407,8 +500,19 @@ export function createToolExecuteBeforeHook(
         }
       }
 
-      if (input.tool === 'write' && getProjectDir && filePath) {
+      if ((input.tool === 'write' || input.tool === 'edit') && getProjectDir && filePath) {
         const fileExists = existsSync(normalizeForComparison(projectDir, filePath));
+        if (!fileExists && input.tool === 'edit') {
+          throw new Error(
+            formatGuidanceMessage(
+              'File does not exist',
+              `Cannot edit '${filePath}' because it does not exist.`,
+              `Create '${filePath}' with write first, then read and edit as needed.`,
+              'Use write for new files and edit only for existing files.'
+            )
+          );
+        }
+
         if (fileExists && !hasReadTargetFile(collector, projectDir, filePath)) {
           setOverwriteRequirement(input.sessionID, {
             pending: true,
@@ -540,6 +644,28 @@ export function createToolExecuteAfterHook(
     // Only operate when in Setu agent mode
     const currentAgent = getCurrentAgent ? getCurrentAgent() : 'setu';
     if (currentAgent.toLowerCase() !== 'setu') {
+      return;
+    }
+
+    if (input.tool === 'question') {
+      clearQuestionBlocked(input.sessionID);
+
+      const pendingSafety = getPendingSafetyConfirmation(input.sessionID);
+      if (pendingSafety) {
+        const decision = getQuestionDecision(output);
+        if (decision === 'approved') {
+          approvePendingSafetyConfirmation(input.sessionID, pendingSafety.actionFingerprint);
+          debugLog('Safety confirmation approved by user');
+        } else if (decision === 'denied') {
+          denyPendingSafetyConfirmation(input.sessionID, pendingSafety.actionFingerprint);
+          debugLog('Safety confirmation denied by user');
+        } else {
+          denyPendingSafetyConfirmation(input.sessionID, pendingSafety.actionFingerprint);
+          debugLog('Safety confirmation unresolved; defaulting to denied');
+        }
+      }
+
+      debugLog('Question answered; cleared question block');
       return;
     }
     

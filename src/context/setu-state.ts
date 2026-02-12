@@ -9,7 +9,16 @@ export interface SetuDisciplineState {
   questionReason?: string;
   /** Whether a safety classifier triggered a block */
   safetyBlocked: boolean;
+  /** Optional pending safety confirmation for risky actions */
+  pendingSafetyConfirmation?: PendingSafetyConfirmation;
   /** When this state was last updated (for TTL) */
+  updatedAt: number;
+}
+
+export interface PendingSafetyConfirmation {
+  actionFingerprint: string;
+  reasons: string[];
+  status: 'pending' | 'approved' | 'denied';
   updatedAt: number;
 }
 
@@ -87,6 +96,88 @@ export function clearSafetyBlocked(sessionID: string): void {
   sessionStates.set(sessionID, {
     ...state,
     safetyBlocked: false,
+    updatedAt: Date.now(),
+  });
+}
+
+export function setPendingSafetyConfirmation(
+  sessionID: string,
+  payload: { actionFingerprint: string; reasons: string[] }
+): void {
+  const state = getDisciplineState(sessionID);
+  sessionStates.set(sessionID, {
+    ...state,
+    pendingSafetyConfirmation: {
+      actionFingerprint: payload.actionFingerprint,
+      reasons: payload.reasons,
+      status: 'pending',
+      updatedAt: Date.now(),
+    },
+    updatedAt: Date.now(),
+  });
+}
+
+export function getPendingSafetyConfirmation(sessionID: string): PendingSafetyConfirmation | null {
+  const state = getDisciplineState(sessionID);
+  const pending = state.pendingSafetyConfirmation;
+  if (!pending) {
+    return null;
+  }
+
+  if (isStale(pending.updatedAt, STATE_TTL_MS)) {
+    const nextState = getDisciplineState(sessionID);
+    sessionStates.set(sessionID, {
+      ...nextState,
+      pendingSafetyConfirmation: undefined,
+      updatedAt: Date.now(),
+    });
+    return null;
+  }
+
+  return pending;
+}
+
+export function approvePendingSafetyConfirmation(sessionID: string, actionFingerprint: string): void {
+  const state = getDisciplineState(sessionID);
+  const pending = state.pendingSafetyConfirmation;
+  if (!pending || pending.actionFingerprint !== actionFingerprint) {
+    return;
+  }
+
+  sessionStates.set(sessionID, {
+    ...state,
+    pendingSafetyConfirmation: {
+      ...pending,
+      status: 'approved',
+      updatedAt: Date.now(),
+    },
+    updatedAt: Date.now(),
+  });
+}
+
+export function denyPendingSafetyConfirmation(sessionID: string, actionFingerprint: string): void {
+  const state = getDisciplineState(sessionID);
+  const pending = state.pendingSafetyConfirmation;
+  if (!pending || pending.actionFingerprint !== actionFingerprint) {
+    return;
+  }
+
+  sessionStates.set(sessionID, {
+    ...state,
+    pendingSafetyConfirmation: {
+      ...pending,
+      status: 'denied',
+      updatedAt: Date.now(),
+    },
+    updatedAt: Date.now(),
+  });
+}
+
+export function clearPendingSafetyConfirmation(sessionID: string): void {
+  const state = getDisciplineState(sessionID);
+  sessionStates.set(sessionID, {
+    ...state,
+    pendingSafetyConfirmation: undefined,
     updatedAt: Date.now(),
   });
 }

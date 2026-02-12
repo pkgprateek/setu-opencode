@@ -260,7 +260,8 @@ export const SetuPlugin: Plugin = async (ctx) => {
     getCurrentAgent,
     getContextCollector,
     getProjectDir,
-    getVerificationState
+    getVerificationState,
+    getPhase0State
   );
   
   return {

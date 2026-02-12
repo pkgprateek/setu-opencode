@@ -104,8 +104,6 @@ export function createSystemTransformHook(
       return;
     }
     
-    // isDefault was used for style-based branching; now always true since styles were removed
-    // Keeping parameter for backward compatibility with getStateInjection signature
     const isDefault = true;
     
     // Get file availability for context injection
@@ -149,10 +147,9 @@ export function createSystemTransformHook(
       }
     }
     
-    // Add verification reminder when needed (only in builder gear — verification is irrelevant in scout/architect)
+    // Add verification reminder when needed
     const verificationState = getVerificationState();
-    const currentGear = getProjectDir ? determineGear(getProjectDir()).current : 'scout';
-    if (!verificationState.complete && currentGear === 'builder') {
+    if (!verificationState.complete) {
       const stepsNeeded = ['build', 'test', 'lint'].filter(
         s => !verificationState.stepsRun.has(s)
       );
@@ -202,10 +199,10 @@ export function createSystemTransformHook(
 
       const overwriteRequirement = getOverwriteRequirement(input.sessionID);
       if (overwriteRequirement?.pending) {
-        // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional sanitization of control chars
         // Sanitize filePath before interpolation: strip control chars and newlines
         const safePath = (overwriteRequirement.filePath ?? '')
-          .replace(/[\x00-\x1f\x7f]/g, '');
+          .replace(/[\x00-\x1f\x7f]/g, '')
+          .replace(/\n/g, ' ');
         output.system.unshift(
           `[SETU: Overwrite Guard]\n` +
             `Pending requirement: read '${safePath}' before any mutation.\n\n` +

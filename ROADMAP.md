@@ -52,7 +52,18 @@
 
 ---
 
-## Current State (v1.2.0 — Track A Code Complete, Unit Tests Pass, E2E Pending)
+## Current State (v1.2.1 — Track A SHIPPED, All Acceptance Tests Pass)
+
+### Shipped (v1.2.1 - February 2025)
+
+**Critical Fixes:**
+- [x] **FR-02 / AT-01: Phase 0 enforcement** — Wired `shouldBlockInPhase0()` into live enforcement path
+- [x] **FR-04 / AT-04: Read-before-write for edit** — Extended overwrite guard to edit tool
+- [x] **FR-05 / AT-05: Safety confirmation flow** — Split block vs ask actions with proper question resolution
+- [x] **10 new tests** — Phase 0, safety, read-before-write coverage
+- [x] **Updated README** — Compelling personal story, psychology-backed messaging
+
+### Implemented (v1.0.0 through v1.2.0)
 
 ### Implemented (v1.0.0 through v1.2.0)
 
