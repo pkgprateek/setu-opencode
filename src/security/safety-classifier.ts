@@ -48,7 +48,7 @@ const FILE_MUTATION_BASH_PATTERNS: RegExp[] = [
   /\btouch\b\s+[^\n]+/i,
   /(^|\s)(?:>|>>)\s*[^\s]+/i,
   /\btruncate\b\s+[^\n]+/i,
-  /\b(?:sed)\b\s+[-\w\s]*-i\b/i,
+  /\b(?:sed)\b\s+[-\w\s]{0,200}-i\b/i,
   /\|\s*tee\b/i,
   /\bmv\b\s+[^\n]+/i,
   /\b(?:chmod|chown)\b\s+[^\n]+/i,
@@ -78,6 +78,73 @@ const SENSITIVE_PATH_PATTERNS: RegExp[] = [
   /(^|\/)\.docker\/config\.json$/i,
 ];
 
+/**
+ * Shell-aware tokenizer that handles quoted strings and escaped characters.
+ * 
+ * This is a simplified POSIX-style tokenizer that:
+ * - Respects single and double quotes
+ * - Handles escaped spaces and quotes
+ * - Strips quotes from the final token
+ * 
+ * Note: Does not handle variable expansion or complex shell constructs.
+ * For a security-critical classifier, this provides defense in depth
+ * beyond simple whitespace splitting.
+ */
+function tokenizeShell(command: string): string[] {
+  const tokens: string[] = [];
+  let current = '';
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let escaped = false;
+
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i];
+
+    if (escaped) {
+      // Previous char was backslash, include this char literally
+      current += char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\' && !inSingleQuote) {
+      // Backslash escapes next char, except in single quotes
+      escaped = true;
+      continue;
+    }
+
+    if (char === "'" && !inDoubleQuote) {
+      // Toggle single quote mode
+      inSingleQuote = !inSingleQuote;
+      continue; // Don't include the quote itself
+    }
+
+    if (char === '"' && !inSingleQuote) {
+      // Toggle double quote mode
+      inDoubleQuote = !inDoubleQuote;
+      continue; // Don't include the quote itself
+    }
+
+    if (/\s/.test(char) && !inSingleQuote && !inDoubleQuote) {
+      // Whitespace outside quotes: token boundary
+      if (current.length > 0) {
+        tokens.push(current);
+        current = '';
+      }
+      continue;
+    }
+
+    current += char;
+  }
+
+  // Don't forget the last token
+  if (current.length > 0) {
+    tokens.push(current);
+  }
+
+  return tokens;
+}
+
 export function classifyHardSafety(tool: string, args: Record<string, unknown>): SafetyDecision {
   const matched: SafetyReason[] = [];
 
@@ -106,21 +173,21 @@ export function classifyHardSafety(tool: string, args: Record<string, unknown>):
     }
 
     // Extract and check file path tokens from command
-    const tokens = command.split(/\s+/);
-    for (const token of tokens) {
+    // Shell-aware tokenization: handles quotes and basic escaping
+    const tokens = tokenizeShell(command);
+    outer: for (const token of tokens) {
       // Check for path-like tokens
       if (
         token.startsWith('/') ||
         token.startsWith('./') ||
         token.startsWith('../') ||
         token.startsWith('~') ||
-        /\.(env|pem|key|p12|pfx|json|ya?ml)$/i.test(token) ||
-        token.startsWith('@')
+        /\.(env|pem|key|p12|pfx|json|ya?ml)$/i.test(token)
       ) {
         for (const pattern of SENSITIVE_PATH_PATTERNS) {
           if (pattern.test(token)) {
             matched.push({ category: 'sensitive', message: 'Access to sensitive path via shell detected' });
-            break;
+            break outer;
           }
         }
       }

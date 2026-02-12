@@ -472,7 +472,7 @@ Scans for:
 |---------|------|-------|-----|------|
 | **Enforcement** | ✅ Physical (hooks) | ❌ Prompt only | ❌ Prompt only | ❌ Prompt only |
 | **RPI Workflow** | ✅ Automatic (gears) | ❌ Manual | ✅ Semi-auto | ✅ Complex |
-| **Parallel Execution** | ✅ (subagents) | ❌ Sequential | ✅ (waves) | ✅ (agents) |
+| **Parallel Execution** | ✅ (read-only tools) | ❌ Sequential | ✅ (waves) | ✅ (agents) |
 | **Setup** | ✅ One line | ⚠️ CLI install | ❌ 40+ files | ❌ Complex |
 | **Complexity** | 🟢 Low | 🟡 Medium | 🔴 High | 🔴 Very High |
 | **Context Management** | ✅ JIT | ⚠️ Git-backed | ✅ Fresh agents | ❌ Database |
