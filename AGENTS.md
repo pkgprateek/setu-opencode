@@ -274,8 +274,8 @@ Setu: setu_research({ task: 'Implement dark mode toggle' })
 Setu: [Spawning 3 research subagents...]
 Setu: Created RESEARCH.md. Advanced to Architect gear.
 Setu: [Architect gear] Creating implementation plan...
-Setu: setu_plan({ task: 'Implement dark mode toggle', findings: '...' })
-Setu: Created PLAN.md with 4 steps. Advanced to Builder gear.
+Setu: setu_plan({ objective: 'Implement dark mode toggle', steps: '## Step 1: ...', successCriteria: '...' })
+Setu: Created PLAN.md. User approval required, then Builder gear.
 Setu: [Builder gear] Executing step 1/4...
 Setu: [Step 1 complete] setu_verify() → All passed
 Setu: [Step 2 complete] setu_verify() → All passed

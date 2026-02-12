@@ -39,12 +39,15 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
     }
 
     // Sanitize inputs before persisting (content may be injected into prompts later)
+    // Defense-in-depth: validate types even though schema should guarantee them
     const sanitizedArgs = {
       summary: sanitizeSummary(args.summary),
       constraints: args.constraints ? sanitizeConstraints(args.constraints) : undefined,
       patterns: args.patterns ? sanitizePatterns(args.patterns) : undefined,
       learnings: args.learnings ? sanitizeLearningsField(args.learnings) : undefined,
-      openQuestions: args.openQuestions ? sanitizeOpenQuestions(args.openQuestions) : undefined
+      openQuestions: (args.openQuestions && typeof args.openQuestions === 'string' && args.openQuestions.trim().length > 0)
+        ? sanitizeOpenQuestions(args.openQuestions)
+        : undefined
     };
     
     const content = formatResearch(sanitizedArgs);
@@ -111,11 +114,19 @@ ${args.learnings}
 ${args.openQuestions}
 `;
 
-  content += `
+  if (args.openQuestions) {
+    content += `
+## Next Steps
+
+Resolve open questions before proceeding to PLAN.md.
+`;
+  } else {
+    content += `
 ## Next Steps
 
 Ready to create PLAN.md.
 `;
+  }
 
   return content;
 }

@@ -40,7 +40,7 @@ export const SETU_TOOLS = [
  * - webfetch: Fetch web content
  * - todoread: Read todo list
  */
-export const READ_ONLY_TOOLS = ['read', 'glob', 'grep', 'list', 'webfetch', 'todoread', 'todowrite'] as const;
+export const READ_ONLY_TOOLS = ['read', 'glob', 'grep', 'list', 'webfetch', 'todoread'] as const;
 
 /**
  * Side-effect tools that are blocked in Phase 0.

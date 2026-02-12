@@ -166,6 +166,9 @@ export function createToolExecuteBeforeHook(
   getProjectDir?: () => string,
   getVerificationState?: () => VerificationState
 ): (input: ToolExecuteBeforeInput, output: ToolExecuteBeforeOutput) => Promise<void> {
+  // Direct mutation tools only. 'task' is intentionally excluded: it's not a
+  // direct mutator, but launches subagents that may mutate. It receives partial
+  // blocking (e.g., overwrite guard at line 235) without full mutation treatment.
   const isMutatingToolName = (toolName: string): boolean =>
     ['write', 'edit', 'bash', 'patch', 'multiedit', 'apply_patch'].includes(toolName);
 
@@ -265,7 +268,7 @@ export function createToolExecuteBeforeHook(
     
     // Context injection for task tool (subagent prompts)
     if (input.tool === 'task' && getContextCollector) {
-      const collector = getContextCollector();
+      // Use outer collector binding — getContextCollector() returns the same instance
       if (collector && collector.getContext().confirmed) {
         const context = collector.getContext();
         const summary = contextToSummary(context);
@@ -304,7 +307,6 @@ export function createToolExecuteBeforeHook(
       
       // Check for git commit - enhanced pre-commit checklist
       if (GIT_COMMIT_PATTERN.test(command)) {
-        const projectDir = getProjectDir ? getProjectDir() : process.cwd();
         const branch = getCurrentBranch(projectDir);
         
         if (!verificationState.complete) {
@@ -337,7 +339,6 @@ export function createToolExecuteBeforeHook(
       
       // Check for git push
       if (GIT_PUSH_PATTERN.test(command) && !verificationState.complete) {
-        const projectDir = getProjectDir ? getProjectDir() : process.cwd();
         const branch = getCurrentBranch(projectDir);
         const branchWarning = isProtectedBranch(branch) 
           ? `\n⚠️ Warning: Pushing to protected branch: ${branch}` 
@@ -368,7 +369,6 @@ export function createToolExecuteBeforeHook(
       );
       
       if (isPackageManifest) {
-        const projectDir = getProjectDir ? getProjectDir() : process.cwd();
         logSecurityEvent(
           projectDir,
           SecurityEventType.DEPENDENCY_EDIT_BLOCKED,
@@ -388,7 +388,6 @@ export function createToolExecuteBeforeHook(
       // PATH TRAVERSAL PREVENTION
       // Validate file paths are within project directory
       if (getProjectDir) {
-        const projectDir = getProjectDir();
         const pathValidation = validateFilePath(projectDir, filePath, { 
           allowSensitive: false,
           allowAbsoluteWithinProject: true 
@@ -409,7 +408,6 @@ export function createToolExecuteBeforeHook(
       }
 
       if (input.tool === 'write' && getProjectDir && filePath) {
-        const projectDir = getProjectDir();
         const fileExists = existsSync(normalizeForComparison(projectDir, filePath));
         if (fileExists && !hasReadTargetFile(collector, projectDir, filePath)) {
           setOverwriteRequirement(input.sessionID, {
@@ -437,7 +435,6 @@ export function createToolExecuteBeforeHook(
         const criticalSecrets = secrets.filter((s: SecretMatch) => s.severity === 'critical' || s.severity === 'high');
         
         if (criticalSecrets.length > 0) {
-          const projectDir = getProjectDir ? getProjectDir() : process.cwd();
           logSecurityEvent(
             projectDir,
             SecurityEventType.SECRETS_DETECTED,
@@ -458,7 +455,6 @@ export function createToolExecuteBeforeHook(
     // Check active task constraints BEFORE Gearbox check
     // Constraints apply regardless of gear
     if (getProjectDir) {
-      const projectDir = getProjectDir();
       const activeTask = loadActiveTask(projectDir);
       
       if (activeTask && activeTask.status === 'in_progress' && activeTask.constraints.length > 0) {
@@ -481,14 +477,13 @@ export function createToolExecuteBeforeHook(
     // - Architect: Has RESEARCH.md but no PLAN.md → .setu/ writes only
     // - Builder: Has both → all allowed (verification gate is separate)
     if (getProjectDir) {
-      const projectDirForGear = getProjectDir();
-      const gearState = determineGear(projectDirForGear);
+      const gearState = determineGear(projectDir);
       const gearBlockResult = shouldBlockByGear(gearState.current, input.tool, output.args);
 
       if (gearBlockResult.blocked) {
         debugLog(`Gearbox BLOCKED: ${input.tool} in ${gearState.current} gear`);
         logSecurityEvent(
-          projectDirForGear,
+          projectDir,
           SecurityEventType.GEAR_BLOCKED,
           `Blocked ${input.tool} in ${gearState.current} gear (${gearBlockResult.reason || 'no reason'})`,
           { sessionId: input.sessionID, tool: input.tool }

@@ -83,7 +83,7 @@ interface SetuState {
  * - tool.execute.before: Phase 0 enforcement (block side-effects until context confirmed)
  * - tool.execute.after: Track verification steps, file reads, searches
  * - event: Handle session lifecycle, load context on start
- * - tool: Custom tools (setu_verify, setu_context, setu_feedback, lsp_*)
+ * - tool: Custom tools (setu_verify, setu_context, setu_feedback, setu_task, setu_research, setu_plan, setu_reset, setu_doctor)
  */
 export const SetuPlugin: Plugin = async (ctx) => {
   // Create the Setu agent configuration file on plugin init
@@ -311,9 +311,14 @@ export const SetuPlugin: Plugin = async (ctx) => {
     ) => {
       // Record for parallel execution tracking (debug audit trail)
       // Only track when in Setu mode to avoid polluting other modes
+      // Wrapped defensively: audit tracking must never prevent enforcement
       const currentAgent = getCurrentAgent();
       if (currentAgent.toLowerCase() === 'setu') {
-        recordToolExecution(activeBatches, input.sessionID, input.tool);
+        try {
+          recordToolExecution(activeBatches, input.sessionID, input.tool);
+        } catch (err) {
+          debugLog('Failed to record tool execution:', err);
+        }
       }
       
       // Delegate to the main before hook for Phase 0 enforcement

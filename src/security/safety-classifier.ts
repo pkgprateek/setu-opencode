@@ -2,6 +2,27 @@ import { getStringProp } from '../utils';
 
 export type HardSafetyAction = 'ask' | 'block';
 
+/**
+ * Structured category for safety classification.
+ * Action determination is derived from this enum, not from reason text.
+ * 'destructive' → block (irrecoverable operations like rm -rf, git reset --hard)
+ * 'production' | 'mutation' | 'sensitive' → ask (reversible but risky)
+ */
+export type SafetyCategory = 'destructive' | 'production' | 'mutation' | 'sensitive';
+
+/** Maps category to enforcement action. Single source of truth. */
+const CATEGORY_ACTION: Record<SafetyCategory, HardSafetyAction> = {
+  destructive: 'block',
+  production: 'ask',
+  mutation: 'ask',
+  sensitive: 'ask',
+};
+
+export interface SafetyReason {
+  category: SafetyCategory;
+  message: string;
+}
+
 export interface SafetyDecision {
   hardSafety: boolean;
   action: HardSafetyAction;
@@ -47,28 +68,28 @@ const SENSITIVE_PATH_PATTERNS: RegExp[] = [
 ];
 
 export function classifyHardSafety(tool: string, args: Record<string, unknown>): SafetyDecision {
-  const reasons: string[] = [];
+  const matched: SafetyReason[] = [];
 
   if (tool === 'bash') {
     const command = getStringProp(args, 'command') ?? '';
 
     for (const pattern of DESTRUCTIVE_BASH_PATTERNS) {
       if (pattern.test(command)) {
-        reasons.push('Destructive shell command detected');
+        matched.push({ category: 'destructive', message: 'Destructive shell command detected' });
         break;
       }
     }
 
     for (const pattern of PRODUCTION_BASH_PATTERNS) {
       if (pattern.test(command)) {
-        reasons.push('Production-impacting command detected');
+        matched.push({ category: 'production', message: 'Production-impacting command detected' });
         break;
       }
     }
 
     for (const pattern of FILE_MUTATION_BASH_PATTERNS) {
       if (pattern.test(command)) {
-        reasons.push('Filesystem mutation via shell detected');
+        matched.push({ category: 'mutation', message: 'Filesystem mutation via shell detected' });
         break;
       }
     }
@@ -78,16 +99,19 @@ export function classifyHardSafety(tool: string, args: Record<string, unknown>):
     const filePath = getStringProp(args, 'filePath') ?? '';
     for (const pattern of SENSITIVE_PATH_PATTERNS) {
       if (pattern.test(filePath)) {
-        reasons.push('Sensitive file path detected');
+        matched.push({ category: 'sensitive', message: 'Sensitive file path detected' });
         break;
       }
     }
   }
 
-  if (reasons.length === 0) {
+  if (matched.length === 0) {
     return { hardSafety: false, action: 'ask', reasons: [] };
   }
 
-  const action: HardSafetyAction = reasons.some((r) => r.includes('Destructive')) ? 'block' : 'ask';
-  return { hardSafety: true, action, reasons };
+  // Derive action from structured category, not display text
+  const action: HardSafetyAction = matched.some((r) => CATEGORY_ACTION[r.category] === 'block')
+    ? 'block'
+    : 'ask';
+  return { hardSafety: true, action, reasons: matched.map((r) => r.message) };
 }

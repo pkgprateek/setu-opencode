@@ -60,6 +60,23 @@ function formatFilesAlreadyRead(filesRead: Array<{ path: string }>): string {
  * - Full persona (already in agent file)
  * - Behavioral instructions (enforced by hooks)
  */
+/** Input shape for the system transform hook */
+interface SystemTransformInput {
+  sessionID: string;
+  message?: { content?: string };
+}
+
+/** Output shape for the system transform hook */
+interface SystemTransformOutput {
+  system: string[];
+}
+
+/** Hook signature returned by createSystemTransformHook */
+type SystemTransformHook = (
+  input: SystemTransformInput,
+  output: SystemTransformOutput
+) => Promise<void>;
+
 export function createSystemTransformHook(
   getVerificationState: () => { complete: boolean; stepsRun: Set<string> },
   getSetuFilesExist?: () => FileAvailability,
@@ -67,10 +84,10 @@ export function createSystemTransformHook(
   getContextCollector?: () => ContextCollector | null,
   getProjectRules?: () => ProjectRules | null,
   getProjectDir?: () => string
-) {
+): SystemTransformHook {
   return async (
-    _input: { sessionID: string; message?: { content?: string } },
-    output: { system: string[] }
+    input: SystemTransformInput,
+    output: SystemTransformOutput
   ): Promise<void> => {
     const currentAgent = getCurrentAgent ? getCurrentAgent() : 'setu';
     const agentLower = currentAgent.toLowerCase();
@@ -170,7 +187,7 @@ export function createSystemTransformHook(
         }
       }
 
-      const disciplineState = getDisciplineState(_input.sessionID);
+      const disciplineState = getDisciplineState(input.sessionID);
       if (disciplineState.questionBlocked) {
         output.system.unshift(
           `[SETU: Clarification Required]\n` +
@@ -180,7 +197,7 @@ export function createSystemTransformHook(
         );
       }
 
-      const overwriteRequirement = getOverwriteRequirement(_input.sessionID);
+      const overwriteRequirement = getOverwriteRequirement(input.sessionID);
       if (overwriteRequirement?.pending) {
         // Sanitize filePath before interpolation: strip control chars and newlines
         const safePath = (overwriteRequirement.filePath ?? '')
