@@ -13,6 +13,11 @@
 - **Action fingerprinting** — Safety confirmations are matched to specific actions and consumed after single use
 - **Debug observability** — Added logging for enforcement decisions and safety classifications
 
+### Documentation
+- **Architecture diagram added** — README now references `assets/architecture.svg`, derived from the internal architecture model
+- **Install path clarified** — README now distinguishes current manual `opencode.json` setup from planned `init` command UX
+- **Roadmap wording tightened** — sequencing language cleaned up for first public release preparation
+
 ## [1.2.0] - 2025-02-10
 
 ### Added

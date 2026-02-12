@@ -17,9 +17,7 @@ Setu bridges the gap between "AI that codes fast" and "AI that codes correctly."
 
 ## Why I Built This
 
-I was building a product. Twice, my AI agent — one of the best available — deleted 12+ hours of my work.
-
-Not maliciously. It just *forgot*. It forgot I told it not to touch certain files. It forgot the architecture we discussed. It forgot why we made specific decisions three prompts ago.
+I was building a product. Twice, my AI agent — one of the best available — deleted 12+ hours of my work. Not maliciously. It just *forgot*. It forgot I told it not to touch certain files. It forgot the architecture we discussed. It forgot why we made specific decisions three prompts ago.
 
 And when I ran my dev server, it ran `npm run build` anyway — overwriting my bundles, breaking my local environment.
 
@@ -29,9 +27,7 @@ Every build command: "Please check if the dev server is running first..."
 
 I was spending more time re-explaining than coding. Burning tokens on ghost loops — the same broken approach, 15 retries, zero progress.
 
-**So I built the discipline layer I needed.**
-
-Setu bridges the gap between "AI that codes fast" and "AI that codes correctly."
+**So I built the discipline layer I needed.** Setu bridges the gap between "AI that codes fast" and "AI that codes correctly."
 
 ---
 
@@ -151,6 +147,8 @@ These aren't roadblocks—they're guardrails that keep your agent on the right p
 
 ## Installation (30 Seconds)
 
+Current stable path:
+
 ```json
 // opencode.json
 {
@@ -161,6 +159,13 @@ These aren't roadblocks—they're guardrails that keep your agent on the right p
 Restart OpenCode. Press **Tab** until you see "Setu." Done.
 
 **Note:** First run requires one restart. Setu appears in Tab cycle on second launch.
+
+Planned install UX (upcoming):
+
+- `npx setu-opencode@latest init`
+- `npm install -g setu-opencode && setu-opencode init`
+
+These commands are planned to automate OpenCode config edits safely. Until then, use `opencode.json` setup above.
 
 ### 30-Second Proof (Run This)
 

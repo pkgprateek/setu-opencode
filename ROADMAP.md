@@ -65,8 +65,6 @@
 
 ### Implemented (v1.0.0 through v1.2.0)
 
-### Implemented (v1.0.0 through v1.2.0)
-
 **Core Infrastructure:**
 - [x] Package structure (`src/`, `skills/`)
 - [x] TypeScript configuration with strict mode
