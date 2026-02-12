@@ -51,9 +51,12 @@ Setu bridges the gap between "AI that codes fast" and "AI that codes correctly."
 
 Setu doesn't ask your agent to "be more careful." It creates a workflow where carefulness is the default.
 
-![Setu Architecture](assets/setu-architecture.svg)
+<img src="assets/architecture.svg" alt="Component Architecture" width="1000" />
 
-### How It Works (No Willpower Required)
+---
+Need the full architecture set? See [docs/DIAGRAMS.md](./docs/DIAGRAMS.md).
+
+## How It Works (No Willpower Required)
 
 Your agent automatically progresses through three phases. Can't skip. Can't rush.
 
@@ -291,6 +294,7 @@ Skills load on-demand, not at startup.
 - Version is tracked by the npm badge at the top of this README.
 
 **See:** [ROADMAP.md](./ROADMAP.md) for upcoming features
+**See:** [docs/DIAGRAMS.md](./docs/DIAGRAMS.md) for all architecture diagrams
 
 ---
 
