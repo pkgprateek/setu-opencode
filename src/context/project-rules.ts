@@ -166,7 +166,6 @@ export function loadProjectRules(projectDir: string): ProjectRules {
       if (
         parsed &&
         typeof parsed.task === 'string' &&
-        typeof parsed.mode === 'string' &&
         typeof parsed.status === 'string' &&
         Array.isArray(parsed.constraints)
       ) {
@@ -252,7 +251,6 @@ export function formatRulesForInjection(rules: ProjectRules): string {
     blocks.push('');
     blocks.push('[RESUME TASK - CRITICAL]');
     blocks.push(`Task: ${rules.activeTask.task}`);
-    blocks.push(`Mode: ${rules.activeTask.mode}`);
     if (Array.isArray(rules.activeTask.constraints) && rules.activeTask.constraints.length > 0) {
       blocks.push(`Constraints: ${rules.activeTask.constraints.join(', ')}`);
     }

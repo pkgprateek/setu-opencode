@@ -2,7 +2,7 @@
  * Active Task Persistence
  * 
  * Manages .setu/active.json for tracking current task state:
- * - Task description and mode
+ * - Task description
  * - Constraints (READ_ONLY, NO_PUSH, etc.)
  * - Status (in_progress, completed, blocked)
  * 
@@ -15,7 +15,7 @@
 import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { ensureSetuDir } from './storage';
-import { type ActiveTask, type ConstraintType, type TaskStatus, type SetuMode, CONSTRAINT_TYPES } from './types';
+import { type ActiveTask, type ConstraintType, type TaskStatus, CONSTRAINT_TYPES } from './types';
 import { MAX_LEARNINGS } from './limits';
 import { debugLog, errorLog } from '../debug';
 import { createPromptSanitizer } from '../utils/sanitization';
@@ -54,27 +54,13 @@ function checkBypassIndicators(command: string): boolean {
 }
 
 // Re-export types for convenience
-export type { ActiveTask, ConstraintType, TaskStatus, SetuMode };
+export type { ActiveTask, ConstraintType, TaskStatus };
 export { CONSTRAINT_TYPES };
 
 const ACTIVE_JSON = 'active.json';
 const MAX_TASK_LENGTH = 500;       // Prevent bloated task descriptions
 const MAX_REFERENCE_LENGTH = 200;  // Prevent long URLs
 const MAX_REFERENCES = 10;         // Reasonable limit
-
-const VALID_MODES: SetuMode[] = ['ultrathink', 'quick', 'collab'];
-const DEFAULT_MODE: SetuMode = 'ultrathink';
-
-/**
- * Validate and normalize mode to a valid SetuMode.
- * Returns default mode if invalid.
- */
-function validateMode(mode: unknown): SetuMode {
-  if (typeof mode === 'string' && VALID_MODES.includes(mode as SetuMode)) {
-    return mode as SetuMode;
-  }
-  return DEFAULT_MODE;
-}
 
 /**
  * Sanitize a string for safe storage.
@@ -135,7 +121,6 @@ export function loadActiveTask(projectDir: string): ActiveTask | null {
     // Validate required fields
     if (
       typeof parsed.task !== 'string' ||
-      typeof parsed.mode !== 'string' ||
       typeof parsed.startedAt !== 'string' ||
       !isValidISOTimestamp(parsed.startedAt) ||
       !isValidStatus(parsed.status) ||
@@ -151,7 +136,6 @@ export function loadActiveTask(projectDir: string): ActiveTask | null {
     // Build validated task
     const task: ActiveTask = {
       task: sanitize(parsed.task, MAX_TASK_LENGTH),
-      mode: validateMode(parsed.mode),
       constraints: validConstraints,
       startedAt: parsed.startedAt,
       status: parsed.status,
@@ -230,7 +214,6 @@ export function saveActiveTask(projectDir: string, task: ActiveTask): void {
     // Sanitize before saving
     const sanitizedTask: ActiveTask = {
       task: sanitize(task.task, MAX_TASK_LENGTH),
-      mode: task.mode,  // Already validated as SetuMode
       constraints: task.constraints.filter(isValidConstraint),
       startedAt: task.startedAt,
       status: task.status,
@@ -291,18 +274,15 @@ export function saveActiveTask(projectDir: string, task: ActiveTask): void {
  * Create a new active task with defaults.
  * 
  * @param taskDescription - What the user wants to do
- * @param mode - Operational mode (ultrathink, quick, collab)
  * @param constraints - Optional constraints to apply
  * @returns New ActiveTask ready to save
  */
 export function createActiveTask(
   taskDescription: string,
-  mode: SetuMode = 'ultrathink',
   constraints: ConstraintType[] = []
 ): ActiveTask {
   return {
     task: sanitize(taskDescription, MAX_TASK_LENGTH),
-    mode: mode,
     constraints: constraints.filter(isValidConstraint),
     startedAt: new Date().toISOString(),
     status: 'in_progress',

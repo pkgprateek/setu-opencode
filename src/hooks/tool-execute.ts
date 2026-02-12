@@ -3,27 +3,35 @@
  * 
  * Uses: tool.execute.before, tool.execute.after
  * 
- * - tool.execute.before: Phase 0 blocking (pre-emptive enforcement)
+ * - tool.execute.before: Discipline and gear enforcement
  *   Context injection for subagent prompts (task tool)
  *   Constraint enforcement (READ_ONLY, NO_PUSH, etc.)
  *   Secrets detection for write/edit operations
  * - tool.execute.after: Tracks verification steps, file reads, searches
  */
 
-import { basename } from 'path';
+import { basename, isAbsolute, normalize, resolve } from 'path';
+import { existsSync } from 'fs';
 import {
-  shouldBlockInPhase0,
-  createPhase0BlockMessage,
   determineGear,
   shouldBlock as shouldBlockByGear,
-  createGearBlockMessage,
-  type Phase0State
+  createGearBlockMessage
 } from '../enforcement';
-import { type ContextCollector, formatContextForInjection, contextToSummary } from '../context';
+import {
+  type ContextCollector,
+  formatContextForInjection,
+  contextToSummary,
+  getDisciplineState,
+  setSafetyBlocked,
+  clearQuestionBlocked,
+  clearSafetyBlocked,
+  setOverwriteRequirement,
+  getOverwriteRequirement,
+  clearOverwriteRequirement,
+} from '../context';
 import { loadActiveTask, shouldBlockDueToConstraint } from '../context/active';
-import { type SetuStyle, getStyleEnforcementLevel } from '../prompts/styles';
 import { debugLog } from '../debug';
-import { isString, getStringProp, getCurrentBranch, isProtectedBranch } from '../utils';
+import { isString, getStringProp, getCurrentBranch, isProtectedBranch, formatGuidanceMessage } from '../utils';
 import { isReadOnlyTool, PARALLEL_BATCH_WINDOW_MS } from '../constants';
 import { 
   detectSecrets, 
@@ -32,7 +40,9 @@ import {
   SecurityEventType,
   type SecretMatch
 } from '../security';
+import { classifyHardSafety } from '../security/safety-classifier';
 import { sanitizeArgs } from '../utils/error-handling';
+import { detectEnvironmentConflict } from '../environment/detector';
 
 // ============================================================================
 // Verification Step Tracking
@@ -57,47 +67,6 @@ export interface ToolExecuteBeforeInput {
  */
 export interface ToolExecuteBeforeOutput {
   args: Record<string, unknown>;
-}
-
-/**
- * Enforcement level based on Setu style
- */
-export type EnforcementLevel = 'full' | 'light' | 'none';
-
-/**
- * Determines enforcement level based on Setu style.
- * Only used when in Setu agent mode.
- *
- * @param setuStyle - The Setu style (ultrathink/quick/collab)
- * @returns The enforcement level for Phase 0
- */
-export function getSetuEnforcementLevel(setuStyle: SetuStyle): EnforcementLevel {
-  const styleLevel = getStyleEnforcementLevel(setuStyle);
-  
-  switch (styleLevel) {
-    case 'strict':
-      return 'full';    // Ultrathink: full blocking
-    case 'none':
-      return 'none';    // Quick: no blocking
-    case 'light':
-      return 'light';   // Expert/Collab: warn but don't block
-    default:
-      return 'full';    // Safe default: full enforcement
-  }
-}
-
-/**
- * Determines enforcement level based on the current agent.
- * 
- * @deprecated Use getSetuEnforcementLevel with a SetuStyle instead.
- * This function returns hardcoded 'full' for 'setu' agent and 'none' otherwise.
- * Kept for backwards compatibility only.
- */
-export function getEnforcementLevel(currentAgent: string): EnforcementLevel {
-  if (currentAgent.toLowerCase() === 'setu') {
-    return 'full';
-  }
-  return 'none';
 }
 
 /**
@@ -153,6 +122,25 @@ const PACKAGE_MANIFEST_PATTERNS = [
   /\.git\/hooks\//,
 ] as const;
 
+function normalizeForComparison(projectDir: string, filePath: string): string {
+  const resolvedPath = isAbsolute(filePath)
+    ? resolve(filePath)
+    : resolve(projectDir, filePath);
+  return normalize(resolvedPath);
+}
+
+function hasReadTargetFile(collector: ContextCollector | null, projectDir: string, targetFilePath: string): boolean {
+  if (!collector) return false;
+
+  const target = normalizeForComparison(projectDir, targetFilePath);
+  const filesRead = collector.getContext().filesRead;
+
+  return filesRead.some((entry) => {
+    const candidate = normalizeForComparison(projectDir, entry.path);
+    return candidate === target;
+  });
+}
+
 /**
  * Create a before-execution hook that enforces Gearbox rules for tool execution.
  *
@@ -166,22 +154,24 @@ const PACKAGE_MANIFEST_PATTERNS = [
  * Also enforces active task constraints (READ_ONLY, NO_PUSH, etc.)
  * Also enforces Git Discipline: requires verification before commit/push.
  *
- * @param getPhase0State - Accessor that returns the current Phase 0 state (kept for backwards compat)
  * @param getCurrentAgent - Optional accessor for the current agent identifier; defaults to "setu" when omitted
  * @param getContextCollector - Optional accessor for a ContextCollector used to obtain and format confirmed context for injection
- * @param getSetuStyle - Optional accessor for the current Setu style (used for style-level enforcement when in Setu mode)
  * @param getProjectDir - Optional accessor for project directory (used for constraint loading and gear determination)
  * @param getVerificationState - Optional accessor for verification state (used for git discipline enforcement)
  * @returns A hook function invoked before tool execution that enforces Gearbox rules and may throw an Error when a tool is blocked
  */
 export function createToolExecuteBeforeHook(
-  getPhase0State: () => Phase0State,
   getCurrentAgent?: () => string,
   getContextCollector?: () => ContextCollector | null,
-  getSetuStyle?: () => SetuStyle,
   getProjectDir?: () => string,
   getVerificationState?: () => VerificationState
 ): (input: ToolExecuteBeforeInput, output: ToolExecuteBeforeOutput) => Promise<void> {
+  // Direct mutation tools only. 'task' is intentionally excluded: it's not a
+  // direct mutator, but launches subagents that may mutate. It receives partial
+  // blocking (e.g., overwrite guard at line 235) without full mutation treatment.
+  const isMutatingToolName = (toolName: string): boolean =>
+    ['write', 'edit', 'bash', 'patch', 'multiedit', 'apply_patch'].includes(toolName);
+
   return async (
     input: ToolExecuteBeforeInput,
     output: ToolExecuteBeforeOutput
@@ -192,17 +182,93 @@ export function createToolExecuteBeforeHook(
     if (currentAgent.toLowerCase() !== 'setu') {
       return;
     }
-    
-    // SECURITY: Sanitize args to prevent control char injection (2.9.2)
+
+    // SECURITY: Sanitize args to prevent control char injection
     // Removes null bytes and control characters that could bypass parsing
     output.args = sanitizeArgs(output.args);
-    
-    const setuStyle = getSetuStyle ? getSetuStyle() : 'ultrathink';
-    const enforcementLevel = getSetuEnforcementLevel(setuStyle);
+    const projectDir = getProjectDir ? getProjectDir() : process.cwd();
+    const collector = getContextCollector ? getContextCollector() : null;
+    const disciplineState = getDisciplineState(input.sessionID);
+    const isMutating = isMutatingToolName(input.tool);
+
+    if (input.tool === 'question') {
+      clearQuestionBlocked(input.sessionID);
+      debugLog('Question answered; cleared question block');
+      return;
+    }
+
+    if (disciplineState.questionBlocked) {
+      throw new Error(
+        formatGuidanceMessage(
+          'Clarification required before continuing',
+          disciplineState.questionReason ?? 'A required implementation decision is still unanswered.',
+          'Answer the active structured question first.',
+          'After clarification, Setu will continue the protocol automatically.'
+        )
+      );
+    }
+
+    if (isMutating && disciplineState.safetyBlocked) {
+      throw new Error(
+        formatGuidanceMessage(
+          'Safety block active',
+          'Previous action triggered safety block in this session.',
+          'Address the safety condition before continuing.',
+          'Use safer alternatives or explicitly confirm intent with the user.'
+        )
+      );
+    }
+
+    const pendingOverwrite = getOverwriteRequirement(input.sessionID);
+
+    if (pendingOverwrite?.pending) {
+      const requiredPath = pendingOverwrite.filePath;
+      const requiredNormalized = normalizeForComparison(projectDir, requiredPath);
+
+      if (input.tool === 'read') {
+        const readPath = getStringProp(output.args, 'filePath') ?? '';
+        const readNormalized = readPath ? normalizeForComparison(projectDir, readPath) : '';
+
+        if (readNormalized === requiredNormalized) {
+          clearOverwriteRequirement(input.sessionID);
+          debugLog(`Overwrite gate cleared after read: ${requiredPath}`);
+        }
+        // Allow all reads to pass through — only the required read clears the gate
+      } else {
+        if (isMutating || input.tool === 'task') {
+          throw new Error(
+            formatGuidanceMessage(
+              'Overwrite guard active',
+              `Pending discipline step: read '${requiredPath}' first.`,
+              `Use read on '${requiredPath}' before any further changes.`,
+              'Do not use bash/write/edit to bypass this guard.'
+            )
+          );
+        }
+      }
+    }
+
+    if (isMutating) {
+      const safetyDecision = classifyHardSafety(input.tool, output.args);
+      if (safetyDecision.hardSafety) {
+        setSafetyBlocked(input.sessionID);
+
+        throw new Error(
+          formatGuidanceMessage(
+            'Execution paused by safety policy',
+            safetyDecision.reasons.join('; '),
+            'Confirm explicitly before running this action.',
+            'Use a lower-risk alternative if possible.'
+          )
+        );
+      }
+
+      clearSafetyBlocked(input.sessionID);
+    }
     
     // Context injection for task tool (subagent prompts)
     if (input.tool === 'task' && getContextCollector) {
-      const collector = getContextCollector();
+      // Use outer collector binding — getContextCollector() returns the same instance
       if (collector && collector.getContext().confirmed) {
         const context = collector.getContext();
         const summary = contextToSummary(context);
@@ -225,11 +291,22 @@ export function createToolExecuteBeforeHook(
     // This applies in Setu mode regardless of gear state
     if (input.tool === 'bash' && getVerificationState) {
       const command = getStringProp(output.args, 'command') ?? '';
+      const envConflict = await detectEnvironmentConflict(command);
+      if (envConflict.hasConflict) {
+        throw new Error(
+          formatGuidanceMessage(
+            'Potential environment conflict',
+            envConflict.reason ?? 'Command can conflict with active development processes.',
+            'Stop the dev server first, then run build/verification commands.',
+            'If you must continue, run the command manually after confirming local state.'
+          )
+        );
+      }
+
       const verificationState = getVerificationState();
       
       // Check for git commit - enhanced pre-commit checklist
       if (GIT_COMMIT_PATTERN.test(command)) {
-        const projectDir = getProjectDir ? getProjectDir() : process.cwd();
         const branch = getCurrentBranch(projectDir);
         
         if (!verificationState.complete) {
@@ -262,7 +339,6 @@ export function createToolExecuteBeforeHook(
       
       // Check for git push
       if (GIT_PUSH_PATTERN.test(command) && !verificationState.complete) {
-        const projectDir = getProjectDir ? getProjectDir() : process.cwd();
         const branch = getCurrentBranch(projectDir);
         const branchWarning = isProtectedBranch(branch) 
           ? `\n⚠️ Warning: Pushing to protected branch: ${branch}` 
@@ -293,7 +369,6 @@ export function createToolExecuteBeforeHook(
       );
       
       if (isPackageManifest) {
-        const projectDir = getProjectDir ? getProjectDir() : process.cwd();
         logSecurityEvent(
           projectDir,
           SecurityEventType.DEPENDENCY_EDIT_BLOCKED,
@@ -313,7 +388,6 @@ export function createToolExecuteBeforeHook(
       // PATH TRAVERSAL PREVENTION
       // Validate file paths are within project directory
       if (getProjectDir) {
-        const projectDir = getProjectDir();
         const pathValidation = validateFilePath(projectDir, filePath, { 
           allowSensitive: false,
           allowAbsoluteWithinProject: true 
@@ -332,6 +406,26 @@ export function createToolExecuteBeforeHook(
           throw new Error(`🛡️ [Path Security] ${pathValidation.error}`);
         }
       }
+
+      if (input.tool === 'write' && getProjectDir && filePath) {
+        const fileExists = existsSync(normalizeForComparison(projectDir, filePath));
+        if (fileExists && !hasReadTargetFile(collector, projectDir, filePath)) {
+          setOverwriteRequirement(input.sessionID, {
+            pending: true,
+            filePath,
+            createdAt: Date.now(),
+          });
+
+          throw new Error(
+            formatGuidanceMessage(
+              'Read required before overwrite',
+              `Target file already exists: '${filePath}'.`,
+              `Read '${filePath}' first, then update it.`,
+              'Use edit for in-place updates after reading the file.'
+            )
+          );
+        }
+      }
       
       // SECRETS DETECTION
       // Scan content for accidental secrets before write/edit
@@ -341,7 +435,6 @@ export function createToolExecuteBeforeHook(
         const criticalSecrets = secrets.filter((s: SecretMatch) => s.severity === 'critical' || s.severity === 'high');
         
         if (criticalSecrets.length > 0) {
-          const projectDir = getProjectDir ? getProjectDir() : process.cwd();
           logSecurityEvent(
             projectDir,
             SecurityEventType.SECRETS_DETECTED,
@@ -362,7 +455,6 @@ export function createToolExecuteBeforeHook(
     // Check active task constraints BEFORE Gearbox check
     // Constraints apply regardless of gear
     if (getProjectDir) {
-      const projectDir = getProjectDir();
       const activeTask = loadActiveTask(projectDir);
       
       if (activeTask && activeTask.status === 'in_progress' && activeTask.constraints.length > 0) {
@@ -378,66 +470,35 @@ export function createToolExecuteBeforeHook(
         }
       }
     }
-    
-    // Quick profile bypasses Gearbox enforcement (but NOT constraints or safety checks above)
-    if (enforcementLevel === 'none') {
-      return;
-    }
-    
+
     // GEARBOX ENFORCEMENT
     // Determines gear based on artifact existence:
     // - Scout: No RESEARCH.md → read-only tools only
     // - Architect: Has RESEARCH.md but no PLAN.md → .setu/ writes only
     // - Builder: Has both → all allowed (verification gate is separate)
     if (getProjectDir) {
-      const projectDir = getProjectDir();
       const gearState = determineGear(projectDir);
       const gearBlockResult = shouldBlockByGear(gearState.current, input.tool, output.args);
-      
+
       if (gearBlockResult.blocked) {
-        if (enforcementLevel === 'full') {
-          debugLog(`Gearbox BLOCKED: ${input.tool} in ${gearState.current} gear`);
-          logSecurityEvent(
-            projectDir,
-            SecurityEventType.GEAR_BLOCKED,
-            `Blocked ${input.tool} in ${gearState.current} gear (${gearBlockResult.reason || 'no reason'})`,
-            { sessionId: input.sessionID, tool: input.tool }
-          );
-          throw new Error(createGearBlockMessage(gearBlockResult));
-        } else {
-          // Light enforcement: warn but don't block
-          debugLog(`Gearbox WARNING: ${input.tool} in ${gearState.current} gear - ${gearBlockResult.reason}`);
-          return;
-        }
+        debugLog(`Gearbox BLOCKED: ${input.tool} in ${gearState.current} gear`);
+        logSecurityEvent(
+          projectDir,
+          SecurityEventType.GEAR_BLOCKED,
+          `Blocked ${input.tool} in ${gearState.current} gear (${gearBlockResult.reason || 'no reason'})`,
+          { sessionId: input.sessionID, tool: input.tool }
+        );
+        throw new Error(
+          formatGuidanceMessage(
+            'Execution paused by gear policy',
+            createGearBlockMessage(gearBlockResult),
+            'Create required artifacts or confirm a reduced-scope request.',
+            'Use setu_research first, then setu_plan when needed.'
+          )
+        );
       }
-      
-      if (enforcementLevel === 'full') {
-        debugLog(`Gearbox ALLOWED: ${input.tool} in ${gearState.current} gear`);
-      }
-    } else {
-      // Fallback to Phase 0 if no project directory (shouldn't happen)
-      // Context confirmed - allow all tools (Phase 0 complete)
-      const state = getPhase0State();
-      if (state.contextConfirmed) {
-        return;
-      }
-      
-      // Check Phase 0 blocking rules
-      const { blocked, reason, details } = shouldBlockInPhase0(input.tool, output.args);
-      
-      if (blocked && reason) {
-        if (enforcementLevel === 'full') {
-          debugLog(`Phase 0 BLOCKED: ${input.tool}`);
-          throw new Error(createPhase0BlockMessage(reason, details));
-        } else {
-          debugLog(`Phase 0 WARNING: ${input.tool} - ${reason}`);
-          return;
-        }
-      }
-      
-      if (enforcementLevel === 'full') {
-        debugLog(`Phase 0 ALLOWED: ${input.tool}`);
-      }
+
+      debugLog(`Gearbox ALLOWED: ${input.tool} in ${gearState.current} gear`);
     }
   };
 }
@@ -614,92 +675,6 @@ export function createToolExecuteAfterHook(
     // It cannot be auto-detected from bash commands
   };
 }
-
-/**
- * Attempt tracker for the "2 attempts then ask" pattern
- * 
- * Tracks failed attempts at solving a problem and suggests asking
- * for guidance after 2 failures.
- */
-export interface AttemptState {
-  taskId: string;
-  attempts: number;
-  approaches: string[];
-}
-
-export function createAttemptTracker(): {
-  recordAttempt: (taskId: string, approach: string) => number;
-  getAttempts: (taskId: string) => AttemptState | undefined;
-  shouldAskForGuidance: (taskId: string) => boolean;
-  getGuidanceMessage: (taskId: string) => string | null;
-  reset: (taskId: string) => void;
-  clearAll: () => void;
-} {
-  const attempts = new Map<string, AttemptState>();
-  
-  return {
-    /**
-     * Record an attempt at solving a task
-     */
-    recordAttempt: (taskId: string, approach: string): number => {
-      const state = attempts.get(taskId) || { taskId, attempts: 0, approaches: [] };
-      state.attempts++;
-      state.approaches.push(approach);
-      attempts.set(taskId, state);
-      return state.attempts;
-    },
-    
-    /**
-     * Get attempt state for a task
-     */
-    getAttempts: (taskId: string): AttemptState | undefined => {
-      return attempts.get(taskId);
-    },
-    
-    /**
-     * Check if we should ask for guidance (2+ attempts)
-     */
-    shouldAskForGuidance: (taskId: string): boolean => {
-      const state = attempts.get(taskId);
-      return state ? state.attempts >= 2 : false;
-    },
-    
-    /**
-     * Get a formatted guidance message
-     */
-    getGuidanceMessage: (taskId: string): string | null => {
-      const state = attempts.get(taskId);
-      if (!state || state.attempts < 2) return null;
-      
-      const approachList = state.approaches
-        .slice(-2)
-        .map((a, i) => `${i + 1}. ${a}`)
-        .join('\n');
-      
-      return `I've tried ${state.attempts} approaches without success:
-
-${approachList}
-
-Would you like me to try a different approach, or do you have guidance?`;
-    },
-    
-    /**
-     * Reset attempts for a task (on success or user intervention)
-     */
-    reset: (taskId: string): void => {
-      attempts.delete(taskId);
-    },
-    
-    /**
-     * Clear all attempt tracking
-     */
-    clearAll: (): void => {
-      attempts.clear();
-    }
-  };
-}
-
-export type AttemptTracker = ReturnType<typeof createAttemptTracker>;
 
 // ============================================================================
 // Parallel Execution Tracking

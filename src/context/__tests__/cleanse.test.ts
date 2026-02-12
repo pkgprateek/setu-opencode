@@ -37,7 +37,7 @@ describe('JIT Context Preparation', () => {
 
   describe('prepareJITContext', () => {
     test('generates context with correct step number', () => {
-      const task = createActiveTask('Test task', 'ultrathink');
+      const task = createActiveTask('Test task');
       task.progress = { lastCompletedStep: 3, lastCompletedAt: new Date().toISOString() };
       saveActiveTask(testDir, task);
 
@@ -48,7 +48,7 @@ describe('JIT Context Preparation', () => {
     });
 
     test('includes objective in context', () => {
-      const task = createActiveTask('Test task', 'ultrathink');
+      const task = createActiveTask('Test task');
       saveActiveTask(testDir, task);
 
       const context = prepareJITContext(testDir, 'Implement feature X', { mode: 'full' });
@@ -57,7 +57,7 @@ describe('JIT Context Preparation', () => {
     });
 
     test('includes failed approaches (last 3 only)', () => {
-      const task = createActiveTask('Test task', 'ultrathink');
+      const task = createActiveTask('Test task');
       task.learnings = {
         worked: [],
         failed: [
@@ -82,7 +82,7 @@ describe('JIT Context Preparation', () => {
 
     test('truncates failed approaches to 200 chars', () => {
       const longApproach = 'x'.repeat(500);
-      const task = createActiveTask('Test task', 'ultrathink');
+      const task = createActiveTask('Test task');
       task.learnings = {
         worked: [],
         failed: [longApproach]
@@ -111,7 +111,7 @@ describe('JIT Context Preparation', () => {
     });
 
     test('includes constraints from active task', () => {
-      const task = createActiveTask('Test task', 'ultrathink');
+      const task = createActiveTask('Test task');
       task.constraints = ['READ_ONLY', 'NO_PUSH'];
       saveActiveTask(testDir, task);
 
@@ -123,7 +123,7 @@ describe('JIT Context Preparation', () => {
 
     test('includes previous step summary if available', () => {
       // Create task at step 1
-      const task = createActiveTask('Test task', 'ultrathink');
+      const task = createActiveTask('Test task');
       task.progress = { lastCompletedStep: 1, lastCompletedAt: new Date().toISOString() };
       saveActiveTask(testDir, task);
 
@@ -145,7 +145,7 @@ describe('JIT Context Preparation', () => {
     });
 
     test('sanitizes objective (removes control chars)', () => {
-      const task = createActiveTask('Test task', 'ultrathink');
+      const task = createActiveTask('Test task');
       saveActiveTask(testDir, task);
 
       const maliciousObjective = 'Do something\x00with\x01control\x02chars';
@@ -167,7 +167,7 @@ describe('JIT Context Preparation', () => {
     });
 
     test('truncates context if over maxTokens', () => {
-      const task = createActiveTask('Test task', 'ultrathink');
+      const task = createActiveTask('Test task');
       task.learnings = {
         worked: [],
         failed: ['x'.repeat(10000)]
@@ -183,7 +183,7 @@ describe('JIT Context Preparation', () => {
     });
 
     test('uses nullish coalescing for maxTokens (handles 0)', () => {
-      const task = createActiveTask('Test task', 'ultrathink');
+      const task = createActiveTask('Test task');
       saveActiveTask(testDir, task);
 
       // maxTokens: 0 should use default (2000), not 0
@@ -200,7 +200,7 @@ describe('JIT Context Preparation', () => {
     });
 
     test('includes artifacts section', () => {
-      const task = createActiveTask('Test task', 'ultrathink');
+      const task = createActiveTask('Test task');
       saveActiveTask(testDir, task);
 
       const context = prepareJITContext(testDir, 'Do something', { mode: 'full' });
@@ -211,7 +211,7 @@ describe('JIT Context Preparation', () => {
     });
 
     test('includes execution instructions', () => {
-      const task = createActiveTask('Test task', 'ultrathink');
+      const task = createActiveTask('Test task');
       saveActiveTask(testDir, task);
 
       const context = prepareJITContext(testDir, 'Do something', { mode: 'full' });
@@ -224,7 +224,7 @@ describe('JIT Context Preparation', () => {
 
   describe('getJITContextSummary', () => {
     test('returns summary with correct step number', () => {
-      const task = createActiveTask('Test task', 'ultrathink');
+      const task = createActiveTask('Test task');
       task.progress = { lastCompletedStep: 5, lastCompletedAt: new Date().toISOString() };
       saveActiveTask(testDir, task);
 
@@ -257,7 +257,7 @@ describe('JIT Context Preparation', () => {
     });
 
     test('includes failed approaches (last 3)', () => {
-      const task = createActiveTask('Test task', 'ultrathink');
+      const task = createActiveTask('Test task');
       task.learnings = {
         worked: [],
         failed: ['Fail 1', 'Fail 2', 'Fail 3', 'Fail 4']
@@ -273,7 +273,7 @@ describe('JIT Context Preparation', () => {
     });
 
     test('includes constraints', () => {
-      const task = createActiveTask('Test task', 'ultrathink');
+      const task = createActiveTask('Test task');
       task.constraints = ['READ_ONLY', 'NO_PUSH'];
       saveActiveTask(testDir, task);
 

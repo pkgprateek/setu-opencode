@@ -104,3 +104,19 @@ export {
   formatRulesForInjection,
   hasProjectRules
 } from './project-rules';
+
+// Discipline guards (safety, question blocking, overwrite protection)
+export type { SetuDisciplineState, OverwriteRequirementState } from './setu-state';
+
+export {
+  getDisciplineState,
+  setDisciplineState,
+  setQuestionBlocked,
+  clearQuestionBlocked,
+  setSafetyBlocked,
+  clearSafetyBlocked,
+  clearDisciplineState,
+  setOverwriteRequirement,
+  getOverwriteRequirement,
+  clearOverwriteRequirement,
+} from './setu-state';

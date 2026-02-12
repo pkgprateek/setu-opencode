@@ -101,7 +101,6 @@ export function createCompactionHook(
         output.context.push(`## Active Task (CRITICAL)
 
 Task: ${activeTask.task}
-Mode: ${activeTask.mode}
 Constraints: ${constraintsStr}${referencesStr}
 Started: ${activeTask.startedAt}
 

@@ -13,7 +13,7 @@ export {
   type Phase0BlockResult
 } from './phase-zero';
 
-// Gearbox (v1.1)
+// Gearbox (v1.1.0)
 export {
   determineGear,
   shouldBlock,
@@ -23,7 +23,7 @@ export {
   type GearBlockResult
 } from './gears';
 
-// Attempt tracking with gear shifting (v1.1)
+// Attempt tracking with gear shifting (v1.1.0)
 export {
   createEnhancedAttemptTracker,
   type AttemptState,

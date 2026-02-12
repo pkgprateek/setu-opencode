@@ -1,20 +1,25 @@
 ---
 name: setu-verification
-description: Run verification protocol before completing tasks. Checks build, tests, lint based on mode. Use when finishing a task, before claiming completion, or asked to "verify", "validate", "check", "test", or "run tests".
+description: Run verification protocol before completing tasks. Checks build, tests, lint. Use when finishing a task, before claiming completion, or asked to "verify", "validate", "check", "test", or "run tests".
 ---
 
 # Verification Protocol
 
 Before declaring a task complete, verify using targeted extraction.
 
-## Mode-Specific Behavior
+## When to Verify
 
-| Mode | Verification Level | What to Run |
-|------|-------------------|-------------|
-| **Ultrathink** | Full | All steps: build, test, lint, visual, edge cases |
-| **Quick** | Minimal | Build only if risky changes (new deps, config) |
-| **Expert** | User-driven | Suggest steps, let user decide |
-| **Collab** | Discuss | Ask what verification is needed |
+Verification runs in **Builder gear** — the state where both `.setu/RESEARCH.md` and `.setu/PLAN.md` exist, meaning research and planning are complete and implementation has started.
+
+**Precondition check:** If RESEARCH.md or PLAN.md are missing, you are not in Builder gear. Complete the RPI workflow first:
+- Missing RESEARCH.md → use `setu_research` to advance from Scout to Architect
+- Missing PLAN.md → use `setu_plan` to advance from Architect to Builder
+
+**Scope selection:**
+- **Full scope** (default): All steps — build, test, lint, type check. Use when logic, dependencies, or configuration changed, or when changes span multiple modules/files.
+- **Incremental scope**: Only steps relevant to changed files. Use only when the user explicitly requests it, or changes are isolated to a single module with no cross-cutting impact (e.g., updating a single component's styling).
+
+When in doubt, use Full scope.
 
 ## Verification Steps
 
@@ -124,13 +129,13 @@ npm run lint 2>&1 | grep -c "error" && npm run lint 2>&1 | grep "error" | head -
 
 ## When to Skip Verification
 
-In Quick mode, skip verification for:
+Skip verification for:
 - Comment changes only
 - Documentation updates
 - Whitespace/formatting fixes
 - Renaming variables (after LSP rename)
 
-Still verify in Quick mode for:
+Always verify for:
 - New dependencies added
 - Configuration changes
 - Any logic changes

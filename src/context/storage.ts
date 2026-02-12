@@ -36,7 +36,8 @@ export { MAX_INJECTION_SIZE } from './limits';
 const CONTEXT_JSON = 'context.json';
 const VERIFICATION_LOG = 'verification.log';
 
-// Log rotation settings (from PLAN.md Section 2.9.4)
+
+// Log rotation settings — prevent unbounded log growth
 const MAX_LOG_SIZE = 1024 * 1024;    // 1MB
 const MAX_LOG_FILES = 3;
 
@@ -65,7 +66,7 @@ export function loadContext(projectDir: string): SetuContext | null {
 /**
  * Save a SetuContext to `.setu/context.json`.
  * 
- * Security features (PLAN.md Section 2.9.1):
+ * Security features (context size limits):
  * - Enforces MAX_CONTEXT_SIZE (50KB) to prevent token bloat
  * - Validates arrays before truncation
  * - Truncates filesRead and searchesPerformed arrays if too large
@@ -120,7 +121,7 @@ export function saveContext(projectDir: string, context: SetuContext): void {
       jsonContent = JSON.stringify(buildMinimalContext('[truncated due to serialization error]'));
     }
     
-    // Check size limit and truncate if needed (PLAN.md 2.9.1)
+    // Check size limit and truncate if needed (prevents token bloat)
     // Only attempt re-serialization if initial serialization succeeded
     if (jsonContent.length > MAX_CONTEXT_SIZE && !serializationFailed) {
       debugLog(`Context size ${jsonContent.length} exceeds ${MAX_CONTEXT_SIZE}, truncating...`);
@@ -358,7 +359,7 @@ export function createContextCollector(projectDir: string): ContextCollector {
 /**
  * Rotate log file when it exceeds MAX_LOG_SIZE.
  * 
- * Rotation scheme (PLAN.md Section 2.9.4):
+ * Rotation scheme:
  * - verification.log.2 → delete
  * - verification.log.1 → verification.log.2
  * - verification.log → verification.log.1
@@ -416,7 +417,7 @@ function rotateLog(logPath: string): void {
 /**
  * Record a verification step result in .setu/verification.log.
  *
- * Security features (PLAN.md Section 2.9.4):
+ * Security features (log rotation):
  * - Rotates log when it exceeds MAX_LOG_SIZE (1MB)
  * - Keeps MAX_LOG_FILES (3) rotated logs
  * 
@@ -437,7 +438,7 @@ export function logVerification(
   const setuDir = ensureSetuDir(projectDir);
   const logPath = join(setuDir, VERIFICATION_LOG);
   
-  // Check if rotation needed (PLAN.md 2.9.4)
+  // Check if rotation needed (prevents unbounded log growth)
   if (existsSync(logPath)) {
     try {
       const stats = statSync(logPath);

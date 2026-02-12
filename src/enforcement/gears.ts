@@ -164,12 +164,14 @@ export interface GearBlockResult {
   gear: Gear;
 }
 
+/** Scout gear: only these Setu tools are allowed (hoisted to module scope for performance) */
+const SCOUT_ALLOWED_SETU_TOOLS = new Set(['setu_task', 'setu_context', 'setu_research', 'setu_doctor', 'setu_feedback']);
+
 export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockResult {
   switch (gear) {
     case 'scout': {
       // Only read-only tools or approved Setu tools allowed
-      const scoutAllowedSetuTools = new Set(['setu_research', 'setu_doctor']);
-      const isScoutAllowedSetuTool = isSetuTool(tool) && scoutAllowedSetuTools.has(tool);
+      const isScoutAllowedSetuTool = isSetuTool(tool) && SCOUT_ALLOWED_SETU_TOOLS.has(tool);
       if (!isReadOnlyTool(tool) && !isScoutAllowedSetuTool) {
         return {
           blocked: true,

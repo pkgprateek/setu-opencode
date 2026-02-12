@@ -3,6 +3,7 @@ import { validateProjectDir } from '../utils/path-validation';
 import { join } from 'path';
 import { writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
+import { setQuestionBlocked } from '../context';
 import { resetProgress } from '../context/active';
 import { ensureSetuDir } from '../context/storage';
 import { clearResults } from '../context/results';
@@ -16,6 +17,54 @@ const sanitizeContextSummary = createPromptSanitizer(1000);
 const sanitizeSteps = createPromptSanitizer(10000); // Steps can be longer
 const sanitizeSuccessCriteria = createPromptSanitizer(2000);
 
+export function countStructuredSteps(rawSteps: string): number {
+  const lines = rawSteps.split('\n');
+  let count = 0;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (
+      /^(#{2,6})\s*(?:step|task|phase|item)?\s*\d*[:.-]?\s+.+$/i.test(trimmed) ||
+      /^\d+\s*[.)-:]\s+.+$/.test(trimmed) ||
+      /^[-*]\s+.+$/.test(trimmed)
+    ) {
+      count++;
+    }
+  }
+  return count;
+}
+
+export function normalizeUnstructuredSteps(rawSteps: string): string {
+  const compact = rawSteps.replace(/\s+/g, ' ').trim();
+  if (!compact) {
+    return `## Step 1: Implement requested change\n- Apply the requested update safely.\n\n## Step 2: Verify result\n- Validate output and report completion.`;
+  }
+
+  const sentenceCandidates = compact
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 6);
+
+  const first = sentenceCandidates[0] ?? 'Implement the requested change.';
+  const second = sentenceCandidates[1] ?? 'Verify the result and confirm completion.';
+
+  return `## Step 1: Execute request\n- ${first}\n\n## Step 2: Verify outcome\n- ${second}`;
+}
+
+export function normalizeStepsInput(rawSteps: string): { steps: string; stepCount: number } {
+  const structuredCount = countStructuredSteps(rawSteps);
+  if (structuredCount > 0) {
+    return { steps: rawSteps, stepCount: structuredCount };
+  }
+
+  const normalized = normalizeUnstructuredSteps(rawSteps);
+  return {
+    steps: normalized,
+    stepCount: countStructuredSteps(normalized),
+  };
+}
+
 export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<typeof tool> => tool({
   description: 'Create execution plan in .setu/PLAN.md. Requires RESEARCH.md to exist. Resets step progress to 0.',
   args: {
@@ -24,7 +73,7 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
     steps: tool.schema.string().describe('Full step definitions using the atomic format (see PLAN_TEMPLATE)'),
     successCriteria: tool.schema.string().describe('Truths, artifacts, and key links that prove completion')
   },
-  async execute(args, _context) {
+  async execute(args, context) {
     const projectDir = getProjectDir();
 
     // Validate projectDir to prevent directory traversal
@@ -43,11 +92,9 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
       throw new Error('steps is required and cannot be empty');
     }
 
-    // Validate step count to prevent DoS (max 100 steps)
-    const stepCount = (args.steps.match(/## Step \d+|### Step \d+|\*\*Step \d+\*\*/gi) || []).length;
-    if (stepCount === 0) {
-      throw new Error('No steps detected. Steps must use headings like "## Step 1", "### Step 1", or "**Step 1**".');
-    }
+    // Validate step count to prevent DoS (max 100 steps) and normalize unstructured plans
+    const normalizedStepsResult = normalizeStepsInput(args.steps);
+    const stepCount = normalizedStepsResult.stepCount;
     if (stepCount > 100) {
       throw new Error(`Too many steps (${stepCount}). Maximum is 100.`);
     }
@@ -62,7 +109,7 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
     const sanitizedArgs = {
       objective: sanitizeObjective(args.objective),
       contextSummary: sanitizeContextSummary(args.contextSummary ?? ''),
-      steps: sanitizeSteps(args.steps), // Steps can be longer
+      steps: sanitizeSteps(normalizedStepsResult.steps), // Steps can be longer
       successCriteria: sanitizeSuccessCriteria(args.successCriteria ?? '')
     };
     
@@ -92,10 +139,18 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
       resultsCleared = false;
     }
     
+    // Trigger user approval before execution begins
+    if (context?.sessionID) {
+      setQuestionBlocked(
+        context.sessionID,
+        `Plan created with ${stepCount} steps. Ask the user to review and approve the plan before executing.`
+      );
+    }
+
     // SECURITY: Log gear transition (architect → builder unlocks write operations)
     debugLog(`[AUDIT] Gear transition: architect → builder. Plan created with ${stepCount} steps. Project: ${projectDir}`);
     
-    return `Plan created with ${stepCount} steps. Gear shifted: architect → builder. Progress reset to Step 0. ${resultsCleared ? 'Old results cleared.' : 'Warning: failed to clear old results.'} Ready for execution.`;
+    return `Plan created with ${stepCount} steps. Gear shifted: architect → builder. Progress reset to Step 0. ${resultsCleared ? 'Old results cleared.' : 'Warning: failed to clear old results.'}\n\n**Action required**: Ask the user to confirm this plan before executing.`;
   }
 });
 

@@ -3,6 +3,15 @@
 ## [Unreleased]
 
 ### Added
+- **Discipline guards**: Lightweight question/safety/overwrite blocking that operates independently of gears
+  - `setQuestionBlocked()` / `clearQuestionBlocked()`: Force user interaction when research has open questions or plan needs approval
+  - `setSafetyBlocked()` / `clearSafetyBlocked()`: Block until user confirms destructive actions
+  - Overwrite protection requires prior read before file writes
+- **Artifact archiving on new task**: `setu_task create` archives old RESEARCH.md and PLAN.md to `.setu/HISTORY.md`, resetting gear to scout
+- **User interaction at gear transitions**: Research with open questions and plan creation trigger question blocking to ensure user alignment before proceeding
+- **Gear-based system prompt injection**: System transform now injects per-gear workflow guidance (`[SETU: Gear] scout/architect/builder`) with gear-specific instructions
+- **`setu_task` added to core tools list**: Task creation is now a recognized Setu tool in constants
+- **`openQuestions` argument for `setu_research`**: Allows marking unresolved questions that require user input
 - **Progress tracking and step completion system**
   - `advanceStep`: Automatically advance step counter after verification
   - `recordFailedApproach`: Track failed attempts to prevent repeated mistakes
@@ -59,14 +68,28 @@
 - Type safety: `wrapHook` return type includes undefined for error cases
 - Empty catch blocks now discriminate ENOENT from other errors
 - SetuError prototype chain fixed for post-transpilation instanceof checks
-- Style detection regex escapes properly (`\\s`, `\\w`)
+- Command detection regex escapes properly (`\\s`, `\\w`)
 
 ### Changed
+- **Unified workflow enforcement to gear-based state machine**: Gears (Scout/Architect/Builder) are now the single workflow authority. Removed competing in-memory state machine that duplicated gear logic and caused conflicts on session restart
+- **Rewritten tool-execute enforcement hook**: Removed ~318 lines of legacy complexity (enforcement levels, heuristic gates, fallback blocks). Kept: gear enforcement, discipline guards, git discipline, dependency safety, path security, secrets detection, constraints, context injection
+- **`todowrite` reclassified as read-only**: Moved from side-effect tools to read-only tools since it manages OpenCode internal state, not filesystem
+- **Renamed state API**: `getSetuState` → `getDisciplineState`, `setSetuState` → `setDisciplineState`, `clearSetuState` → `clearDisciplineState` to reflect actual purpose
+- **System transform uses gear-based guidance**: Replaced in-memory state injections with gear-aware workflow instructions from `determineGear()`
 - **Persona optimization**: Reduced token overhead from ~1,100 to ~400 tokens (64% reduction)
-- Agent version updated to 2.7.0
-- Removed `expert` style, merged into `collab` (now 3 styles: ultrathink, quick, collab)
-- Style guidance changed to descriptive-only (removed behavioral directives)
+- Agent version aligned to package version (1.2.0)
+- Removed legacy preset system; consolidated to a single default behavior
+- Runtime guidance changed to descriptive-only (removed behavioral directives)
 - Removed parallel execution guidance from persona (enforcement via hooks instead)
+
+### Removed
+- **In-memory workflow state machine**: `SetuPhase` type and all transition functions (`transitionSetuPhase`, `setSetuState`, `getSetuState`). Gears handle workflow via artifact existence
+- **`EnforcementLevel` type and related functions**: `getSetuEnforcementLevel()`, `getEnforcementLevel()`, `skipGearEnforcement`, `policyExemptBash` — replaced by direct gear checks
+- **Legacy attempt tracker factory**: `createAttemptTracker()` and `AttemptTracker`/`AttemptState` type exports
+- **`logExecutionPhase()`**: 33-line function only used by the removed state machine
+- **Deprecated `isReadOnlyToolName()`**: Replaced by direct constant lookups
+- **Dead code files**: `src/templates/plan.ts`, `src/templates/research.ts` (never imported), `src/config/setu-config.ts`, `src/config/index.ts` (full config system, never imported)
+- **Net reduction**: -627 lines of code
 
 ### Security
 - YAML injection prevention with control char removal
@@ -116,7 +139,7 @@
 
 ### Changed
 - Reduced agent persona from ~800 to ~400 tokens (50% reduction)
-- Consolidated styles from 4 to 3 (removed `expert`, merged into `collab`)
+- Consolidated legacy preset system before single-default rollout
 - Moved unit tests to `src/hooks/__tests__/` (Jest/Vitest convention)
 - Centralized security logging through `logSecurityEvent()` API
 - Enhanced tool execute hook with secrets detection, path validation, and audit logging
@@ -127,7 +150,7 @@
 ### Fixed
 - Removed duplicate path logic in `validateFilePath`
 - Removed double redaction in debug logging (50% reduction in overhead)
-- Fixed `Profile` → `Style` terminology in persona prefix
+- Fixed runtime terminology in persona prefix
 - Added constraint bypass detection for bash commands (`$`, backticks, `eval`, etc.)
 - Removed duplicate tool classification constants
 - Removed unused exports from `persona.ts`
@@ -136,7 +159,7 @@
 
 ## [1.0.0-rc.3] - 2025-01-28
 
-- Renamed Profile to Style (ultrathink, quick, expert, collab)
+- Renamed runtime terminology (legacy release note)
 - Eliminated meta-reasoning in agent responses
 - Added file-based debug logging with `SETU_DEBUG=true`
 
@@ -144,7 +167,7 @@
 
 - Fixed context loading on session start (was detected but not loaded)
 - Added constraints survival across restarts
-- Enforced `[Style: X]` prefix in all responses
+- Enforced runtime prefix in all responses
 - Added glob-first and parallel read guidance
 
 ## [1.0.0-rc.1] - 2025-01-28
@@ -160,6 +183,6 @@
 - Phase 0 blocking enforcement
 - Context persistence (`.setu/context.md`, `.setu/context.json`)
 - Setu as primary agent
-- 4 operational styles: Ultrathink, Quick, Expert, Collab
+- Initial multi-preset runtime (legacy)
 - Custom tools: `setu_verify`, `setu_context`, `setu_feedback`
 - 7 bundled skills

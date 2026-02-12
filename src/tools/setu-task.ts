@@ -12,6 +12,8 @@
  */
 
 import { tool } from '@opencode-ai/plugin';
+import { appendFileSync, existsSync, readFileSync, unlinkSync } from 'fs';
+import { join } from 'path';
 import {
   createActiveTask,
   saveActiveTask,
@@ -20,21 +22,16 @@ import {
   clearActiveTask,
   type ActiveTask,
   type ConstraintType,
-  type SetuMode,
   type TaskStatus,
   CONSTRAINT_TYPES
 } from '../context/active';
 import { debugLog } from '../debug';
+import { getErrorMessage } from '../utils/error-handling';
 
 /**
  * Valid constraint names for input validation
  */
 const VALID_CONSTRAINTS = Object.values(CONSTRAINT_TYPES);
-
-/**
- * Valid modes for input validation
- */
-const VALID_MODES: SetuMode[] = ['ultrathink', 'quick', 'collab'];
 
 /**
  * Valid statuses for input validation
@@ -49,16 +46,6 @@ function validateConstraints(input: string[] | undefined): ConstraintType[] {
   return input.filter((c): c is ConstraintType => 
     VALID_CONSTRAINTS.includes(c as ConstraintType)
   );
-}
-
-/**
- * Validates mode, returns default if invalid
- */
-function validateMode(input: string | undefined): SetuMode {
-  if (input && VALID_MODES.includes(input as SetuMode)) {
-    return input as SetuMode;
-  }
-  return 'ultrathink';
 }
 
 /**
@@ -84,7 +71,6 @@ function formatTask(task: ActiveTask): string {
     : '';
   
   return `**Task:** ${task.task}
-**Mode:** ${task.mode}
 **Status:** ${task.status}
 **Constraints:** ${constraintList}
 **Started:** ${task.startedAt}${refList}`;
@@ -127,9 +113,6 @@ Active tasks persist to \`.setu/active.json\` and survive:
       task: tool.schema.string().optional().describe(
         'Task description (required for create)'
       ),
-      mode: tool.schema.string().optional().describe(
-        'Operational mode: ultrathink, quick, collab (default: ultrathink)'
-      ),
       constraints: tool.schema.array(tool.schema.string()).optional().describe(
         'Constraints to apply: READ_ONLY, NO_PUSH, NO_DELETE, SANDBOX'
       ),
@@ -155,17 +138,50 @@ Example:
 setu_task({
   action: "create",
   task: "Implement user authentication",
-  mode: "ultrathink",
   constraints: ["NO_PUSH"]
 })
 \`\`\``;
           }
+
+          // Archive old artifacts to reset gear to scout.
+          // New task should not inherit previous task's RESEARCH/PLAN artifacts.
+          const setuDir = join(projectDir, '.setu');
+          const researchPath = join(setuDir, 'RESEARCH.md');
+          const planPath = join(setuDir, 'PLAN.md');
+          const historyPath = join(setuDir, 'HISTORY.md');
+
+          try {
+            if (existsSync(researchPath)) {
+              const timestamp = new Date().toISOString();
+              const oldResearch = readFileSync(researchPath, 'utf-8');
+              const archiveEntry = `\n---\n## Archived Research (${timestamp})\n\n${oldResearch}\n`;
+              appendFileSync(historyPath, archiveEntry, 'utf-8');
+              unlinkSync(researchPath);
+              debugLog('Archived old RESEARCH.md to HISTORY.md');
+            }
+          } catch (archiveError) {
+            debugLog(`Failed to archive RESEARCH.md: ${getErrorMessage(archiveError)}`);
+            // Continue — partial archive failure should not block task creation
+          }
+
+          try {
+            if (existsSync(planPath)) {
+              const timestamp = new Date().toISOString();
+              const oldPlan = readFileSync(planPath, 'utf-8');
+              const archiveEntry = `\n---\n## Archived Plan (${timestamp})\n\n${oldPlan}\n`;
+              appendFileSync(historyPath, archiveEntry, 'utf-8');
+              unlinkSync(planPath);
+              debugLog('Archived old PLAN.md to HISTORY.md');
+            }
+          } catch (archiveError) {
+            debugLog(`Failed to archive PLAN.md: ${getErrorMessage(archiveError)}`);
+            // Continue — partial archive failure should not block task creation
+          }
           
-          const mode = validateMode(args.mode);
           const constraints = validateConstraints(args.constraints);
           
           // Create and save the task
-          const newTask = createActiveTask(args.task, mode, constraints);
+          const newTask = createActiveTask(args.task, constraints);
           
           // Add references if provided
           if (args.references && args.references.length > 0) {

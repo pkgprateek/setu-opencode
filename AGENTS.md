@@ -1,493 +1,552 @@
-# Project: setu-opencode
+# AGENTS.md - Setu Project Guide
 
-## Overview
+> **Project**: setu-opencode  
+> **Purpose**: Disciplined RPI (Research → Plan → Implement) workflow enforcement  
+> **Philosophy**: "One Discipline. Zero Styles. Infinite Clarity."
 
-An OpenCode plugin that provides **Setu** — a disciplined primary agent for AI coding. Setu is a Tab-accessible mode that enforces pre-emptive discipline: context first, verify always.
+---
 
-When you install setu-opencode, Setu becomes your default agent. Press Tab to switch between Setu, Build, and Plan modes.
+## Quick Start for AI Agents
 
-## Stack
+### Understanding Setu
 
-- **Language**: TypeScript 5.x with strict mode
-- **Runtime**: Node.js (OpenCode plugin)
-- **Build**: Bun, TypeScript compiler
-- **Testing**: Manual testing via OpenCode (automated tests planned)
+Setu is a **discipline layer**, not a coding tool. It enforces the RPI workflow:
 
-## Architecture
+1. **Research** (Scout gear) - Understand before building
+2. **Plan** (Architect gear) - Design before coding  
+3. **Implement** (Builder gear) - Build with verification
 
-### Setu as Primary Agent
+This prevents "AI slop" - code that looks right but is wrong.
 
-Setu registers itself as a **primary agent** in OpenCode:
+### Three Modes, One Purpose Each
 
-```
-Tab → Setu (default) → Build → Plan → (cycle)
-```
+| Mode | How to Access | Purpose | Enforcement |
+|------|---------------|---------|-------------|
+| **Setu** | Press Tab | Disciplined RPI workflow | Full (gears, verification, safety) |
+| **Plan** | Press Tab | Free exploration | None (research mode) |
+| **Build** | Press Tab | Quick execution | Minimal (safety only) |
 
-**Why a primary agent instead of just hooks?**
-- **Permission-based blocking**: CANNOT edit vs DOES NOT edit
-- **Clear user experience**: User knows they're in Setu mode
-- **Easy escape hatch**: Tab to Build if Setu causes issues
-- **No conflicts**: Doesn't interfere with Plan/Build modes
+**Key insight**: Setu doesn't compete with Plan/Build - it complements them. Use:
+- **Build** for quick fixes (typos, small changes)
+- **Plan** for exploration (understanding codebase)
+- **Setu** for substantial work (features, refactoring)
 
-### Plugin Structure
+---
 
-```
-src/
-├── index.ts          # Plugin entry point, hook registration, agent creation
-├── agent/            # Setu agent configuration
-│   └── setu-agent.ts       # Creates .opencode/agents/setu.md
-├── hooks/            # OpenCode hook implementations
-│   ├── system-transform.ts   # Injects Setu persona
-│   ├── chat-message.ts       # Agent/profile detection
-│   └── tool-execute.ts       # Tool interception (before/after)
-├── enforcement/      # Phase 0 blocking logic
-├── context/          # Context persistence (.setu/ directory)
-│   ├── index.ts            # Module exports
-│   ├── types.ts            # Context type definitions (SetuContext, etc.)
-│   ├── storage.ts          # Read/write context files, ContextCollector
-│   └── feedback.ts         # User feedback mechanism
-├── prompts/          # Persona and system prompt fragments
-└── tools/            # Custom tools exposed to agent
-    ├── setu-verify.ts        # Verification trigger
-    ├── setu-context.ts       # Context confirmation + persistence
-    └── setu-feedback.ts      # User feedback submission
+## The Gear System
 
-skills/               # Bundled skills (loaded on-demand)
-├── setu-bootstrap/         # Initial context gathering
-├── setu-verification/      # Build/test/lint protocol
-└── setu-rules-creation/    # AGENTS.md generation
+### Automatic Workflow Enforcement
 
-.setu/                # Context persistence directory (created per-project)
-├── context.json            # Machine-parseable for injection
-├── active.json             # Current task, mode, constraints (survives compaction)
-├── feedback.md             # User feedback on Setu behavior
-└── verification.log        # Build/test/lint audit trail
-```
+Gears shift **automatically** based on artifact existence:
 
-### Key Patterns
-
-1. **Primary agent architecture**: Setu is a Tab-accessible mode with its own permissions
-2. **Permission + Hook defense**: Permission system (CANNOT) + hooks (enforcement)
-3. **Context persistence**: Understanding saved to `.setu/`, survives sessions
-4. **Context injection**: Subagents receive context via prompt, don't re-read
-5. **Parallel execution**: Explicit guidance to use parallel tool calls
-6. **State isolation**: Each session has independent context/attempt state
-7. **Progressive loading**: Skills load on-demand, not upfront
-
-## Terminology
-
-| Term | Meaning | Examples |
-|------|---------|----------|
-| **Mode** (OpenCode) | IDE-level agent via Tab | Plan, Build, Setu |
-| **Style** (Setu) | Operational preset within Setu | ultrathink, quick, collab |
-| **Gear** (Setu v1.1+) | State determined by artifact existence | scout, architect, builder |
-
-## Code Style
-
-- Use `camelCase` for variables and functions
-- Use `PascalCase` for types and interfaces
-- Prefix interfaces with `I` only when necessary for clarity
-- Use explicit return types on exported functions
-- Prefer `const` over `let`
-- Use template literals for string interpolation
-
-### Naming Conventions
-
-| Entity | Convention | Example |
-|--------|------------|---------|
-| Hook files | `kebab-case.ts` | `system-transform.ts` |
-| Tool files | `kebab-case.ts` | `setu-context.ts` |
-| Types | `PascalCase` | `SetuStyle`, `SessionState` |
-| Constants | `SCREAMING_SNAKE_CASE` | `DEFAULT_STYLE`, `MAX_ATTEMPTS` |
-
-### Import Organization
-
-1. Node.js built-ins
-2. External packages
-3. Internal modules (absolute paths)
-4. Relative imports
-
-## Common Commands
-
-- **Build**: `bun run build`
-- **Watch**: `bun run dev`
-- **Lint**: `bun run lint`
-- **Type check**: `bun run typecheck`
-- **Test locally**: Load plugin in OpenCode via `opencode.json`
-
-## Important Context
-
-### The Core Insight
-
-Setu is **pre-emptive**, not reactive. This means:
-- Block side-effect tools BEFORE they execute (Phase 0)
-- Allow read-only tools so agent can form smart questions
-- Verify BEFORE claiming "done" (not after user discovers bugs)
-- Use PARALLEL tool calls for efficiency
-
-### The Experience
-
-> "Setu should feel like a thoughtful colleague, not a gatekeeper."
-
-This means:
-- Clear messaging when blocking (explain why, what to do)
-- Fast context gathering (parallel reads, not serial)
-- Smart questions (context-aware, not generic)
-- Seamless verification (automatic, not manual)
-
-### Mode Isolation
-
-**Setu only activates in Setu mode.** When you're in OpenCode's Plan or Build mode, Setu behaves as if it's not installed:
-
-- No hooks fire
-- No persona injection
-- No Phase 0 enforcement
-- No verification gates
-
-This ensures Plan and Build modes work exactly as they do without the setu-opencode plugin installed. Setu never leaks into or affects OpenCode's native modes.
-
-**Practical effect:** Tab to Build/Plan for the standard OpenCode experience. Tab to Setu for disciplined mode.
-
-### Phase 0 Rule
-
-**Allow (native read-only tools):** `read`, `glob`, `grep`, `list`, `webfetch`, `todoread`
-**Allow (bash read-only):** `cat`, `head`, `tail`, `grep`, `find`, `pwd`, `echo`, `which`, `env`
-**Allow (git read-only):** `git status`, `git log`, `git diff`, `git branch`, `git show`
-**Block (side-effects):** `write`, `edit`, `bash` (other commands), `git` (write operations)
-
-**Tool Preference:** Use native tools over bash commands:
-- `list` over `bash ls` — structured output, faster, cross-platform
-- `glob` over `bash find` — native pattern matching, no shell spawn
-- `grep` over `bash grep` — integrated search with better formatting
-
-This lets the agent "look but don't touch" until context is confirmed.
-
-### Styles (Operational Presets)
-
-| Style | Verification Level | Use Case |
-|-------|-------------------|----------|
-| `ultrathink` | Full (build/test/lint) | Features, refactoring |
-| `quick` | Minimal | Typos, comments |
-| `collab` | Discuss first + review | Architecture, trusted changes |
-
-### Context Persistence
-
-Setu saves understanding to `.setu/`:
-
-```
-.setu/
-├── context.json            # Machine-parseable for injection
-├── active.json             # Current task, mode, constraints (survives compaction)
-├── feedback.md             # User feedback on Setu behavior
-└── verification.log        # Build/test/lint audit trail
+```text
+Session Start
+    │
+    ▼
+No RESEARCH.md? → SCOUT gear
+    │              • Read-only
+    │              • Research only
+    │              • Cannot write code
+    ▼
+Create RESEARCH.md
+    │
+    ▼
+RESEARCH.md exists, no PLAN.md? → ARCHITECT gear
+    │                                 • Can write to .setu/
+    │                                 • Can create PLAN.md
+    │                                 • Cannot touch source code
+    ▼
+Create PLAN.md
+    │
+    ▼
+PLAN.md exists → BUILDER gear
+                   • Full access
+                   • Verify before "done"
 ```
 
-Context is:
-- Collected during Phase 0 (files read, patterns found)
-- Persisted when `setu_context` is called
-- Injected into subagent prompts automatically
-- Loaded on new session start for continuity
+### Gear Capabilities
 
-### State Management
+| Gear | Can Read | Can Write .setu/ | Can Write src/ | How to Advance |
+|------|----------|------------------|----------------|----------------|
+| **Scout** | ✅ All | ✅ RESEARCH.md only | ❌ No | `setu_research` |
+| **Architect** | ✅ All | ✅ Any file | ❌ No | `setu_plan` |
+| **Builder** | ✅ All | ✅ Any | ✅ Yes | N/A (final) |
 
-- Operational profile persists for session until changed
-- Context persists across sessions (`.setu/` directory)
-- Attempt counter resets on success or user guidance
-- After 3 failed attempts (configurable) → suggest gear shift to update RESEARCH.md or PLAN.md
+### Why Gears Matter
 
-### Parallel Execution
+From Dex Horthy's research ("No Vibes Allowed"):
+- AI produces "slop" without understanding
+- Context rot degrades quality beyond ~10k tokens
+- RPI workflow prevents wrong assumptions and architectural debt
 
-Always use parallel tool calls when possible:
+Setu enforces this **physically** via hooks - cannot be bypassed.
+
+---
+
+## Tool Reference
+
+### Core Tools
+
+#### `setu_context` - Session Management
+
+Manage your session, task, and constraints.
 
 ```typescript
-// GOOD: Parallel reads
-read("src/index.ts")
-read("src/hooks/tool-execute.ts")  // Same message
+setu_context({
+  action: 'confirm' | 'create_task' | 'update_task' | 'clear_task' | 'reset_progress',
+  summary?: string,      // For 'confirm': What you understand
+  task?: string,         // For 'create_task' | 'update_task'
+  constraints?: string[] // e.g., ['READ_ONLY', 'NO_DELETE']
+});
+```
+
+**Examples**:
+```typescript
+// Confirm understanding
+setu_context({
+  action: 'confirm',
+  summary: 'This is a TypeScript React app using Vite. Auth is in src/auth/.'
+});
+
+// Create task
+setu_context({
+  action: 'create_task',
+  task: 'Implement JWT authentication',
+  constraints: ['use_existing_patterns', 'add_tests']
+});
+```
+
+---
+
+#### `setu_task` - Task Management
+
+Create, update, or clear active tasks. Archives old artifacts on new task creation.
+
+```typescript
+setu_task({
+  action: 'create' | 'update' | 'clear',
+  task?: string,         // For 'create': task description
+  constraints?: string[] // e.g., ['READ_ONLY', 'NO_DELETE']
+});
+```
+
+**On `create`**:
+1. Archives existing RESEARCH.md and PLAN.md to `.setu/HISTORY.md`
+2. Deletes the original files (gear resets to scout)
+3. Creates new active task
+
+**Example**:
+```typescript
+setu_task({
+  action: 'create',
+  task: 'Implement dark mode toggle',
+  constraints: ['use_existing_patterns']
+});
+// Result: Old artifacts archived, gear reset to scout
+```
+
+---
+
+#### `setu_research` - Parallel Research
+
+Research with multiple subagents working in parallel.
+
+```typescript
+setu_research({
+  summary: string,        // What to research (required)
+  constraints?: string,   // Any constraints to consider
+  patterns?: string,      // Patterns to look for
+  learnings?: string,     // Existing learnings to build upon
+  openQuestions?: string  // Unresolved questions requiring user input (triggers question blocking)
+});
+```
+
+**What happens**:
+1. Creates a single RESEARCH.md file
+2. If openQuestions is provided, triggers question blocking (user must answer before proceeding)
+3. Gear advances: Scout → Architect
+
+**Example**:
+```typescript
+setu_research({
+  summary: 'Implement authentication system',
+  constraints: 'Must use existing JWT middleware',
+  patterns: 'Look for auth patterns in src/auth/',
+  openQuestions: 'Should we support refresh tokens?'
+});
+
+// Result: RESEARCH.md created, now in Architect gear
+```
+
+---
+
+#### `setu_plan` - Create Implementation Plan
+
+Create PLAN.md with implementation steps.
+
+```typescript
+setu_plan({
+  objective: string,        // One sentence: what this plan accomplishes
+  contextSummary?: string,  // 2-3 sentences from RESEARCH.md for subagent context
+  steps: string,            // Full step definitions in markdown (headings, numbered, or bullets)
+  successCriteria?: string  // Truths, artifacts, and key links that prove completion
+});
+```
+
+**What happens**:
+1. Validates RESEARCH.md exists (precondition)
+2. Normalizes and counts steps (max 100)
+3. Writes PLAN.md to `.setu/`
+4. Resets step progress to 0
+5. Triggers user approval (question blocking)
+6. Gear advances: Architect → Builder (after approval)
+
+**Example**:
+```typescript
+setu_plan({
+  objective: 'Implement JWT authentication',
+  contextSummary: 'Uses jose library. Existing middleware pattern in src/middleware/.',
+  steps: '## Step 1: Add jose dependency\n- Install jose via npm\n\n## Step 2: Create auth middleware\n- Add JWT validation in src/middleware/auth.ts',
+  successCriteria: 'All auth routes return 401 without valid JWT. Tests pass.'
+});
+
+// Result: PLAN.md created, user approval required, then Builder gear
+```
+
+---
+
+#### `setu_verify` - Run Verification
+
+Run build, test, and lint verification.
+
+```typescript
+setu_verify({
+  steps?: string[],      // Specific steps to run: 'build', 'test', 'lint', 'typecheck', 'visual'
+  skipSteps?: string[]   // Steps to skip
+});
+```
+
+**Default behavior** (no args): Runs all required steps (build, test, lint). Typecheck runs if available. Visual checks are not run automatically — the user is prompted to verify UI manually after other steps pass.
+
+**Example**:
+```typescript
+setu_verify({ steps: ['build', 'test'] });
+// Result: Build and test checks run, recorded in verification.log
+
+setu_verify({ skipSteps: ['lint'] });
+// Result: All steps except lint
+```
+
+---
+
+#### `setu_doctor` - Environment Check
+
+Check environment health and detect issues.
+
+```typescript
+setu_doctor({
+  verbose?: boolean  // Include healthy checks in output, not just issues (default: false)
+});
+```
+
+**Checks**:
+- Git status (uncommitted changes, detached HEAD)
+- Dependencies (missing node_modules, lockfile sync)
+- Runtime (Node.js version, TypeScript availability)
+- Dev server conflicts (would break build)
+
+**Example**:
+```typescript
+setu_doctor({ verbose: true });
+// Result: Full report including healthy checks, warnings, and errors
+```
+
+---
+
+## Working with Setu
+
+### Typical Workflow
+
+**Starting a new feature**:
+```text
+User: Implement dark mode toggle
+Setu: [Scout gear] Let me research the current theming approach...
+Setu: Reading src/theme/, src/components/...
+Setu: setu_research({ summary: 'Dark mode toggle: reviewed src/theme/ and src/components/...' })
+Setu: Created RESEARCH.md. Advanced to Architect gear.
+Setu: [Architect gear] Creating implementation plan...
+Setu: setu_plan({ objective: 'Implement dark mode toggle', steps: '## Step 1: ...', successCriteria: '...' })
+Setu: Created PLAN.md. User approval required, then Builder gear.
+Setu: [Builder gear] Executing step 1/4...
+Setu: [Step 1 complete] setu_verify() → All passed
+Setu: [Step 2 complete] setu_verify() → All passed
+Setu: Feature complete. All 4 steps verified.
+```
+
+**Quick fix (wrong mode?)**:
+```
+User: Fix typo in README
+Setu: [Scout gear] This is a simple fix. For immediate execution, press Tab to switch to Build mode.
+User: [Presses Tab → Build mode]
+Build: Fixed typo.
+```
+
+---
+
+### Best Practices
+
+#### 1. Let Setu Research First
+
+**Don't**: Jump straight to implementation in Scout gear  
+**Do**: Call `setu_research` to advance to Architect
+
+**Why**: Prevents wrong assumptions. Research phase compresses "truth" about the codebase.
+
+#### 2. Create Clear Plans
+
+**Don't**: Vague plans ("fix the bug")  
+**Do**: Specific steps ("Step 1: Add validation, Step 2: Update error handling...")
+
+**Why**: Clear plans are verifiable. Vague plans lead to "slop."
+
+#### 3. Verify Before Claiming Done
+
+**Don't**: "Done!" without verification  
+**Do**: `setu_verify()` after significant changes
+
+**Why**: Catch issues before user discovers them.
+
+#### 4. Use Parallel Execution
+
+**Don't**: Serial tool calls  
+**Do**: Parallel reads when possible
+
+```typescript
+// GOOD: Parallel
+read("src/auth/index.ts")
+read("src/auth/types.ts")
 read("package.json")
 
-// BAD: Serial reads
-read("src/index.ts")  // Message 1
-// wait for response
-read("src/hooks/tool-execute.ts")  // Message 2
-// wait for response
-read("package.json")  // Message 3
+// BAD: Serial
+read("src/auth/index.ts")
+// wait
+read("src/auth/types.ts")
+// wait
+read("package.json")
 ```
 
-## Git Workflow
+**Why**: Faster context gathering. More tokens for actual work.
 
-- **Always ask before committing**: Do not commit without explicit user approval
-- **Always ask before pushing**: Do not push without explicit user approval
-- **Commit style**: Conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`)
+#### 5. Respect Environment
 
-### Git Commit Messages
-- **Style**: Terse, veteran-level. Focus on WHY (user/business value), not HOW (diff shows that). Format: `type(scope): summary\n\nContext in 1-2 sentences.\nKey detail if non-obvious.`
-- **Anti-pattern**: Listing changed files, defensive "no breaking changes", or repeating yourself. The diff is the source of truth.
+**Don't**: Run `npm run build` while dev server is active  
+**Do**: Check with `setu_doctor` first, or stop dev server
 
-## Testing Strategy
-
-### Test Environment
-
-A test folder exists at `./tests/` within the repo (gitignored):
-- `opencode.json` configured to load the plugin from `dist/`
-- Uses `opencode/big-pickle` model (free tier)
-
-### Testing Steps
-
-1. Build plugin: `bun run build`
-2. Navigate to test folder: `cd tests`
-3. Start OpenCode: `opencode`
-4. Verify Setu appears in Tab cycle
-5. Test Phase 0 blocking (try to write before context confirmed)
-6. Test context persistence (check `.setu/` directory)
-7. Test verification flow
-8. Verify token efficiency
-
-## Files to Never Modify Without Asking
-
-- `package.json` (dependencies, versions)
-- `tsconfig.json` (compiler settings)
-- `.gitignore` (tracked files)
-
-## Files Safe to Modify
-
-- `src/**/*.ts` (implementation)
-- `skills/**/*.md` (skill definitions)
-- `README.md`, `ROADMAP.md` (documentation)
-- `docs/**/*.md` (documentation)
-
-## Interoperability
-
-### With OpenCode
-
-Setu is a primary agent. OpenCode's Plan/Build remain accessible via Tab.
-- In Setu mode: Full enforcement
-- In Plan mode: Setu hooks defer to OpenCode
-- In Build mode: Light enforcement
-
-### With Other Plugins (v3.0 - Deferred)
-
-> **Note:** No other discipline plugins currently exist for OpenCode. This section describes future interoperability that will be implemented if/when needed.
-
-When other discipline plugins are detected (future):
-- Setu enters "minimal mode" (reduced functionality to avoid conflicts)
-- Defers context injection to the other plugin
-- Focuses on Phase 0 and verification only
-- Avoids conflicting with other plugin directories
+**Why**: Prevents breaking local environment (Theo problem).
 
 ---
 
-## Implementation Guide
+## Architecture Overview
 
-### For New Sessions: Where to Start
+### Three Layers
 
-If you're starting a new session to implement Setu features, follow this order:
-
-#### Phase 1: Setu as Primary Agent (v1.0 Critical)
-
-| Step | File to Create/Modify | What to Do |
-|------|----------------------|------------|
-| 1.1 | `src/agent/setu-agent.ts` | Create function to generate `.opencode/agents/setu.md` at plugin init |
-| 1.2 | `src/index.ts` | Add `config` hook to set `default_agent: "setu"` |
-| 1.3 | `src/hooks/chat-message.ts` | Add agent tracking (store current agent per session) |
-| 1.4 | `src/hooks/tool-execute.ts` | Add mode-aware enforcement (check agent before blocking) |
-
-**Key Code Pattern for 1.1 (Agent Config)**:
-```typescript
-// src/agent/setu-agent.ts
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
-import { join } from 'path';
-
-const SETU_AGENT_CONFIG = `---
-mode: primary
-color: "#2ECC71"
-description: Setu disciplined mode - context first, verify always
-permission:
-  edit:
-    "*": ask
-  bash:
-    "*": ask
----
-
-You are Setu, a disciplined AI coding assistant...
-`;
-
-export async function createSetuAgent(projectDir: string): Promise<void> {
-  const agentDir = join(projectDir, '.opencode', 'agent');
-  const agentPath = join(agentDir, 'setu.md');
-  
-  if (!existsSync(agentDir)) {
-    mkdirSync(agentDir, { recursive: true });
-  }
-  
-  if (!existsSync(agentPath)) {
-    writeFileSync(agentPath, SETU_AGENT_CONFIG);
-    console.log('[Setu] Created .opencode/agents/setu.md');
-  }
-}
+```text
+┌─────────────────────────────────────┐
+│  Layer 3: Tools (User Interface)    │
+│  - setu_context                     │
+│  - setu_research                    │
+│  - setu_plan                        │
+│  - setu_verify                      │
+│  - setu_doctor                      │
+└─────────────────────────────────────┘
+                  ↓
+┌─────────────────────────────────────┐
+│  Layer 2: Gears (Workflow Engine)   │
+│  - Scout (Research)                 │
+│  - Architect (Plan)                 │
+│  - Builder (Implement)              │
+└─────────────────────────────────────┘
+                  ↓
+┌─────────────────────────────────────┐
+│  Layer 1: Hooks (Enforcement)       │
+│  - tool.execute.before (blocks)     │
+│  - system.transform (injects)       │
+│  - chat.message (tracks)            │
+└─────────────────────────────────────┘
 ```
 
-#### Phase 2: Context Persistence (v1.0 Critical)
+### Key Files
 
-| Step | File to Create/Modify | What to Do |
-|------|----------------------|------------|
-| 2.1 | `src/context/types.ts` | Define `SetuContext` interface |
-| 2.2 | `src/context/storage.ts` | Implement read/write for `.setu/` files |
-| 2.3 | `src/tools/setu-context.ts` | Enhance to persist context on confirmation |
-| 2.4 | `src/hooks/tool-execute.ts` | Inject context into subagent prompts (task tool) |
-| 2.5 | `src/hooks/event.ts` | Load existing context on session start |
-
-**Key Code Pattern for 2.2 (Storage)**:
-```typescript
-// src/context/storage.ts
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
-import { join } from 'path';
-import type { SetuContext } from './types';
-
-const SETU_DIR = '.setu';
-
-export function ensureSetuDir(projectDir: string): string {
-  const setuDir = join(projectDir, SETU_DIR);
-  if (!existsSync(setuDir)) {
-    mkdirSync(setuDir, { recursive: true });
-  }
-  return setuDir;
-}
-
-export function writeContext(projectDir: string, context: SetuContext): void {
-  const setuDir = ensureSetuDir(projectDir);
-  
-  // Write JSON (machine-parseable)
-  writeFileSync(
-    join(setuDir, 'context.json'),
-    JSON.stringify(context, null, 2)
-  );
-}
-
-export function loadContext(projectDir: string): SetuContext | null {
-  const contextPath = join(projectDir, SETU_DIR, 'context.json');
-  if (!existsSync(contextPath)) return null;
-  return JSON.parse(readFileSync(contextPath, 'utf-8'));
-}
+```text
+src/
+├── index.ts              # Plugin entry, hook registration
+├── agent/
+│   └── setu-agent.ts     # Agent persona
+├── hooks/
+│   ├── chat-message.ts   # Agent tracking
+│   ├── system-transform.ts # Context injection (gear-based)
+│   └── tool-execute.ts   # Enforcement (core moat)
+├── enforcement/
+│   ├── gears.ts          # Gear state machine (single workflow authority)
+│   └── attempts.ts       # Ghost loop prevention
+├── context/
+│   ├── storage.ts        # Read/write .setu/
+│   ├── active.ts         # Task management
+│   ├── setu-state.ts     # Discipline guards (question/safety/overwrite)
+│   └── cleanse.ts        # JIT context
+├── tools/
+│   ├── setu-context.ts   # Session management
+│   ├── setu-task.ts      # Task creation with artifact archiving
+│   ├── setu-research.ts  # Parallel research (with open questions)
+│   ├── setu-plan.ts      # Plan creation (with user approval)
+│   ├── setu-verify.ts    # Verification
+│   └── setu-doctor.ts    # Environment checks
+└── environment/
+    └── detector.ts       # Environment awareness
 ```
-
-#### Phase 3: Parallel Execution (v1.0 Important)
-
-| Step | File to Modify | What to Do |
-|------|----------------|------------|
-| 3.1 | `src/prompts/persona.ts` | Add parallel execution guidance section |
-| 3.2 | `src/prompts/persona.ts` | Add `[SETU:]` prefix to all injections |
-
-#### Phase 4: Active Task Management (v1.1)
-
-| Step | File to Create/Modify | What to Do |
-|------|----------------------|------------|
-| 4.1 | `src/tools/setu-task.ts` | Create tool for managing active tasks with constraints |
-| 4.2 | `src/index.ts` | Register `setu_task` tool and wire verification reset |
-| 4.3 | `src/hooks/tool-execute.ts` | Reset verification state when new task created |
-
-#### Phase 5: Other Plugin Detection (v3.0 - Deferred)
-
-> **Note:** This phase is deferred until other discipline plugins exist for OpenCode.
-> "Minimal mode" means Setu steps back when conflicting plugins are detected: no persona injection, defers context injection, focuses only on Phase 0 + verification.
-> This is speculative architecture — no known plugins require this today.
-
-| Step | File to Create/Modify | What to Do |
-|------|----------------------|------------|
-| 5.1 | `src/detection/plugins.ts` | Detect other discipline plugins |
-| 5.2 | `src/index.ts` | Enter minimal mode if other plugin detected |
-
-### Reference: Existing Files
-
-Before implementing, read these existing files:
-- `src/index.ts` - Current plugin entry point
-- `src/hooks/tool-execute.ts` - Current Phase 0 implementation
-- `src/enforcement/phase-zero.ts` - Blocking logic
-- `src/tools/setu-context.ts` - Current context confirmation tool
-
-### Reference: OpenCode Plugin API
-
-Key hooks used:
-- `config` - Modify OpenCode config (set default_agent)
-- `chat.message` - Track current agent from messages
-- `tool.execute.before` - Intercept before tool execution
-- `tool.execute.after` - Track verification/context gathering
-- `event` - Handle session lifecycle events
-- `experimental.chat.system.transform` - Inject persona into system prompt
-
-### Success Criteria
-
-After implementation, verify:
-1. Setu appears in Tab cycle (Tab → Setu → Build → Plan)
-2. Setu is default on fresh OpenCode start
-3. Phase 0 blocks in Setu mode, defers in Plan mode
-4. Context persists to `.setu/` directory
-5. Context loads on session start
-6. Context injects into subagent prompts
 
 ---
 
-## MCP Tools
+## Context Management
 
-MCP (Model Context Protocol) servers extend capabilities. Use the right tool for the right job.
+### JIT (Just-In-Time) Loading
 
-### Available MCP Tools
+**Problem**: Context stuffing degrades quality beyond ~10k tokens (Jack Morris research)  
+**Solution**: Load only what you need, when you need it
 
-| Tool | When to Use | Rules |
-|------|-------------|-------|
-| **Context7** | Code/library context, API verification, function signatures | Prefer over memory. Never hallucinate APIs if Context7 can verify. |
-| **Exa** (`web_search_exa`) | Web search, docs, blogs, discussions, fresh info | The ONLY search tool. Summarize findings, cite sources. |
-| **Firecrawl** | Scraping a specific known URL | Never use for search. If URL unknown → use Exa first. Treat as expensive. |
-| **Zread** | Long-form reading (PDFs, specs, RFCs) | Use before summarizing large inputs. Accuracy > brevity. |
+**How it works**:
+1. **System prompt**: Current gear, task status, constraints
+2. **Subagent spawn**: Fresh JIT-cleansed context
+3. **Tool execution**: Relevant files only
 
-### Tool Selection Order
+**Results Pattern**:
+- Track progress via file existence (survives compaction)
+- Git-tracked (reviewable)
+- Survives session restarts
 
-1. **Code or library question?** → Context7
-2. **Search or discovery needed?** → Exa
-3. **Known URL to fetch?** → Firecrawl
-4. **Large or dense content?** → Zread
+### Context Files
 
-*Pattern: Search → Fetch → Read → Explain*
+```text
+.setu/
+├── context.json          # Machine-parseable context
+├── active.json           # Current task, constraints
+├── RESEARCH.md           # Research findings
+├── PLAN.md               # Implementation plan
+├── HISTORY.md            # Archived artifacts from previous tasks
+├── verification.log      # Audit trail
+└── feedback.md           # User feedback
+```
 
-### Prohibited
+---
 
-- Hallucinating APIs or web content
-- Using Firecrawl as a search engine
-- Skipping tools when they're applicable
-- Guessing URLs (use Exa to find them first)
+## Safety & Security
+
+### Path Validation
+
+All file operations validated:
+- No path traversal (../../etc/passwd)
+- No absolute paths outside project
+- Sensitive file detection (.env, .key)
+
+### Environment Checks
+
+Before destructive operations:
+- Dev server detection
+- Build process detection
+- Git status check
+
+### Secret Detection
+
+Scans for:
+- API keys
+- Passwords
+- Private keys
+- Tokens
+
+---
+
+## Comparison: Setu vs Others
+
+| Feature | Setu | beads | GSD | BMAD |
+|---------|------|-------|-----|------|
+| **Enforcement** | ✅ Physical (hooks) | ❌ Prompt only | ❌ Prompt only | ❌ Prompt only |
+| **RPI Workflow** | ✅ Automatic (gears) | ❌ Manual | ✅ Semi-auto | ✅ Complex |
+| **Parallel Execution** | ✅ (read-only tools) | ❌ Sequential | ✅ (waves) | ✅ (agents) |
+| **Setup** | ✅ One line | ⚠️ CLI install | ❌ 40+ files | ❌ Complex |
+| **Complexity** | 🟢 Low | 🟡 Medium | 🔴 High | 🔴 Very High |
+| **Context Management** | ✅ JIT | ⚠️ Git-backed | ✅ Fresh agents | ❌ Database |
+
+**Setu's unique advantage**: The only system that **physically enforces** RPI workflow through hooks. Cannot be bypassed.
 
 ---
 
 ## Target Personas
 
-Setu serves different users differently:
-
-| Persona | What They Need | Setu Value |
-|---------|----------------|------------|
-| **Junior Dev** | Guidance without feeling blocked | "AI that thinks before acting" |
-| **Senior Dev** | Speed without sacrificing quality | "Enforcement without friction" |
-| **Tech Lead** | Predictable agent behavior | "Consistent agent behavior" |
-| **PM** | Features that ship working | "Features that actually work" |
-| **Startup Founder** | Fast iteration, no wasted cycles | "Stop burning tokens on wrong approaches" |
-| **AI Engineer** | Discipline layer for their tools | "Add discipline to your own tools" |
+| Persona | Pain Point | Setu Solution |
+|---------|------------|---------------|
+| **Junior Dev** | "AI does random stuff" | Enforced workflow prevents mistakes |
+| **Senior Dev** | "Spend time fixing AI" | Quality gate before completion |
+| **Tech Lead** | "Unpredictable behavior" | Consistent, auditable workflow |
+| **Startup Founder** | "Burn tokens on wrong approaches" | Research phase prevents waste |
+| **Solo Builder** | "AI loses context" | Persistence across sessions |
 
 ---
 
-## OpenCode Reference
+## Commands
 
-When working within OpenCode, these docs may be helpful:
+### Build
+```bash
+bun run build
+```
 
-| Topic | URL |
-|-------|-----|
-| Agents (Primary/Subagent) | https://opencode.ai/docs/agents |
-| Plugins (Hooks, Tools) | https://opencode.ai/docs/plugins |
-| Permissions (Ask/Allow/Deny) | https://opencode.ai/docs/permissions |
-| Skills (SKILL.md format) | https://opencode.ai/docs/skills |
-| Rules (AGENTS.md) | https://opencode.ai/docs/rules |
+### Development
+```bash
+bun run dev  # Watch mode
+```
 
-### Key OpenCode Concepts
+### Quality
+```bash
+bun run lint       # Linting
+bun run typecheck  # Type checking
+```
 
-- **Tab** cycles between primary agents (Plan, Build, Setu)
-- **@mention** invokes subagents
-- **Permissions** can be `ask`, `allow`, or `deny` per tool/pattern
-- **Skills** are loaded on-demand via the `skill` tool
-- **Plugins** can hook into `tool.execute.before`, `session.compacting`, etc.
+### Testing
+```bash
+cd tests
+opencode  # Load plugin from dist/
+```
+
+---
+
+## Contributing
+
+### Code Style
+- `camelCase` for variables/functions
+- `PascalCase` for types/interfaces
+- Explicit return types on exports
+- Prefer `const` over `let`
+
+### Commit Messages
+```text
+type(scope): summary
+
+Context in 1-2 sentences.
+Key detail if non-obvious.
+```
+
+**Types**: `feat:`, `fix:`, `docs:`, `refactor:`
+
+---
+
+## Resources
+
+- **Architecture**: docs/internal/ARCHITECTURE.md
+- **Research**: docs/internal/RESEARCH.md
+- **Simplification Plan**: docs/internal/SIMPLIFY.md
+- **OpenCode Docs**: https://opencode.ai/docs
+
+---
+
+## License
+
+Apache 2.0 - See LICENSE file

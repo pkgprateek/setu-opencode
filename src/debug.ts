@@ -5,7 +5,6 @@
  * 
  * Configuration:
  * 1. SETU_DEBUG env var (true/false)
- * 2. Future: setu.json config file (v1.1)
  * 
  * When debug is enabled:
  * - Logs to console with [Setu] prefix
@@ -52,7 +51,6 @@ export function setProjectDir(dir: string): void {
  * 
  * Debug mode is enabled when:
  * - SETU_DEBUG=true or SETU_DEBUG=1 (env var)
- * - Future: setu.json has debug: true (v1.1)
  */
 export function isDebugMode(): boolean {
   // Check env var (only method for now)

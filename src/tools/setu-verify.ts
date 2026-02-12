@@ -6,7 +6,6 @@
  */
 
 import { tool } from "@opencode-ai/plugin";
-import { getStyleVerificationLevel, type SetuStyle } from "../prompts/styles";
 import { detectProjectInfo } from "../context/storage";
 import { logVerification } from "../context/storage";
 import { writeStepResult } from "../context/results";
@@ -151,22 +150,18 @@ function generateVerificationSteps(buildTool: string): VerificationStep[] {
 /**
  * Creates the setu_verify tool definition
  *
- * @param getStyleState - Accessor for current style state
  * @param markVerificationComplete - Callback to mark verification complete
  * @param getProjectDir - Accessor for project directory (for build tool detection)
  */
 export function createSetuVerifyTool(
-  getStyleState: () => { current: SetuStyle },
   markVerificationComplete: () => void,
   getProjectDir?: () => string,
 ): ReturnType<typeof tool> {
   return tool({
     description: `Run Setu's verification protocol before completing a task.
-Checks build, tests, lint based on current style.
+Checks build, tests, lint using Setu's default verification flow.
 Automatically detects project build tool (npm/yarn/pnpm/bun for JS/TS, cargo for Rust, go for Go, uv/pip for Python).
-- Ultrathink: Full verification (all steps)
-- Quick: Minimal (build only if risky)
-- Collab: Discuss what to verify`,
+- Runs required verification checks by default`,
 
     args: {
       steps: tool.schema
@@ -182,9 +177,6 @@ Automatically detects project build tool (npm/yarn/pnpm/bun for JS/TS, cargo for
     },
 
     async execute(args, context): Promise<string> {
-      const style = getStyleState().current;
-      const verificationLevel = getStyleVerificationLevel(style);
-
       // Detect project build tool
       const projectDir = getProjectDir ? getProjectDir() : process.cwd();
       const projectInfo = detectProjectInfo(projectDir);
@@ -214,17 +206,7 @@ Automatically detects project build tool (npm/yarn/pnpm/bun for JS/TS, cargo for
 
       let stepsToRun: VerificationStep[];
 
-      switch (verificationLevel) {
-        case "full":
-          stepsToRun = allSteps.filter((s) => s.required);
-          break;
-        case "minimal":
-          stepsToRun = allSteps.filter((s) => s.name === "build");
-          break;
-        case "discuss":
-          stepsToRun = [];
-          break;
-      }
+      stepsToRun = allSteps.filter((s) => s.required);
 
       // Apply filters with validated input
       if (validatedSteps?.length) {
@@ -242,7 +224,7 @@ Automatically detects project build tool (npm/yarn/pnpm/bun for JS/TS, cargo for
       }
 
       // Execute verification steps when possible
-      // Runtime type guard for exec function (PLAN.md security fix)
+      // Runtime type guard for exec function (ensures type safety)
       type ExecResult = { stdout?: string; stderr?: string; exitCode?: number };
       type ExecFn = (command: string) => Promise<ExecResult>;
 
@@ -260,7 +242,7 @@ Automatically detects project build tool (npm/yarn/pnpm/bun for JS/TS, cargo for
           )
           .join("\n\n");
 
-        return `## Verification Protocol [Style: ${style}]
+        return `## Verification Protocol
 
 **Detected:** ${projectInfo.type || "unknown"} project using \`${buildTool}\`
 
@@ -368,7 +350,7 @@ ${stepsList}
             .map((r) => `- ${r.name}: ${r.success ? "PASS" : "FAIL"}`)
             .join("\n");
 
-          return `## Verification Results [Style: ${style}]
+          return `## Verification Results
 
 **Detected:** ${projectInfo.type || "unknown"} project using \`${buildTool}\`
 
@@ -382,7 +364,7 @@ Next: Step ${completedStep + 1}`;
             .map((r) => `- ${r.name}: ${r.success ? "PASS" : "FAIL"}`)
             .join("\n");
 
-          return `## Verification Results [Style: ${style}]
+          return `## Verification Results
 
 **Detected:** ${projectInfo.type || "unknown"} project using \`${buildTool}\`
 
@@ -394,16 +376,12 @@ ${summary}
       }
 
       if (results.length === 0) {
-        let guidance = "";
-        if (verificationLevel === "discuss") {
-          guidance = "Discuss with user what verification is needed.";
-        }
+        const guidance = "No automated steps were selected.";
 
-        return `## Verification [Style: ${style}]
+        return `## Verification
 
 **Detected:** ${projectInfo.type || "unknown"} project using \`${buildTool}\`
 
-Verification level: ${verificationLevel}
 ${guidance}`;
       }
 
@@ -411,7 +389,7 @@ ${guidance}`;
         .map((r) => `- ${r.name}: ${r.success ? "PASS" : "FAIL"}`)
         .join("\n");
 
-      return `## Verification Results [Style: ${style}]
+      return `## Verification Results
 
 **Detected:** ${projectInfo.type || "unknown"} project using \`${buildTool}\`
 

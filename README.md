@@ -29,135 +29,83 @@ AI coding agents are fast. But speed without discipline creates problems:
 
 ## How It Works
 
+Setu enforces discipline through two layered mechanisms: **Phase 0** (initial context gate) and the **Gear System** (RPI workflow enforcement).
+
 ### Phase 0: Pre-emptive Context Gate
 
-**Why this matters:** The #1 cause of wasted work is wrong assumptions. If the agent doesn't understand your context, everything it builds is wrong.
+Before allowing any side-effect tools, Setu **blocks** execution until context is confirmed. The agent can read files and explore the codebase ("look but don't touch"), but cannot write, edit, or execute side-effect commands until it confirms understanding via `setu_context`.
 
-**What Setu does:** Before allowing any side-effect tools, Setu **blocks** execution until context is confirmed. The agent can read files and explore the codebase ("look but don't touch"), but cannot write, edit, or execute side-effect commands until it confirms understanding.
+### The Gear System: Research → Plan → Implement
 
-**The difference:**
-- Without Setu: Agent assumes JWT auth, builds it, you wanted OAuth
-- With Setu: Agent reads first, asks smart questions, builds correctly
+Once Phase 0 is satisfied, gears enforce the RPI workflow — blocking premature implementation:
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│                     Your Prompt                             │
-└─────────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│  PHASE 0: Context Gate                                      │
-│  → Agent can READ files (look but don't touch)              │
-│  → Agent CANNOT write files, execute side-effect commands, or modify code│
-│  → Explores codebase, forms understanding                   │
-│  → Confirms context with setu_context tool                  │
-└─────────────────────────────────────────────────────────────┘
-                           │
-                    (Context confirmed)
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Agent executes with correct understanding                  │
-└─────────────────────────────────────────────────────────────┘
+Session Start
+    │
+    ▼
+No RESEARCH.md? → SCOUT gear
+    │              • Read-only
+    │              • Research only
+    │              • Cannot write code
+    ▼
+Create RESEARCH.md
+    │
+    ▼
+RESEARCH.md exists, no PLAN.md? → ARCHITECT gear
+    │                                 • Can write to .setu/
+    │                                 • Can create PLAN.md
+    │                                 • Cannot touch source code
+    ▼
+Create PLAN.md
+    │
+    ▼
+PLAN.md exists → BUILDER gear
+                   • Full access
+                   • Verify before "done"
 ```
 
-### Styles (Operational Presets): Match Rigor to Risk
+| Gear | Can Read | Can Write .setu/ | Can Write src/ | How to Advance |
+|------|----------|------------------|----------------|----------------|
+| **Scout** | All | RESEARCH.md only (via `setu_research`) | No | `setu_research` |
+| **Architect** | All | Any file | No | `setu_plan` |
+| **Builder** | All | Any | Yes | N/A (final) |
 
-**Why this matters:** Not every task needs the same level of verification. A typo fix doesn't need full test runs. A new feature does.
+**Why this beats prompts:** Gears are enforced via OpenCode hooks — they physically block tool execution. Unlike `AGENTS.md` instructions that the AI can ignore, hooks cannot be bypassed.
 
-**What Setu does:** Three styles that match verification level to task risk.
+### Discipline Guards
 
-| Style | When to Use | What Happens |
-| ------- | ------------- | -------------- |
-| **Ultrathink** | Features, refactoring | Deep analysis, full verification (default) |
-| **Quick** | Typos, comments | Skip ceremony, just do it |
-| **Collab** | Architecture decisions | Discuss before implementing, trust user |
+Three independent safety mechanisms that can activate in any gear:
 
-**Switch styles** by mentioning them in your message:
-```text
-:ultrathink implement the auth system
-:quick fix the typo in line 42
-:collab let's design the API together
-```
-
-**Aliases:** `:trust` and `:x` now map to collab for backward compatibility.
-
-The system prompt shows the current style so you always know what level of rigor is active.
+| Guard | Trigger | Blocks Until |
+|-------|---------|-------------|
+| **Question blocking** | Research has open questions, or plan needs approval | User answers via `question` tool |
+| **Safety blocking** | Destructive/irreversible action detected | User confirms the action |
+| **Overwrite protection** | File write without prior read | Agent reads the file first |
 
 ### Verification Before "Done"
 
-**Why this matters:** "Done" should mean "verified working," not "I think it's done."
-
-**What Setu does:** In **Ultrathink** style (default), before claiming completion:
+Before claiming completion:
 
 1. **Build** — Runs build, checks exit code, captures only errors
 2. **Tests** — Runs test suite, captures only failures
 3. **Lint** — Checks for errors/warnings
 4. **Visual** — Asks you to verify UI (when applicable)
 
-**The difference:**
-- Without Setu: "Done!" → You run tests → They fail → 10 more minutes of back-and-forth
-- With Setu: Agent runs tests first → Fixes failures → "Done" means done
-
 ### Attempt Limits: Prevent Infinite Loops
 
-**Why this matters:** When an agent is on the wrong track, retrying the same approach wastes tokens and time.
+After 3 failed attempts at the same problem (configurable):
 
-**What Setu does:** After 2 failed attempts at the same problem:
+> "I've tried X, Y, and Z without success. Would you like me to shift gears and update RESEARCH.md or PLAN.md with what I've learned, or do you have specific guidance?"
 
-> "I've tried X and Y. Would you like me to try Z, or do you have guidance?"
+### Three Modes, One Purpose Each
 
-**The difference:**
-- Without Setu: Agent retries broken import 15 times (it was a config issue)
-- With Setu: After 2 tries, agent asks "Could this be a config issue?"
+| Mode | How to Access | Purpose | Enforcement |
+|------|---------------|---------|-------------|
+| **Setu** | Press Tab | Disciplined RPI workflow | Full (Phase 0, gears, verification, safety) |
+| **Plan** | Press Tab | Free exploration | None (research mode) |
+| **Build** | Press Tab | Quick execution | Minimal (safety only) |
 
-### Parallel Execution: Fast Context Gathering
-
-**Why this matters:** Serial file reads waste time. Reading files one-by-one when they could be read in parallel is inefficient.
-
-**What Setu does:** Intelligently batches read-only operations for maximum efficiency. When the agent needs to gather context, Setu guides it to execute independent reads in parallel rather than sequentially.
-
-```text
-Without Setu                          With Setu
-─────────────────────────────────     ─────────────────────────────────
-read(A) ─────┐                        read(A) ─┬─ read(B) ─┬─ glob(C)
-             │ wait                            │           │
-read(B) ─────┤                        ─────────┴───────────┴─────────▶
-             │ wait                            (one round trip)
-glob(C) ─────┘
-             ▼
-   (three round trips)
-```
-
-**The difference:**
-- Without Setu: 6 sequential file reads → 6 round trips → slow
-- With Setu: 6 parallel file reads → 1 round trip → fast
-
-**Security note:** Parallel execution only applies to read-only tools (`read`, `glob`, `grep`, `webfetch`, `todoread`). Side-effect tools are never parallelized — safety takes precedence over speed.
-
-### Compaction Safety: Survive Memory Loss
-
-**Why this matters:** Long sessions get compressed by OpenCode (compaction). Without protection, the agent forgets constraints and "goes rogue" — executing unrelated actions.
-
-**What Setu does:**
-1. **Active Task Tracking** — Every task is saved to `.setu/active.json` with constraints
-2. **Compaction Hook** — When OpenCode compacts, Setu injects the active task into the summary
-3. **Constraint Enforcement** — Constraints like `READ_ONLY`, `NO_PUSH` block inappropriate tools
-
-**Supported Constraints:**
-
-| Constraint | Effect |
-| ---------- | ------ |
-| `READ_ONLY` | Blocks write/edit tools |
-| `NO_PUSH` | Blocks git push |
-| `NO_DELETE` | Blocks rm, git reset --hard |
-| `SANDBOX` | Blocks operations outside project |
-
-> **Security Notice:** Task constraints are enforced via static command analysis and can be bypassed by shell metacharacters, variable expansion, or eval. They are a defense-in-depth layer, not a security boundary. OpenCode's permission system (`bash: "*": ask`) is the real security gate. Do not rely on constraints alone for critical security requirements.
-
-**The difference:**
-- Without Setu: Session compacts → Agent forgets it was in "review only" mode → Pushes changes
-- With Setu: Session compacts → Constraints survive → Agent still respects "no push"
+**Key insight**: Setu doesn't compete with Plan/Build — it complements them. Use Build for quick fixes, Plan for exploration, Setu for substantial work.
 
 ---
 
@@ -174,7 +122,7 @@ Add to your `opencode.json`:
 
 OpenCode automatically installs the plugin on next startup.
 
-**First run:** Restart OpenCode once after adding the plugin. Setu will appear in the Tab cycle on second launch. (This is a known limitation being addressed in v1.2.)
+**First run:** Restart OpenCode once after adding the plugin. Setu will appear in the Tab cycle on second launch. (Known limitation.)
 
 ---
 
@@ -189,10 +137,11 @@ Setu is a discipline layer, not a replacement for your tools.
 ```
 
 Setu hooks into OpenCode's plugin system:
-- `experimental.chat.system.transform` — Injects Setu persona
-- `tool.execute.before` — Phase 0 blocking
+- `experimental.chat.system.transform` — Injects Setu persona + gear state
+- `tool.execute.before` — Phase 0 context gate + gear enforcement + discipline guards
 - `tool.execute.after` — Verification tracking, context collection
 - `event` — Session lifecycle, context loading
+- `experimental.session.compacting` — Preserves active task across compaction
 
 Your MCPs, tools, and workflows work unchanged. Setu wraps them with discipline.
 
@@ -219,11 +168,9 @@ Discipline shouldn't cost you your token budget.
 
 | State | Token Cost |
 |-------|------------|
-| Session start | ~400 tokens (v2.5.0) |
+| Session start | ~400 tokens |
 | + 1 skill loaded | +300-600 |
 | All skills loaded | ~1,100 total |
-
-**v2.5.0 Optimization:** 64% reduction in persona overhead (from ~1,100 to ~400 tokens per message).
 
 Setu's persona is lean. Skills load on-demand, not upfront.
 
@@ -234,17 +181,22 @@ Setu's persona is lean. Skills load on-demand, not upfront.
 | Tool | Purpose |
 | ------ | --------- |
 | `setu_context` | Confirm context understanding, unlocks Phase 0 |
-| `setu_verify` | Run verification protocol (build/test/lint) |
+| `setu_task` | Create/update/clear active tasks with constraint enforcement and artifact archiving |
+| `setu_research` | Save research findings to RESEARCH.md, advance gear (Scout → Architect) |
+| `setu_plan` | Create implementation plan in PLAN.md, advance gear (Architect → Builder) |
+| `setu_verify` | Run verification protocol (build/test/lint/typecheck) |
+| `setu_doctor` | Environment health checks (git, deps, runtime, port conflicts) |
+| `setu_reset` | Reset step progress counter |
 | `setu_feedback` | Record feedback on Setu behavior |
 
 ### Hooks Used
 
 | Hook | Purpose |
 | ------ | --------- |
-| `experimental.chat.system.transform` | Inject Setu persona |
-| `tool.execute.before` | Phase 0 blocking, constraint enforcement |
+| `experimental.chat.system.transform` | Inject Setu persona + gear-based workflow guidance |
+| `tool.execute.before` | Phase 0 context gate, gear enforcement, discipline guards, constraint enforcement |
 | `tool.execute.after` | Verification tracking, context collection |
-| `event` | Session lifecycle, context loading |
+| `event` | Session lifecycle, context loading, Silent Exploration |
 | `experimental.session.compacting` | Inject active task into compaction summary |
 
 ---
@@ -254,7 +206,7 @@ Setu's persona is lean. Skills load on-demand, not upfront.
 | Skill | Purpose |
 | ------- | --------- |
 | `setu-bootstrap` | Project setup that follows the discipline protocol |
-| `setu-verification` | Style-specific verification steps |
+| `setu-verification` | Verification and release checks |
 | `setu-rules-creation` | Create effective AGENTS.md files |
 
 Skills load when relevant, not at startup.
@@ -266,18 +218,19 @@ Skills load when relevant, not at startup.
 Setu is named after the bridge in mythology — built not by force, but by discipline, cooperation, and engineering.
 
 **Core principles:**
-1. **Think before acting** — Phase 0 prevents wrong assumptions
+1. **Think before acting** — Phase 0 + Scout gear prevent wrong assumptions
 2. **Verify before claiming** — Tests prove correctness
 3. **Ask before spinning** — Attempt limits prevent waste
-4. **Adapt to context** — Styles match rigor to risk
+4. **Adapt to context** — Gears enforce workflow automatically
 
 ---
 
 ## Roadmap
 
-See [ROADMAP.md](./ROADMAP.md) for the path to v1.0.
+See [ROADMAP.md](./ROADMAP.md) for the version plan.
 
-**Coming in v1.1:** Visual verification via [agent-browser](https://github.com/vercel-labs/agent-browser) — Setu will finally be able to *see* what it builds.
+**Current:** v1.2.0 (Track A complete — gear-only core with discipline guards).
+**Next:** v1.3.0 (Track B — flexible task model, parallel orchestration, JIT optimization).
 
 ---
 
