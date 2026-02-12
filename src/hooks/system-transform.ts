@@ -201,8 +201,8 @@ export function createSystemTransformHook(
       if (overwriteRequirement?.pending) {
         // Sanitize filePath before interpolation: strip control chars and newlines
         const safePath = (overwriteRequirement.filePath ?? '')
-          .replace(/[\x00-\x1f\x7f]/g, '')
-          .replace(/\n/g, ' ');
+          .replace(/\n/g, ' ')
+          .replace(/[\x00-\x09\x0b-\x1f\x7f]/g, '');
         output.system.unshift(
           `[SETU: Overwrite Guard]\n` +
             `Pending requirement: read '${safePath}' before any mutation.\n\n` +

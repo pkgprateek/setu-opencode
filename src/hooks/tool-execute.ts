@@ -129,6 +129,8 @@ const PACKAGE_MANIFEST_PATTERNS = [
   /\.git\/hooks\//,
 ] as const;
 
+const MAX_STRINGIFY_DEPTH = 20;
+
 function normalizeForComparison(projectDir: string, filePath: string): string {
   const resolvedPath = isAbsolute(filePath)
     ? resolve(filePath)
@@ -148,18 +150,22 @@ function hasReadTargetFile(collector: ContextCollector | null, projectDir: strin
   });
 }
 
-function stableStringify(value: unknown): string {
+function stableStringify(value: unknown, depth = 0): string {
+  if (depth > MAX_STRINGIFY_DEPTH) {
+    return JSON.stringify('[MaxDepth]');
+  }
+
   if (value === null || typeof value !== 'object') {
     return JSON.stringify(value);
   }
 
   if (Array.isArray(value)) {
-    return `[${value.map((item) => stableStringify(item)).join(',')}]`;
+    return `[${value.map((item) => stableStringify(item, depth + 1)).join(',')}]`;
   }
 
   const entries = Object.entries(value as Record<string, unknown>)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, val]) => `${JSON.stringify(key)}:${stableStringify(val)}`);
+    .map(([key, val]) => `${JSON.stringify(key)}:${stableStringify(val, depth + 1)}`);
   return `{${entries.join(',')}}`;
 }
 
@@ -193,6 +199,30 @@ function getQuestionDecision(output: { title: string; output: string; metadata: 
   }
 
   return 'unknown';
+}
+
+function isQuestionRelatedToPending(
+  output: { title: string; output: string; metadata: unknown },
+  pending: { actionFingerprint: string; reasons: string[] }
+): boolean {
+  const content = `${output.title}\n${output.output}\n${stringifyUnknown(output.metadata)}`.toLowerCase();
+
+  if (
+    content.includes('proceed - i understand the risk') ||
+    content.includes('cancel - use a safer alternative')
+  ) {
+    return true;
+  }
+
+  const fingerprint = pending.actionFingerprint.toLowerCase();
+  if (fingerprint && content.includes(fingerprint)) {
+    return true;
+  }
+
+  return pending.reasons.some((reason) => {
+    const normalized = reason.toLowerCase().trim();
+    return normalized.length >= 8 && content.includes(normalized);
+  });
 }
 
 /**
@@ -262,9 +292,20 @@ export function createToolExecuteBeforeHook(
       );
     }
 
-    if (getPhase0State && !getPhase0State().contextConfirmed) {
+    const phase0State = getPhase0State?.();
+    if (!phase0State?.contextConfirmed) {
+      if (!getPhase0State) {
+        debugLog('Phase 0 accessor missing - defaulting to unconfirmed context');
+      }
+
       const phase0Result = shouldBlockInPhase0(input.tool, output.args);
       if (phase0Result.blocked) {
+        logSecurityEvent(
+          projectDir,
+          SecurityEventType.PHASE0_BLOCKED,
+          `Blocked ${input.tool} during Phase 0 (${phase0Result.reason ?? 'unknown'})`,
+          { sessionId: input.sessionID, tool: input.tool }
+        );
         throw new Error(createPhase0BlockMessage(phase0Result.reason, phase0Result.details));
       }
     }
@@ -652,16 +693,19 @@ export function createToolExecuteAfterHook(
 
       const pendingSafety = getPendingSafetyConfirmation(input.sessionID);
       if (pendingSafety) {
-        const decision = getQuestionDecision(output);
-        if (decision === 'approved') {
-          approvePendingSafetyConfirmation(input.sessionID, pendingSafety.actionFingerprint);
-          debugLog('Safety confirmation approved by user');
-        } else if (decision === 'denied') {
-          denyPendingSafetyConfirmation(input.sessionID, pendingSafety.actionFingerprint);
-          debugLog('Safety confirmation denied by user');
+        if (isQuestionRelatedToPending(output, pendingSafety)) {
+          const decision = getQuestionDecision(output);
+          if (decision === 'approved') {
+            approvePendingSafetyConfirmation(input.sessionID, pendingSafety.actionFingerprint);
+            debugLog('Safety confirmation approved by user');
+          } else if (decision === 'denied') {
+            denyPendingSafetyConfirmation(input.sessionID, pendingSafety.actionFingerprint);
+            debugLog('Safety confirmation denied by user');
+          } else {
+            debugLog('Safety confirmation unresolved; keeping pending state');
+          }
         } else {
-          denyPendingSafetyConfirmation(input.sessionID, pendingSafety.actionFingerprint);
-          debugLog('Safety confirmation unresolved; defaulting to denied');
+          debugLog('Question response unrelated to pending safety confirmation; keeping pending state');
         }
       }
 

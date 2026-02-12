@@ -104,12 +104,25 @@ export function setPendingSafetyConfirmation(
   sessionID: string,
   payload: { actionFingerprint: string; reasons: string[] }
 ): void {
+  const fingerprint = payload.actionFingerprint?.trim();
+  if (!fingerprint) {
+    throw new Error('actionFingerprint is required for safety confirmation');
+  }
+
+  const reasons = payload.reasons
+    .map((reason) => reason.trim())
+    .filter((reason) => reason.length > 0);
+
+  if (reasons.length === 0) {
+    throw new Error('reasons must include at least one non-empty entry');
+  }
+
   const state = getDisciplineState(sessionID);
   sessionStates.set(sessionID, {
     ...state,
     pendingSafetyConfirmation: {
-      actionFingerprint: payload.actionFingerprint,
-      reasons: payload.reasons,
+      actionFingerprint: fingerprint,
+      reasons,
       status: 'pending',
       updatedAt: Date.now(),
     },
@@ -125,9 +138,8 @@ export function getPendingSafetyConfirmation(sessionID: string): PendingSafetyCo
   }
 
   if (isStale(pending.updatedAt, STATE_TTL_MS)) {
-    const nextState = getDisciplineState(sessionID);
     sessionStates.set(sessionID, {
-      ...nextState,
+      ...state,
       pendingSafetyConfirmation: undefined,
       updatedAt: Date.now(),
     });
@@ -141,6 +153,9 @@ export function approvePendingSafetyConfirmation(sessionID: string, actionFinger
   const state = getDisciplineState(sessionID);
   const pending = state.pendingSafetyConfirmation;
   if (!pending || pending.actionFingerprint !== actionFingerprint) {
+    console.warn(
+      `[setu] safety_confirmation_fingerprint_mismatch (approve) session=${sessionID} expected=${pending?.actionFingerprint ?? 'none'} got=${actionFingerprint}`
+    );
     return;
   }
 
@@ -159,6 +174,9 @@ export function denyPendingSafetyConfirmation(sessionID: string, actionFingerpri
   const state = getDisciplineState(sessionID);
   const pending = state.pendingSafetyConfirmation;
   if (!pending || pending.actionFingerprint !== actionFingerprint) {
+    console.warn(
+      `[setu] safety_confirmation_fingerprint_mismatch (deny) session=${sessionID} expected=${pending?.actionFingerprint ?? 'none'} got=${actionFingerprint}`
+    );
     return;
   }
 

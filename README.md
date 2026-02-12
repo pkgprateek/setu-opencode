@@ -1,7 +1,7 @@
 # Setu OpenCode
 
-> **Your AI agent, but it actually remembers what you told it.**
-> **Pre-emptive discipline for AI coding.**
+> **Pre-emptive discipline for AI coding in OpenCode.**
+> **Think first. Verify always. Ship with evidence.**
 > Other tools fix mistakes after they happen. Setu prevents them before they start.
 
 Setu bridges the gap between "AI that codes fast" and "AI that codes correctly."
@@ -11,7 +11,7 @@ Setu bridges the gap between "AI that codes fast" and "AI that codes correctly."
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=for-the-badge)](LICENSE)
 [![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-f27435.svg?style=for-the-badge)](https://opencode.ai)
 
-**Setu** (Sanskrit: सेतु, "bridge") transforms OpenCode from an overeager junior dev into a senior engineer who thinks before typing.
+**Setu** (Sanskrit: सेतु, "bridge") is a discipline layer that helps agents read before they write.
 
 ---
 
@@ -51,7 +51,7 @@ Setu bridges the gap between "AI that codes fast" and "AI that codes correctly."
 
 Setu doesn't ask your agent to "be more careful." It creates a workflow where carefulness is the default.
 
-![Setu Workflow Diagram](assets/setu-workflow.svg)
+![Setu Architecture](assets/setu-architecture.svg)
 
 ### How It Works (No Willpower Required)
 
@@ -79,10 +79,10 @@ Agent creates PLAN.md with implementation steps. **Still cannot touch your sourc
 
 **🔨 Builder: Execute With Confidence**
 
-Now (and only now) does it implement. With verification at every step.
+Now (and only now) does it implement. Verification runs at the end, and you can run `setu_verify` after major steps.
 
 - Implements the approved approach
-- Runs verification at each step
+- Runs verification before completion
 - Ships only when everything passes
 
 *Build fails? Won't claim "done." Tests fail? Won't claim "done."*
@@ -159,17 +159,59 @@ Restart OpenCode. Press **Tab** until you see "Setu." Done.
 
 **Note:** First run requires one restart. Setu appears in Tab cycle on second launch.
 
+### 30-Second Proof (Run This)
+
+```text
+You: Update auth middleware to support JWT rotation
+Agent: [Scout gear] I need to read existing auth files first.
+Agent tries edit first -> blocked
+
+Agent: [Reads src/auth/* and related middleware]
+Agent: setu_research(...) -> writes .setu/RESEARCH.md
+Agent: setu_plan(...) -> writes .setu/PLAN.md
+
+You: approve
+Agent: implements changes
+Agent: setu_verify(...) -> build/test/lint evidence
+```
+
+If this flow is not enforced, Setu is not configured correctly.
+
 ---
 
-## Three Modes, Your Choice
+## Four Breakthroughs
 
-| Mode | When | What Happens |
-|------|------|--------------|
-| **Setu** (default) | Features, refactoring, anything important | Full workflow: Scout → Architect → Builder |
-| **Plan** | Exploration, learning the codebase | Free research, no structure |
-| **Build** | Quick fixes, typos, comments | Fast execution, minimal checks |
+### 1) Gearbox Workflow (Automatic Discipline)
 
-**Press Tab to switch.** Discipline when you need it. Speed when you don't.
+Setu shifts through Scout -> Architect -> Builder based on artifacts, not vibes.
+
+- Scout: research only, no source writes
+- Architect: plan only, no source writes
+- Builder: implement with verification before completion
+
+### 2) Hook Enforcement (Physics, Not Suggestions)
+
+Setu enforces behavior at the tool layer. It does not rely on prompt obedience.
+
+- `tool.execute.before` blocks unsafe or out-of-phase actions
+- `tool.execute.after` records verification and progress evidence
+- `system.transform` injects gear-aware guidance each turn
+
+### 3) Persistent Artifacts (No Re-Explaining)
+
+Setu persists task context into project artifacts so sessions can resume with continuity.
+
+- `.setu/RESEARCH.md` captures discovered truth
+- `.setu/PLAN.md` captures approved intent
+- `.setu/HISTORY.md` archives prior task artifacts
+
+### 4) Verification Gate (No Blind "Done")
+
+Completion is coupled to evidence, not confidence.
+
+- `setu_verify` validates build/test/lint before claiming completion
+- risky operations require explicit confirmation
+- read-before-write protection reduces accidental file damage
 
 ---
 
@@ -245,9 +287,8 @@ Skills load on-demand, not at startup.
 
 ## Technical Details
 
-**Token cost:** ~400 tokens at startup. Skills load on-demand.
-
-**Current version:** 1.2.1
+- Skills load on-demand rather than front-loading context.
+- Version is tracked by the npm badge at the top of this README.
 
 **See:** [ROADMAP.md](./ROADMAP.md) for upcoming features
 

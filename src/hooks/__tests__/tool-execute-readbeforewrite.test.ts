@@ -94,4 +94,67 @@ describe('tool-execute read-before-write guards', () => {
       )
     ).rejects.toThrow('File does not exist');
   });
+
+  test('blocks path traversal attempts', async () => {
+    const collector = {
+      getContext: () => ({ filesRead: [] }),
+    } as unknown as ContextCollector;
+
+    const hook = createToolExecuteBeforeHook(
+      () => 'setu',
+      () => collector,
+      () => projectDir,
+      undefined,
+      () => ({ contextConfirmed: true, sessionId: sessionID, startedAt: Date.now() })
+    );
+
+    await expect(
+      hook(
+        { tool: 'edit', sessionID, callID: 'edit-traversal' },
+        { args: { filePath: '../../../etc/passwd', oldString: '', newString: 'pwned' } }
+      )
+    ).rejects.toThrow('Path Security');
+  });
+
+  test('blocks absolute path outside project', async () => {
+    const collector = {
+      getContext: () => ({ filesRead: [] }),
+    } as unknown as ContextCollector;
+
+    const hook = createToolExecuteBeforeHook(
+      () => 'setu',
+      () => collector,
+      () => projectDir,
+      undefined,
+      () => ({ contextConfirmed: true, sessionId: sessionID, startedAt: Date.now() })
+    );
+
+    await expect(
+      hook(
+        { tool: 'edit', sessionID, callID: 'edit-abs' },
+        { args: { filePath: '/etc/passwd', oldString: '', newString: 'pwned' } }
+      )
+    ).rejects.toThrow('Path Security');
+  });
+
+  test('blocks null byte injection in file path', async () => {
+    const collector = {
+      getContext: () => ({ filesRead: [] }),
+    } as unknown as ContextCollector;
+
+    const hook = createToolExecuteBeforeHook(
+      () => 'setu',
+      () => collector,
+      () => projectDir,
+      undefined,
+      () => ({ contextConfirmed: true, sessionId: sessionID, startedAt: Date.now() })
+    );
+
+    await expect(
+      hook(
+        { tool: 'edit', sessionID, callID: 'edit-nullbyte' },
+        { args: { filePath: 'hello.txt\x00.sh', oldString: '', newString: 'pwned' } }
+      )
+    ).rejects.toThrow();
+  });
 });
