@@ -1,6 +1,6 @@
 import { getStringProp } from '../utils';
 
-export type HardSafetyAction = 'ask' | 'block';
+export type HardSafetyAction = 'allow' | 'ask' | 'block';
 
 /**
  * Structured category for safety classification.
@@ -32,7 +32,7 @@ export interface SafetyDecision {
 const DESTRUCTIVE_BASH_PATTERNS: RegExp[] = [
   // Covers: rm with dangerous flags anywhere on line, including escaped/prefixed invocations
   // Bounded to prevent ReDoS on adversarial input
-  /(?:\\?rm|command\s+rm)\b[^\n]{0,500}(?:-\w*[rf]|--recursive|--force|--no-preserve-root)/i,
+  /(?:^|[\s;|&])(?:\\?rm|command\s+rm)\b[^\n]{0,500}(?:-\w*[rf]|--recursive|--force|--no-preserve-root)/i,
   /\bgit\s+reset\s+--hard\b/i,
   /\bgit\s+clean\b[^\n]*\s-(?:[^\n]*f|[^\n]*d|[^\n]*x)/i,
   /\bmkfs\b/i,
@@ -48,6 +48,10 @@ const FILE_MUTATION_BASH_PATTERNS: RegExp[] = [
   /\btouch\b\s+[^\n]+/i,
   /(^|\s)(?:>|>>)\s*[^\s]+/i,
   /\btruncate\b\s+[^\n]+/i,
+  /\b(?:sed)\b\s+[-\w\s]*-i\b/i,
+  /\|\s*tee\b/i,
+  /\bmv\b\s+[^\n]+/i,
+  /\b(?:chmod|chown)\b\s+[^\n]+/i,
 ];
 
 const PRODUCTION_BASH_PATTERNS: RegExp[] = [
@@ -65,6 +69,13 @@ const SENSITIVE_PATH_PATTERNS: RegExp[] = [
   /(^|\/).*\.(pem|key|p12|pfx)$/i,
   /(^|\/)(id_rsa|id_ed25519)$/i,
   /(^|\/)(credentials|secrets?)\.(json|ya?ml|env)$/i,
+  /(^|\/)\.npmrc$/i,
+  /(^|\/)\.netrc$/i,
+  /(^|\/)\.pgpass$/i,
+  /(^|\/)known_hosts$/i,
+  /(^|\/)authorized_keys$/i,
+  /(^|\/)\.aws\/credentials$/i,
+  /(^|\/)\.docker\/config\.json$/i,
 ];
 
 export function classifyHardSafety(tool: string, args: Record<string, unknown>): SafetyDecision {
@@ -93,6 +104,27 @@ export function classifyHardSafety(tool: string, args: Record<string, unknown>):
         break;
       }
     }
+
+    // Extract and check file path tokens from command
+    const tokens = command.split(/\s+/);
+    for (const token of tokens) {
+      // Check for path-like tokens
+      if (
+        token.startsWith('/') ||
+        token.startsWith('./') ||
+        token.startsWith('../') ||
+        token.startsWith('~') ||
+        /\.(env|pem|key|p12|pfx|json|ya?ml)$/i.test(token) ||
+        token.startsWith('@')
+      ) {
+        for (const pattern of SENSITIVE_PATH_PATTERNS) {
+          if (pattern.test(token)) {
+            matched.push({ category: 'sensitive', message: 'Access to sensitive path via shell detected' });
+            break;
+          }
+        }
+      }
+    }
   }
 
   if (tool === 'write' || tool === 'edit') {
@@ -106,7 +138,7 @@ export function classifyHardSafety(tool: string, args: Record<string, unknown>):
   }
 
   if (matched.length === 0) {
-    return { hardSafety: false, action: 'ask', reasons: [] };
+    return { hardSafety: false, action: 'allow', reasons: [] };
   }
 
   // Derive action from structured category, not display text

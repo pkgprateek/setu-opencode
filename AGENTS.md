@@ -39,7 +39,7 @@ This prevents "AI slop" - code that looks right but is wrong.
 
 Gears shift **automatically** based on artifact existence:
 
-```
+```text
 Session Start
     │
     ▼
@@ -153,24 +153,26 @@ Research with multiple subagents working in parallel.
 
 ```typescript
 setu_research({
-  task: string,           // What to research
-  focus?: string[],       // Specific areas: ['security', 'patterns', 'testing']
-  openQuestions?: string[] // Unresolved questions requiring user input
+  summary: string,        // What to research (required)
+  constraints?: string,   // Any constraints to consider
+  patterns?: string,      // Patterns to look for
+  learnings?: string,     // Existing learnings to build upon
+  openQuestions?: string  // Unresolved questions requiring user input (triggers question blocking)
 });
 ```
 
 **What happens**:
-1. Spawns 3 parallel subagents
-2. Each researches different aspect
-3. Results merged into RESEARCH.md
-4. If openQuestions provided, triggers question blocking (user must answer)
-5. Gear advances: Scout → Architect
+1. Creates a single RESEARCH.md file
+2. If openQuestions is provided, triggers question blocking (user must answer before proceeding)
+3. Gear advances: Scout → Architect
 
 **Example**:
 ```typescript
 setu_research({
-  task: 'Implement authentication system',
-  focus: ['security', 'patterns']
+  summary: 'Implement authentication system',
+  constraints: 'Must use existing JWT middleware',
+  patterns: 'Look for auth patterns in src/auth/',
+  openQuestions: 'Should we support refresh tokens?'
 });
 
 // Result: RESEARCH.md created, now in Architect gear
@@ -266,7 +268,7 @@ setu_doctor({ verbose: true });
 ### Typical Workflow
 
 **Starting a new feature**:
-```
+```text
 User: Implement dark mode toggle
 Setu: [Scout gear] Let me research the current theming approach...
 Setu: Reading src/theme/, src/components/...
@@ -349,7 +351,7 @@ read("package.json")
 
 ### Three Layers
 
-```
+```text
 ┌─────────────────────────────────────┐
 │  Layer 3: Tools (User Interface)    │
 │  - setu_context                     │
@@ -376,7 +378,7 @@ read("package.json")
 
 ### Key Files
 
-```
+```text
 src/
 ├── index.ts              # Plugin entry, hook registration
 ├── agent/
@@ -425,7 +427,7 @@ src/
 
 ### Context Files
 
-```
+```text
 .setu/
 ├── context.json          # Machine-parseable context
 ├── active.json           # Current task, constraints
@@ -526,7 +528,7 @@ opencode  # Load plugin from dist/
 - Prefer `const` over `let`
 
 ### Commit Messages
-```
+```text
 type(scope): summary
 
 Context in 1-2 sentences.

@@ -60,7 +60,7 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
       throw new Error(`Failed to save research: ${getErrorMessage(error)}. Check .setu/ directory permissions.`);
     }
     
-    if (sanitizedArgs.openQuestions && sanitizedArgs.openQuestions.trim().length > 0) {
+    if (sanitizedArgs.openQuestions) {
       if (context?.sessionID) {
         setQuestionBlocked(
           context.sessionID,
