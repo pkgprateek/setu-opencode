@@ -272,8 +272,7 @@ setu_doctor({ verbose: true });
 User: Implement dark mode toggle
 Setu: [Scout gear] Let me research the current theming approach...
 Setu: Reading src/theme/, src/components/...
-Setu: setu_research({ task: 'Implement dark mode toggle' })
-Setu: [Spawning 3 research subagents...]
+Setu: setu_research({ summary: 'Dark mode toggle: reviewed src/theme/ and src/components/...' })
 Setu: Created RESEARCH.md. Advanced to Architect gear.
 Setu: [Architect gear] Creating implementation plan...
 Setu: setu_plan({ objective: 'Implement dark mode toggle', steps: '## Step 1: ...', successCriteria: '...' })

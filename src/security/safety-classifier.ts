@@ -176,13 +176,15 @@ export function classifyHardSafety(tool: string, args: Record<string, unknown>):
     // Shell-aware tokenization: handles quotes and basic escaping
     const tokens = tokenizeShell(command);
     outer: for (const token of tokens) {
-      // Check for path-like tokens
+      // Check for path-like tokens or dot-prefixed files (e.g., .npmrc, .netrc)
       if (
         token.startsWith('/') ||
         token.startsWith('./') ||
         token.startsWith('../') ||
         token.startsWith('~') ||
-        /\.(env|pem|key|p12|pfx|json|ya?ml)$/i.test(token)
+        token.startsWith('.') ||
+        /\.(env|pem|key|p12|pfx|json|ya?ml)$/i.test(token) ||
+        /^(authorized_keys|known_hosts|credentials|secrets?)$/i.test(token)
       ) {
         for (const pattern of SENSITIVE_PATH_PATTERNS) {
           if (pattern.test(token)) {

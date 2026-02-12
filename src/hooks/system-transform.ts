@@ -104,6 +104,8 @@ export function createSystemTransformHook(
       return;
     }
     
+    // isDefault was used for style-based branching; now always true since styles were removed
+    // Keeping parameter for backward compatibility with getStateInjection signature
     const isDefault = true;
     
     // Get file availability for context injection
@@ -147,9 +149,10 @@ export function createSystemTransformHook(
       }
     }
     
-    // Add verification reminder when needed
+    // Add verification reminder when needed (only in builder gear — verification is irrelevant in scout/architect)
     const verificationState = getVerificationState();
-    if (!verificationState.complete) {
+    const currentGear = getProjectDir ? determineGear(getProjectDir()).current : 'scout';
+    if (!verificationState.complete && currentGear === 'builder') {
       const stepsNeeded = ['build', 'test', 'lint'].filter(
         s => !verificationState.stepsRun.has(s)
       );

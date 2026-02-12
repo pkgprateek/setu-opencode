@@ -15,7 +15,7 @@ const sanitizeLearningsField = createPromptSanitizer(2000);
 const sanitizeOpenQuestions = createPromptSanitizer(2000);
 
 export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<typeof tool> => tool({
-  description: 'Save research findings to .setu/RESEARCH.md. Call this when you understand the task.',
+  description: 'Save research findings to .setu/RESEARCH.md. Call after initial research, even with open questions.',
   args: {
     summary: tool.schema.string().describe('Research findings in markdown format. Include codebase analysis, patterns found, and relevant context.'),
     constraints: tool.schema.string().optional().describe('Discovered constraints, limitations, or technical debt'),
