@@ -4,7 +4,7 @@ import { mkdir, writeFile } from 'fs/promises';
 import { existsSync, readFileSync } from 'fs';
 import { ensureSetuDir } from '../context/storage';
 import { loadActiveTask } from '../context/active';
-import { decideResearchArtifactMode, setQuestionBlocked } from '../context';
+import { decideResearchArtifactMode } from '../context';
 import { getErrorMessage } from '../utils/error-handling';
 import { removeControlChars, removeInstructionBoundaries, removeSystemPatterns } from '../utils/sanitization';
 import { validateProjectDir } from '../utils/path-validation';
@@ -18,6 +18,27 @@ function sanitizeResearchText(input: string): string {
   return [removeControlChars, removeSystemPatterns, removeInstructionBoundaries]
     .reduce((acc, fn) => fn(acc), input)
     .trim();
+}
+
+const OPEN_QUESTIONS_SENTINEL_PATTERN = /^(?:[-*\d.)\s]*)?(?:none|n\/a|na|nil|null|no(?:\s+open)?\s+questions?)(?:[\s:.-].*)?$/i;
+
+export function normalizeOpenQuestions(input?: string): string | undefined {
+  if (!input || typeof input !== 'string') return undefined;
+
+  const sanitized = sanitizeResearchText(input);
+  if (!sanitized) return undefined;
+
+  const meaningfulLines = sanitized
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !OPEN_QUESTIONS_SENTINEL_PATTERN.test(line));
+
+  if (meaningfulLines.length === 0) {
+    return undefined;
+  }
+
+  return meaningfulLines.join('\n');
 }
 
 export function splitResearchContent(input: string, chunkSize = CHUNK_SIZE_CHARS): string[] {
@@ -58,7 +79,7 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
     risks: tool.schema.string().optional().describe('Known risks/unknowns discovered during research'),
     openQuestions: tool.schema.string().optional().describe('Unresolved questions needing user input (e.g., stack choice, deployment target)')
   },
-  async execute(args, context) {
+  async execute(args) {
     const projectDir = getProjectDir();
 
     try {
@@ -77,9 +98,7 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
       patterns: args.patterns ? sanitizeResearchText(args.patterns) : undefined,
       learnings: args.learnings ? sanitizeResearchText(args.learnings) : undefined,
       risks: args.risks ? sanitizeResearchText(args.risks) : undefined,
-      openQuestions: (args.openQuestions && typeof args.openQuestions === 'string' && args.openQuestions.trim().length > 0)
-        ? sanitizeResearchText(args.openQuestions)
-        : undefined
+      openQuestions: normalizeOpenQuestions(args.openQuestions)
     };
 
     if (!sanitizedArgs.summary) {
@@ -128,14 +147,7 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
     }
 
     if (sanitizedArgs.openQuestions && sanitizedArgs.openQuestions.trim().length > 0) {
-      if (context?.sessionID) {
-        setQuestionBlocked(
-          context.sessionID,
-          `Research has open questions that need answers before planning:\n${sanitizedArgs.openQuestions}`
-        );
-        return 'Research saved. Open questions detected - resolve with question tool (if available) or setu_context before proceeding to setu_plan.';
-      }
-      throw new Error('Cannot save research with open questions: session ID unavailable for gating. This is a bug — please report it.');
+      return `Research saved. Open questions need resolution:\n${sanitizedArgs.openQuestions}\n\nResolve these questions with the user, then call setu_plan.`;
     }
 
     return `Research ${researchMode === 'append' ? 'updated (append mode)' : 'saved (remake mode)'}. Gear shifted: scout -> architect. You can now create PLAN.md.`;
@@ -150,15 +162,22 @@ function formatResearch(args: {
   risks?: string;
   openQuestions?: string;
 }): string {
+  const summaryLines = args.summary.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const scopeLine = summaryLines[0] ?? args.summary.trim();
+  const findingsBody = summaryLines.slice(1).join('\n');
+  const findings = findingsBody.trim().length > 0
+    ? findingsBody
+    : '- No additional findings beyond scope for this simple task.';
+
   let content = `# Research Summary
 
 ## Scope / Objective Understanding
 
-${args.summary.split(/\r?\n/).slice(0, 6).join('\n')}
+${scopeLine}
 
 ## Findings
 
-${args.summary}
+${findings}
 `;
 
   if (args.constraints) content += `

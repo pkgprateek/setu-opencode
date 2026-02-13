@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { splitResearchContent } from '../setu-research';
+import { normalizeOpenQuestions, splitResearchContent } from '../setu-research';
 
 describe('setu_research chunking', () => {
   test('splits large content into fixed-size chunks', () => {
@@ -14,5 +14,19 @@ describe('setu_research chunking', () => {
 
   test('throws for invalid chunk size', () => {
     expect(() => splitResearchContent('abc', 0)).toThrow('chunkSize must be positive');
+  });
+});
+
+describe('setu_research open question normalization', () => {
+  test('treats sentinel values as no open questions', () => {
+    expect(normalizeOpenQuestions('None')).toBeUndefined();
+    expect(normalizeOpenQuestions('N/A')).toBeUndefined();
+    expect(normalizeOpenQuestions('no open questions')).toBeUndefined();
+    expect(normalizeOpenQuestions('- none')).toBeUndefined();
+  });
+
+  test('preserves meaningful open question content', () => {
+    const normalized = normalizeOpenQuestions('Should this be txt or md?');
+    expect(normalized).toBe('Should this be txt or md?');
   });
 });
