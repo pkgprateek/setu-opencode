@@ -49,6 +49,14 @@ export interface HydrationState {
  */
 export function isReadOnlyBashCommand(command: string): boolean {
   const trimmed = command.trim();
+  if (!trimmed) return false;
+
+  // SECURITY: reject shell metacharacters and multiline/continued commands.
+  // Fail-closed: hydration allows only single simple read-only commands.
+  const dangerousPattern = /(;|&&|\|\||\||`|\$\(|>|>>|2>|>&|>\||&|\n|\r|\\\n)/;
+  if (dangerousPattern.test(trimmed)) {
+    return false;
+  }
 
   // Check for git write commands first (they start with git)
   for (const gitCmd of GIT_WRITE_COMMANDS) {
@@ -58,7 +66,8 @@ export function isReadOnlyBashCommand(command: string): boolean {
   }
 
   // Get the first word/command
-  const firstWord = trimmed.split(/\s+/)[0];
+  const words = trimmed.split(/\s+/);
+  const firstWord = words[0];
 
   // Check if it's a read-only command
   if (
@@ -70,7 +79,7 @@ export function isReadOnlyBashCommand(command: string): boolean {
   }
 
   // Check compound commands (e.g., "git status")
-  const firstTwoWords = trimmed.split(/\s+/).slice(0, 2).join(" ");
+  const firstTwoWords = words.slice(0, 2).join(" ");
   if (
     READ_ONLY_BASH_COMMANDS.includes(
       firstTwoWords as (typeof READ_ONLY_BASH_COMMANDS)[number],
@@ -164,7 +173,16 @@ export function shouldBlockDuringHydration(
 
   // Check bash commands
   if (toolName === "bash") {
-    const command = (args?.command as string) || "";
+    const rawCommand = args?.command;
+    if (typeof rawCommand !== 'string') {
+      return {
+        blocked: true,
+        reason: 'invalid_command_type',
+        details: typeof rawCommand,
+      };
+    }
+
+    const command = rawCommand;
     if (isReadOnlyBashCommand(command)) {
       return { blocked: false };
     }

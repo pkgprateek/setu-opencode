@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, mock } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync } from 'fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { createToolExecuteBeforeHook } from '../tool-execute';
@@ -129,10 +129,15 @@ describe('tool-execute before hook hydration enforcement', () => {
   });
 
   test('unlocks write after context confirmed', async () => {
+    const setuDir = join(projectDir, '.setu');
+    mkdirSync(setuDir, { recursive: true });
+    writeFileSync(join(setuDir, 'RESEARCH.md'), '# research', 'utf-8');
+    writeFileSync(join(setuDir, 'PLAN.md'), '# plan', 'utf-8');
+
     const hook = createToolExecuteBeforeHook(
       () => 'setu',
       () => null,
-      undefined,
+      () => projectDir,
       undefined,
       () => ({ contextConfirmed: true, sessionId: 's4', startedAt: Date.now() })
     );

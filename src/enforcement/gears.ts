@@ -169,10 +169,15 @@ export interface GearBlockResult {
 const SCOUT_ALLOWED_SETU_TOOLS = new Set(['setu_task', 'setu_context', 'setu_research', 'setu_doctor', 'setu_feedback']);
 
 export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockResult {
-  const isReadOnlyBash =
-    tool === 'bash' &&
-    typeof (args as Record<string, unknown> | undefined)?.command === 'string' &&
-    isReadOnlyBashCommand((args as Record<string, unknown>).command as string);
+  let isReadOnlyBash = false;
+  if (tool === 'bash' && typeof (args as Record<string, unknown> | undefined)?.command === 'string') {
+    try {
+      isReadOnlyBash = isReadOnlyBashCommand((args as Record<string, unknown>).command as string);
+    } catch {
+      // Fail closed: treat unparseable command as mutating.
+      isReadOnlyBash = false;
+    }
+  }
 
   switch (gear) {
     case 'scout': {
@@ -213,6 +218,15 @@ export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockR
       // All allowed (verification gate handled elsewhere)
       return { blocked: false, gear };
     }
+    default: {
+      const unknownGear = String(gear);
+      return {
+        blocked: true,
+        reason: 'unknown_gear',
+        details: `Gear '${unknownGear}' is not recognized. Blocking by default.`,
+        gear: 'scout',
+      };
+    }
   }
 }
 
@@ -233,5 +247,7 @@ export function createGearBlockMessage(result: GearBlockResult): string {
     case 'builder':
       // Builder never blocks via gears (verification is a separate gate)
       return '';
+    default:
+      return `Blocked: ${result.details || 'unknown gear enforcement state'} Next: return to Scout and re-establish workflow artifacts.`;
   }
 }
