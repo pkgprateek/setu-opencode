@@ -81,9 +81,6 @@ const BUILD_COMMANDS: Record<
   },
 };
 
-// Default fallback
-const DEFAULT_BUILD_TOOL = "npm";
-
 interface VerificationStep {
   name: string;
   command: string;
@@ -95,8 +92,7 @@ interface VerificationStep {
  * Generate verification steps for the detected build tool
  */
 function generateVerificationSteps(buildTool: string): VerificationStep[] {
-  const commands =
-    BUILD_COMMANDS[buildTool] || BUILD_COMMANDS[DEFAULT_BUILD_TOOL];
+  const commands = BUILD_COMMANDS[buildTool];
 
   const steps: VerificationStep[] = [];
 
@@ -180,7 +176,17 @@ Automatically detects project build tool (npm/yarn/pnpm/bun for JS/TS, cargo for
       // Detect project build tool
       const projectDir = getProjectDir ? getProjectDir() : process.cwd();
       const projectInfo = detectProjectInfo(projectDir);
-      const buildTool = projectInfo.buildTool || DEFAULT_BUILD_TOOL;
+
+      // OPTION A: Skip verification if no build system detected
+      if (!projectInfo.buildTool) {
+        return `## Verification
+
+**Detected:** No build system detected (no package.json, Cargo.toml, go.mod, or pyproject.toml found).
+
+ℹ️ Skipping verification - nothing to build, test, or lint.`;
+      }
+
+      const buildTool = projectInfo.buildTool;
 
       // Generate steps for detected build tool
       const allSteps = generateVerificationSteps(buildTool);
