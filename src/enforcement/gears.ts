@@ -5,6 +5,7 @@ import {
   isSetuTool,
   isReadOnlyTool
 } from '../constants';
+import { isReadOnlyBashCommand } from './hydration';
 
 export type Gear = 'scout' | 'architect' | 'builder';
 
@@ -168,11 +169,16 @@ export interface GearBlockResult {
 const SCOUT_ALLOWED_SETU_TOOLS = new Set(['setu_task', 'setu_context', 'setu_research', 'setu_doctor', 'setu_feedback']);
 
 export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockResult {
+  const isReadOnlyBash =
+    tool === 'bash' &&
+    typeof (args as Record<string, unknown> | undefined)?.command === 'string' &&
+    isReadOnlyBashCommand((args as Record<string, unknown>).command as string);
+
   switch (gear) {
     case 'scout': {
       // Only read-only tools or approved Setu tools allowed
       const isScoutAllowedSetuTool = isSetuTool(tool) && SCOUT_ALLOWED_SETU_TOOLS.has(tool);
-      if (!isReadOnlyTool(tool) && !isScoutAllowedSetuTool) {
+      if (!isReadOnlyTool(tool) && !isScoutAllowedSetuTool && !isReadOnlyBash) {
         return {
           blocked: true,
           reason: 'scout_blocked',
@@ -185,7 +191,7 @@ export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockR
     case 'architect': {
       // Read + write to .setu/ only
       // If it's a side effect tool, it MUST be targeting .setu/ path
-      if (!isReadOnlyTool(tool) && !isSetuTool(tool)) {
+      if (!isReadOnlyTool(tool) && !isSetuTool(tool) && !isReadOnlyBash) {
         return {
           blocked: true,
           reason: 'architect_blocked',
@@ -193,7 +199,7 @@ export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockR
           gear
         };
       }
-      if (isSideEffectTool(tool) && !isSetuPath(args)) {
+      if (tool !== 'bash' && isSideEffectTool(tool) && !isSetuPath(args)) {
         return {
           blocked: true,
           reason: 'architect_blocked',
@@ -219,22 +225,10 @@ export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockR
 export function createGearBlockMessage(result: GearBlockResult): string {
   switch (result.gear) {
     case 'scout':
-      return `🔍 [Scout Gear] ${result.details || 'Observation only.'}
-
-Before making changes, gather context:
-  1. Read relevant files to understand the codebase
-  2. Use \`setu_research\` to save findings to .setu/RESEARCH.md
-  
-Once RESEARCH.md exists, you'll shift to Architect gear.`;
+      return `Blocked: ${result.details || "tool not allowed in Scout"} Next: complete \`setu_research\` to create .setu/RESEARCH.md.`;
 
     case 'architect':
-      return `📐 [Architect Gear] ${result.details || 'Planning phase.'}
-
-You have research context. Now create a plan:
-  1. Write to .setu/ directory only (PLAN.md, etc.)
-  2. Use \`setu_plan\` to create .setu/PLAN.md
-  
-Once PLAN.md exists, you'll shift to Builder gear.`;
+      return `Blocked: ${result.details || "tool not allowed in Architect"} Next: create \`setu_plan\` and stay within .setu/ planning scope.`;
 
     case 'builder':
       // Builder never blocks via gears (verification is a separate gate)

@@ -129,3 +129,9 @@ export {
   getOverwriteRequirement,
   clearOverwriteRequirement,
 } from './setu-state';
+
+export type { ArtifactMode } from './artifact-policy';
+export {
+  decideResearchArtifactMode,
+  decidePlanArtifactMode,
+} from './artifact-policy';
