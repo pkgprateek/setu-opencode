@@ -77,6 +77,10 @@ Once confirmed, context is persisted to .setu/ for continuity.`,
     async execute(args, context): Promise<string> {
       const state = getHydrationState();
       const projectDir = getProjectDir ? getProjectDir() : process.cwd();
+
+      if (context?.sessionID) {
+        clearQuestionBlocked(context.sessionID);
+      }
       
       if (state.contextConfirmed) {
         return `Context was already confirmed. Side-effect tools are already unlocked.

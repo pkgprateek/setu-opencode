@@ -226,15 +226,14 @@ export function shouldBlockDuringHydration(
  */
 export function createHydrationBlockMessage(
   reason?: string,
-  details?: string,
 ): string {
   if (reason === 'unknown_tool') {
-    return 'Blocked by hydration gate: unknown tool. Next: use read/search or a Setu tool first.';
+    return 'Wait: Call setu_context({ summary: "...", task: "..." }) first to confirm understanding.';
   }
 
   if (reason === 'bash_blocked') {
-    return `Blocked by hydration gate: bash command is not read-only (${details ?? 'command'}). Next: gather context first.`;
+    return 'Wait: Call setu_context({ summary: "...", task: "..." }) first, then explore with read/search.';
   }
 
-  return 'Blocked by hydration gate. Next: gather context with read/search, then continue with setu_research.';
+  return 'Wait: Call setu_context({ summary: "...", task: "..." }) first to confirm understanding.';
 }

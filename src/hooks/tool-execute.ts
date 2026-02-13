@@ -16,6 +16,7 @@ import {
   determineGear,
   shouldBlockDuringHydration,
   createHydrationBlockMessage,
+  isReadOnlyBashCommand,
   shouldBlock as shouldBlockByGear,
   createGearBlockMessage,
   type HydrationState,
@@ -225,6 +226,23 @@ function isQuestionRelatedToPending(
   });
 }
 
+function isAllowedDuringQuestionBlock(tool: string, args: Record<string, unknown>): boolean {
+  if (tool === 'question' || tool === 'setu_context' || tool === 'setu_doctor') {
+    return true;
+  }
+
+  if (isReadOnlyTool(tool)) {
+    return true;
+  }
+
+  if (tool === 'bash') {
+    const command = getStringProp(args, 'command');
+    return typeof command === 'string' && isReadOnlyBashCommand(command);
+  }
+
+  return false;
+}
+
 /**
  * Create a before-execution hook that enforces Gearbox rules for tool execution.
  *
@@ -281,14 +299,13 @@ export function createToolExecuteBeforeHook(
       return;
     }
 
-    const isDecisionResolutionTool = input.tool === 'question' || input.tool === 'setu_context';
-    if (disciplineState.questionBlocked && !isDecisionResolutionTool) {
+    if (disciplineState.questionBlocked && !isAllowedDuringQuestionBlock(input.tool, output.args)) {
       throw new Error(
         formatGuidanceMessage(
-          'Clarification required before continuing',
+          'Awaiting user clarification',
           disciplineState.questionReason ?? 'A required implementation decision is still unanswered.',
-          'Resolve the decision via question tool (if available) or setu_context.',
-          'After resolution, Setu will continue the protocol automatically.'
+          'Ask the user one direct question, then wait for their response.',
+          'Read-only inspection is allowed while waiting (read/glob/grep, safe bash, setu_doctor).'
         )
       );
     }
@@ -307,7 +324,7 @@ export function createToolExecuteBeforeHook(
           `Blocked ${input.tool} during hydration gate (${hydrationResult.reason ?? 'unknown'})`,
           { sessionId: input.sessionID, tool: input.tool }
         );
-        throw new Error(createHydrationBlockMessage(hydrationResult.reason, hydrationResult.details));
+        throw new Error(createHydrationBlockMessage(hydrationResult.reason));
       }
     }
 

@@ -241,15 +241,15 @@ export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockR
 export function createGearBlockMessage(result: GearBlockResult): string {
   switch (result.gear) {
     case 'scout':
-      return `Blocked: ${result.details || "tool not allowed in Scout"} Next: complete \`setu_research\` to create .setu/RESEARCH.md.`;
+      return `Wait: Call setu_research({ task: "...", summary: "..." }) first to document findings and advance.`;
 
     case 'architect':
-      return `Blocked: ${result.details || "tool not allowed in Architect"} Next: create \`setu_plan\` and stay within .setu/ planning scope.`;
+      return `Wait: Call setu_plan({ objective: "...", steps: "..." }) first, then ask user "Ready?".`;
 
     case 'builder':
       // Builder never blocks via gears (verification is a separate gate)
       return '';
     default:
-      return `Blocked: ${result.details || 'unknown gear enforcement state'} Next: return to Scout and re-establish workflow artifacts.`;
+      return `Wait: Return to Scout gear and re-establish workflow artifacts.`;
   }
 }

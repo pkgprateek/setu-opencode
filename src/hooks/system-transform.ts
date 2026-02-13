@@ -171,17 +171,20 @@ export function createSystemTransformHook(
         switch (gearState.current) {
           case 'scout':
             output.system.unshift(
-              '[SETU: Workflow] Research the codebase and task. Save findings with setu_research.'
+              '[Setu] Scout Mode: Read-only. Write/edit/delete tools are BLOCKED.\n' +
+              'Action: Call setu_research({ task: "..." }) to document findings and unlock write access.'
             );
             break;
           case 'architect':
             output.system.unshift(
-              '[SETU: Workflow] Create an implementation plan. Save with setu_plan. Ask user to confirm before executing.'
+              '[Setu] Architect Mode: Planning only. Cannot modify source code yet.\n' +
+              'Action: Call setu_plan({ objective: "...", steps: "..." }) to create PLAN.md.'
             );
             break;
           case 'builder':
             output.system.unshift(
-              '[SETU: Workflow] Execute the plan step by step. Run setu_verify before declaring done.'
+              '[Setu] Builder Mode: Execute the plan.\n' +
+              'Action: Follow PLAN.md steps. Run setu_verify() before declaring done.'
             );
             break;
         }
@@ -190,10 +193,7 @@ export function createSystemTransformHook(
       const disciplineState = getDisciplineState(input.sessionID);
       if (disciplineState.questionBlocked) {
         output.system.unshift(
-          `[SETU: Clarification Required]\n` +
-            `Resolve the pending decision before implementation.\n` +
-            `Use native question tool when available; otherwise use setu_context as explicit decision checkpoint.\n` +
-            `Do not execute implementation tools until the decision is resolved.`
+          `[SETU: Clarification Required] Ask one direct question to the user, then wait. Do not run mutating tools until they answer.`
         );
       }
 
