@@ -186,8 +186,7 @@ Create PLAN.md with implementation steps.
 setu_plan({
   objective: string,        // One sentence: what this plan accomplishes
   contextSummary?: string,  // 2-3 sentences from RESEARCH.md for subagent context
-  steps: string,            // Full step definitions in markdown (headings, numbered, or bullets)
-  successCriteria?: string  // Truths, artifacts, and key links that prove completion
+  steps: string             // Full step definitions in markdown (Phase > Task > Step hierarchy)
 });
 ```
 
@@ -199,16 +198,40 @@ setu_plan({
 5. Triggers user approval (question blocking)
 6. Gear advances: Architect → Builder (after approval)
 
-**Example**:
+**Example** (hierarchical Phase > Task > Step format):
 ```typescript
 setu_plan({
   objective: 'Implement JWT authentication',
   contextSummary: 'Uses jose library. Existing middleware pattern in src/middleware/.',
-  steps: '## Step 1: Add jose dependency\n- Install jose via npm\n\n## Step 2: Create auth middleware\n- Add JWT validation in src/middleware/auth.ts',
-  successCriteria: 'All auth routes return 401 without valid JWT. Tests pass.'
+  steps: `# Phase 1: Setup
+## Task 1.1: Install dependencies
+- Step 1: Add jose library
+  - Why: Need JWT signing/verification
+  - Edit(s): package.json
+  - Commands: npm install jose
+
+## Task 1.2: Configure environment
+- Step 1: Add JWT secret config
+  - Why: Auth requires secret key
+  - Edit(s): .env.example, src/config/auth.ts
+  - Commands: None
+
+# Phase 2: Implementation
+## Task 2.1: Create middleware
+- Step 1: Implement JWT validation
+  - Why: Protect routes from unauthorized access
+  - Edit(s): src/middleware/auth.ts
+  - Commands: bun test src/middleware`,
+  nonGoals: 'No refresh token logic, no OAuth integration',
+  assumptions: 'Node 20+, existing Express setup',
+  fileEdits: '- package.json\n- .env.example\n- src/config/auth.ts\n- src/middleware/auth.ts',
+  expectedOutput: 'All protected routes return 401 without valid JWT',
+  rollbackNote: 'Revert commits and remove jose dependency',
+  acceptanceTests: '- Valid JWT allows access\n- Invalid JWT returns 401\n- Missing JWT returns 401',
+  verifyProtocol: 'build -> lint -> test'
 });
 
-// Result: PLAN.md created, user approval required, then Builder gear
+// Result: PLAN.md created with hierarchical structure, user approval required, then Builder gear
 ```
 
 ---
@@ -274,7 +297,7 @@ Setu: setu_research({ task: 'Implement dark mode toggle' })
 Setu: [Spawning 3 research subagents...]
 Setu: Created RESEARCH.md. Advanced to Architect gear.
 Setu: [Architect gear] Creating implementation plan...
-Setu: setu_plan({ objective: 'Implement dark mode toggle', steps: '## Step 1: ...', successCriteria: '...' })
+Setu: setu_plan({ objective: 'Implement dark mode toggle', steps: '## Step 1: ...' })
 Setu: Created PLAN.md. User approval required, then Builder gear.
 Setu: [Builder gear] Executing step 1/4...
 Setu: [Step 1 complete] setu_verify() → All passed
