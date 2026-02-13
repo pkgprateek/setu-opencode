@@ -219,6 +219,40 @@ export function createPromptSanitizer(maxLength: number = MAX_LENGTHS.CONTEXT): 
 }
 
 /**
+ * Create a prompt sanitizer that preserves newlines.
+ *
+ * Use for: Markdown artifacts where line structure is part of semantics
+ * (e.g., RESEARCH.md and PLAN.md sections/steps).
+ */
+export function createPromptMultilineSanitizer(maxLength: number = MAX_LENGTHS.CONTEXT): SanitizationFilter {
+  return (input: string): string => {
+    if (!input || typeof input !== 'string') {
+      return '';
+    }
+
+    const suffix = '\n... (truncated for safety)';
+
+    const filtered = [
+      removeControlChars,
+      removeSystemPatterns,
+      removeInstructionBoundaries,
+      escapeCodeBlocks,
+      escapeHtmlTags,
+    ].reduce((acc, filter) => filter(acc), input);
+
+    const wasTruncated = filtered.length > maxLength;
+    let result = filtered;
+
+    if (wasTruncated) {
+      const take = Math.max(0, maxLength - suffix.length);
+      result = take > 0 ? filtered.slice(0, take) + suffix : suffix.slice(0, maxLength);
+    }
+
+    return result.trim();
+  };
+}
+
+/**
  * Normalize path separators (convert backslashes to forward slashes)
  */
 const normalizeSeparators: SanitizationFilter = (input) =>
