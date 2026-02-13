@@ -191,9 +191,9 @@ export function createSystemTransformHook(
       if (disciplineState.questionBlocked) {
         output.system.unshift(
           `[SETU: Clarification Required]\n` +
-            `Your next assistant response must be a single native question tool call.\n` +
-            `Do not ask in plain chat text. Use the native question tool with recommendations first.\n` +
-            `Do not execute implementation tools until the question is answered.`
+            `Resolve the pending decision before implementation.\n` +
+            `Use native question tool when available; otherwise use setu_context as explicit decision checkpoint.\n` +
+            `Do not execute implementation tools until the decision is resolved.`
         );
       }
 

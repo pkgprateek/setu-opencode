@@ -14,11 +14,11 @@ import { basename, isAbsolute, normalize, resolve } from 'path';
 import { existsSync } from 'fs';
 import {
   determineGear,
-  shouldBlockInPhase0,
-  createPhase0BlockMessage,
+  shouldBlockDuringHydration,
+  createHydrationBlockMessage,
   shouldBlock as shouldBlockByGear,
   createGearBlockMessage,
-  type Phase0State,
+  type HydrationState,
 } from '../enforcement';
 import {
   type ContextCollector,
@@ -249,7 +249,7 @@ export function createToolExecuteBeforeHook(
   getContextCollector?: () => ContextCollector | null,
   getProjectDir?: () => string,
   getVerificationState?: () => VerificationState,
-  getPhase0State?: () => Phase0State
+  getHydrationState?: () => HydrationState
 ): (input: ToolExecuteBeforeInput, output: ToolExecuteBeforeOutput) => Promise<void> {
   // Direct mutation tools only. 'task' is intentionally excluded: it's not a
   // direct mutator, but launches subagents that may mutate. It receives partial
@@ -281,32 +281,33 @@ export function createToolExecuteBeforeHook(
       return;
     }
 
-    if (disciplineState.questionBlocked) {
+    const isDecisionResolutionTool = input.tool === 'question' || input.tool === 'setu_context';
+    if (disciplineState.questionBlocked && !isDecisionResolutionTool) {
       throw new Error(
         formatGuidanceMessage(
           'Clarification required before continuing',
           disciplineState.questionReason ?? 'A required implementation decision is still unanswered.',
-          'Answer the active structured question first.',
-          'After clarification, Setu will continue the protocol automatically.'
+          'Resolve the decision via question tool (if available) or setu_context.',
+          'After resolution, Setu will continue the protocol automatically.'
         )
       );
     }
 
-    const phase0State = getPhase0State?.();
-    if (!phase0State?.contextConfirmed) {
-      if (!getPhase0State) {
-        debugLog('Phase 0 accessor missing - defaulting to unconfirmed context');
+    const hydrationState = getHydrationState?.();
+    if (!hydrationState?.contextConfirmed) {
+      if (!getHydrationState) {
+        debugLog('Hydration accessor missing - defaulting to unconfirmed context');
       }
 
-      const phase0Result = shouldBlockInPhase0(input.tool, output.args);
-      if (phase0Result.blocked) {
+      const hydrationResult = shouldBlockDuringHydration(input.tool, output.args);
+      if (hydrationResult.blocked) {
         logSecurityEvent(
           projectDir,
-          SecurityEventType.PHASE0_BLOCKED,
-          `Blocked ${input.tool} during Phase 0 (${phase0Result.reason ?? 'unknown'})`,
+          SecurityEventType.HYDRATION_BLOCKED,
+          `Blocked ${input.tool} during hydration gate (${hydrationResult.reason ?? 'unknown'})`,
           { sessionId: input.sessionID, tool: input.tool }
         );
-        throw new Error(createPhase0BlockMessage(phase0Result.reason, phase0Result.details));
+        throw new Error(createHydrationBlockMessage(hydrationResult.reason, hydrationResult.details));
       }
     }
 
@@ -352,7 +353,7 @@ export function createToolExecuteBeforeHook(
             formatGuidanceMessage(
               'Safety confirmation required',
               pendingSafety.reasons.join('; '),
-              'Ask the user using question tool with options: Proceed - I understand the risk / Cancel - use a safer alternative.',
+              'Resolve user decision with question tool if available, otherwise use setu_context as explicit checkpoint.',
               'Use a lower-risk alternative if possible.'
             )
           );
@@ -383,10 +384,10 @@ export function createToolExecuteBeforeHook(
             formatGuidanceMessage(
               'Safety confirmation required',
               safetyDecision.reasons.join('; '),
-              'Ask the user using question tool with options: Proceed - I understand the risk / Cancel - use a safer alternative.',
-              'Use a lower-risk alternative if possible.'
-            )
-          );
+               'Resolve user decision with question tool if available, otherwise use setu_context as explicit checkpoint.',
+               'Use a lower-risk alternative if possible.'
+             )
+           );
         }
 
         throw new Error(

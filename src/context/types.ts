@@ -2,7 +2,7 @@
  * Context types for Setu
  * 
  * Defines the structure of context that is:
- * - Collected during Phase 0 (exploration)
+ * - Collected during hydration exploration
  * - Persisted to .setu/context.json
  * - Injected into subagent prompts
  * - Loaded on session start for continuity
@@ -99,7 +99,7 @@ export interface ProjectInfo {
 }
 
 /**
- * A file that was read during Phase 0
+ * A file that was read during hydration
  */
 export interface FileRead {
   /** File path relative to project root */
@@ -111,7 +111,7 @@ export interface FileRead {
 }
 
 /**
- * A search/grep that was performed during Phase 0
+ * A search/grep that was performed during hydration
  */
 export interface SearchPerformed {
   /** The pattern searched for */
@@ -161,10 +161,10 @@ export interface SetuContext {
   /** Project metadata */
   project: ProjectInfo;
   
-  /** Files read during Phase 0 */
+  /** Files read during hydration */
   filesRead: FileRead[];
   
-  /** Searches performed during Phase 0 */
+  /** Searches performed during hydration */
   searchesPerformed: SearchPerformed[];
   
   /** Observed patterns in the codebase */

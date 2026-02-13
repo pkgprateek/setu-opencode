@@ -10,11 +10,11 @@ mock.module('../../debug', () => ({
   errorLog: () => {},
 }));
 
-describe('tool-execute before hook phase 0 enforcement', () => {
+describe('tool-execute before hook hydration enforcement', () => {
   let projectDir = '';
 
   beforeEach(() => {
-    projectDir = mkdtempSync(join(tmpdir(), 'setu-phase0-'));
+    projectDir = mkdtempSync(join(tmpdir(), 'setu-hydration-'));
   });
 
   afterEach(() => {
@@ -35,10 +35,10 @@ describe('tool-execute before hook phase 0 enforcement', () => {
         { tool: 'write', sessionID: 's1', callID: 'c1' },
         { args: { filePath: 'a.txt', content: 'x' } }
       )
-    ).rejects.toThrow('understand the context first');
+    ).rejects.toThrow('Blocked by hydration gate');
 
     const securityLog = readFileSync(join(projectDir, '.setu', 'security.log'), 'utf-8');
-    expect(securityLog).toContain('PHASE0_BLOCKED');
+    expect(securityLog).toContain('HYDRATION_BLOCKED');
     expect(securityLog).toContain('tool:write');
   });
 
@@ -56,35 +56,35 @@ describe('tool-execute before hook phase 0 enforcement', () => {
         { tool: 'bash', sessionID: 's5', callID: 'c5-bash' },
         { args: { command: 'rm -rf /tmp/demo' } }
       )
-    ).rejects.toThrow('understand the context first');
+    ).rejects.toThrow('Blocked by hydration gate');
 
     await expect(
       hook(
         { tool: 'delete', sessionID: 's5', callID: 'c5-delete' },
         { args: { filePath: 'a.txt' } }
       )
-    ).rejects.toThrow('understand the context first');
+    ).rejects.toThrow('Blocked by hydration gate');
 
     await expect(
       hook(
         { tool: 'execute', sessionID: 's5', callID: 'c5-execute' },
         { args: {} }
       )
-    ).rejects.toThrow('understand the context first');
+    ).rejects.toThrow('Blocked by hydration gate');
 
     await expect(
       hook(
         { tool: 'multi_edit', sessionID: 's5', callID: 'c5-multiedit' },
         { args: { edits: [] } }
       )
-    ).rejects.toThrow('understand the context first');
+    ).rejects.toThrow('Blocked by hydration gate');
 
     await expect(
       hook(
         { tool: 'unknown_dangerous_tool', sessionID: 's5', callID: 'c5-unknown' },
         { args: {} }
       )
-    ).rejects.toThrow('understand the context first');
+    ).rejects.toThrow('Blocked by hydration gate');
 
     const securityLog = readFileSync(join(projectDir, '.setu', 'security.log'), 'utf-8');
     expect(securityLog).toContain('tool:bash');

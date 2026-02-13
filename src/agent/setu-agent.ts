@@ -5,7 +5,7 @@
  * Generates .opencode/agents/setu.md at plugin initialization.
  * 
  * IMPORTANT: This file contains ONLY Setu's soul (identity, covenant, philosophy).
- * Behavioral enforcement (Phase 0 context gate, gear-based workflow, verification, discipline guards) is handled by plugin hooks.
+ * Behavioral enforcement (hydration context gate, gear-based workflow, verification, discipline guards) is handled by plugin hooks.
  */
 
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
@@ -25,7 +25,7 @@ import { getErrorMessage } from '../utils/error-handling';
  * - Philosophy
  * 
  * Does NOT contain:
- * - Phase 0 instructions (enforced by hooks)
+ * - Hydration instructions (enforced by hooks)
  * - Verification protocol (enforced by hooks)
  * - Git discipline (user responsibility)
  * - "Read these files" instructions (plugin handles)

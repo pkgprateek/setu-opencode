@@ -1,5 +1,5 @@
 /**
- * Phase 0: Pre-emptive Context Gate
+ * Hydration Gate: Pre-emptive Context Gate
  *
  * The core insight: Block side-effect tools until context is confirmed.
  * Allow read-only tools so the agent can form smart questions.
@@ -14,10 +14,10 @@
  *
  * Security (fail-closed model):
  * - FAIL-CLOSED for unknown tools (block by default, whitelist safe tools)
- * - This prevents new/unknown tools from bypassing Phase 0
+ * - This prevents new/unknown tools from bypassing hydration safeguards
  *
  * Tool classification imported from constants.ts (single source of truth).
- * This module provides Phase 0-specific logic: blocking decisions, bash command parsing.
+ * This module provides hydration-specific logic: blocking decisions, bash command parsing.
  */
 
 import {
@@ -32,12 +32,12 @@ import { debugLog } from "../debug";
 // Re-export type guards for consumers of this module
 export { isSetuTool, isReadOnlyTool };
 
-export interface Phase0State {
+export interface HydrationState {
   /** Whether context has been confirmed by user response */
   contextConfirmed: boolean;
   /** Session ID for isolation */
   sessionId: string;
-  /** Timestamp when Phase 0 started */
+  /** Timestamp when hydration started */
   startedAt: number;
 }
 
@@ -83,7 +83,7 @@ export function isReadOnlyBashCommand(command: string): boolean {
 }
 
 /**
- * Phase 0 enforcement logic
+ * Hydration enforcement logic
  *
  * Allow exploration, block modification
  *
@@ -97,28 +97,28 @@ export function isSideEffectTool(toolName: string): boolean {
 }
 
 /**
- * Result of Phase 0 blocking check
+ * Result of hydration blocking check
  */
-export interface Phase0BlockResult {
+export interface HydrationBlockResult {
   blocked: boolean;
   reason?: string;
   details?: string;
 }
 
 /**
- * Known safe tools that are always allowed in Phase 0.
+ * Known safe tools that are always allowed during hydration.
  * 
  * FAIL-CLOSED SECURITY:
  * Unknown tools are blocked by default. Add tools here to whitelist them.
- * This prevents new/unknown tools from bypassing Phase 0.
+ * This prevents new/unknown tools from bypassing hydration safeguards.
  * 
  * NOTE: Only READ-ONLY tools should be here. Side-effect tools must go through
- * isSideEffectTool check to be blocked in Phase 0.
+ * isSideEffectTool check to be blocked during hydration.
  */
 const KNOWN_SAFE_TOOLS = [
   // Setu tools (via isSetuTool check)
   // Read-only tools (via isReadOnlyTool check)
-  'task',        // Subagent spawning - will get its own Phase 0
+  'task',        // Subagent spawning - will get its own hydration gating
   'question',    // Interactive prompts
   'skill',       // Skill loading
   'lsp',         // Language server
@@ -134,19 +134,19 @@ function isKnownSafeTool(toolName: string): boolean {
 }
 
 /**
- * Decide whether a tool invocation should be blocked by Phase 0 safeguards.
+ * Decide whether a tool invocation should be blocked by hydration safeguards.
  * 
  * SECURITY: Uses FAIL-CLOSED model — unknown tools blocked by default.
  * Unknown tools are blocked by default and must be whitelisted.
  *
  * @param toolName - Name of the tool being invoked
  * @param args - Optional tool arguments; for `bash` the `command` string is examined to determine read-only status
- * @returns A Phase0BlockResult: `blocked` is `true` when the call should be prevented; `reason` is a block code (e.g., `bash_blocked`, `side_effect_blocked`) and `details` contains contextual information when available
+ * @returns A HydrationBlockResult: `blocked` is `true` when the call should be prevented; `reason` is a block code (e.g., `bash_blocked`, `side_effect_blocked`) and `details` contains contextual information when available
  */
-export function shouldBlockInPhase0(
+export function shouldBlockDuringHydration(
   toolName: string,
   args?: Record<string, unknown>,
-): Phase0BlockResult {
+): HydrationBlockResult {
   // Setu's own tools - always allowed
   if (isSetuTool(toolName)) {
     return { blocked: false };
@@ -195,31 +195,22 @@ export function shouldBlockInPhase0(
 }
 
 /**
- * Create the Phase 0 blocking message - natural language, not technical jargon
+ * Create the hydration blocking message - natural language, not technical jargon
  *
  * This message is shown to the agent when it tries to use a blocked tool.
  * For common bash commands, suggest native alternatives with brief explanation.
  */
-export function createPhase0BlockMessage(
+export function createHydrationBlockMessage(
   reason?: string,
   details?: string,
 ): string {
-  // Smart suggestions for common bash commands
-  if (reason === "bash_blocked" && details) {
-    const cmd = details.trim().split(/\s+/)[0];
-
-    // Map common commands to native tools with brief explanation
-    const alternatives: Record<string, string> = {
-      ls: "Using native tool instead (faster, cross-platform).",
-      find: "Using native tool instead (faster, cross-platform).",
-      cat: "Using native tool instead (faster, cross-platform).",
-    };
-
-    if (alternatives[cmd]) {
-      return alternatives[cmd];
-    }
+  if (reason === 'unknown_tool') {
+    return 'Blocked by hydration gate: unknown tool. Next: use read/search or a Setu tool first.';
   }
 
-  // Default message for other cases
-  return `I need to understand the context first before making changes. Let me read the relevant files and confirm my understanding.`;
+  if (reason === 'bash_blocked') {
+    return `Blocked by hydration gate: bash command is not read-only (${details ?? 'command'}). Next: gather context first.`;
+  }
+
+  return 'Blocked by hydration gate. Next: gather context with read/search, then continue with setu_research.';
 }
