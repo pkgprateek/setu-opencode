@@ -137,7 +137,7 @@ Three independent layers protect your codebase:
 
 | Layer | Purpose | How It Helps |
 |-------|---------|--------------|
-| **Context Gate** | Prevents action before understanding | Agent explores your codebase first, then asks you to confirm with `setu_context` |
+| **Hydration Gate** | Prevents action before understanding | Agent explores safely first; write paths unlock only after understanding is established |
 | **Confirmation Flow** | Double-checks risky operations | Production deployments, destructive commands prompt for explicit approval |
 | **Read-Before-Write** | Prevents accidental overwrites | Agent must read existing files before editing them |
 
@@ -261,7 +261,7 @@ Completion is coupled to evidence, not confidence.
 
 | Tool | What It Does |
 |------|--------------|
-| `setu_context` | Confirm understanding, start the workflow |
+| `setu_context` | Explicit alignment checkpoint (fallback when clarification/tooling needs it) |
 | `setu_research` | Document findings (Scout phase) |
 | `setu_plan` | Create implementation plan (Architect phase) |
 | `setu_verify` | Run build/test/lint (Builder phase) |

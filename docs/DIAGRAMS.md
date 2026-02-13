@@ -4,6 +4,8 @@ This file contains the public diagram set defined in `docs/internal/DIAGRAMS.md`
 
 ## Diagram 1: Session Flow
 
+Includes the internal Hydration Gate before visible gear progression.
+
 <img src="../assets/session_flow.svg" alt="Session Flow" width="540" />
 
 ---
