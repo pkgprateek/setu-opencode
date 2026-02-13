@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- **Hydration terminology standardized** — Internal/runtime references now consistently use Hydration Gate naming instead of legacy Phase 0 terms.
+- **Decision gate is capability-aware** — Clarification/approval flows now resolve via native `question` tool when available, with `setu_context` fallback to avoid deadlocks.
+- **User-facing enforcement guidance simplified** — Block messages now provide concise reason + next action without verbose internal policy text.
+
+### Added
+- **Plan contract validation** — `setu_plan` now enforces required sections/fields (goal, non-goals, assumptions, file edits, atomic steps, expected output, rollback, acceptance tests, verify protocol).
+- **Artifact lifecycle policy** — Deterministic append vs remake behavior for research/plan artifact updates.
+- **Research durability for oversized payloads** — Large research payloads are additionally persisted in `.setu/research_chunks/` to avoid silent loss.
+- **New regression tests** — Added coverage for hydration enforcement naming, plan contract validation, research chunking, artifact policy, and gear-path handling.
+
 ## [1.2.1] - 2025-02-12
 
 ### Fixed

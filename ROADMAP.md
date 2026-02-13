@@ -44,7 +44,7 @@
 
 | Principle | Why It Matters | Implementation |
 |-----------|----------------|----------------|
-| **Pre-emptive, not reactive** | Fixing mistakes costs more than preventing them | Phase 0 + gears block tools until context confirmed and artifacts exist |
+| **Pre-emptive, not reactive** | Fixing mistakes costs more than preventing them | Hydration gate + gears block unsafe actions until context/artifacts are ready |
 | **Zero-config by default** | Friction kills adoption | Works out of box, config is optional |
 | **Thoughtful colleague, not gatekeeper** | Users should feel helped, not blocked | Clear messaging, smart questions |
 | **Permission > Hooks** | CANNOT is stronger than DOES NOT | Setu agent uses permission system + hooks |
@@ -52,15 +52,19 @@
 
 ---
 
-## Current State (v1.2.1 — Track A SHIPPED, All Acceptance Tests Pass)
+## Current State (v1.2.2-candidate — Track A+ hardening complete)
 
 ### Shipped (v1.2.1 - February 2025)
 
 **Critical Fixes:**
-- [x] **FR-02 / AT-01: Phase 0 enforcement** — Wired `shouldBlockInPhase0()` into live enforcement path
+- [x] **FR-02 / AT-01: Hydration enforcement** — Wired hydration gating into live enforcement path
 - [x] **FR-04 / AT-04: Read-before-write for edit** — Extended overwrite guard to edit tool
 - [x] **FR-05 / AT-05: Safety confirmation flow** — Split block vs ask actions with proper question resolution
-- [x] **10 new tests** — Phase 0, safety, read-before-write coverage
+- [x] **Decision-gate fallback** — Replaced hard dependency on native `question` tool with capability-aware decision resolution (`question` or `setu_context`)
+- [x] **Plan contract enforcement** — `setu_plan` now validates required schema/sections before writing PLAN.md
+- [x] **Research durability** — oversized research persists in `.setu/research_chunks/` with no silent truncation
+- [x] **Artifact lifecycle policy** — append vs remake behavior added for research/plan updates
+- [x] **Additional test coverage** — hydration, policy, plan contract, and research chunking coverage expanded
 - [x] **Updated README** — Compelling personal story, psychology-backed messaging
 
 ### Implemented (v1.0.0 through v1.2.0)
@@ -74,14 +78,14 @@
 - [x] `config` hook — Sets Setu as default agent
 - [x] `system-transform` hook — Injects lean persona (~500 tokens)
 - [x] `chat.message` hook — Agent tracking
-- [x] `tool.execute.before` hook — Phase 0 context gate + gear-based enforcement
+- [x] `tool.execute.before` hook — hydration gate + gear-based enforcement
 - [x] `tool.execute.after` hook — Verification tracking, context collection
 - [x] `event` hook — Session lifecycle, context loading
 - [x] `session.compacting` hook — Injects active task on compaction
 
 **Tools:**
 - [x] `setu_verify` — Run verification protocol
-- [x] `setu_context` — Confirm context, persist to `.setu/`
+- [x] `setu_context` — Explicit alignment checkpoint, persist to `.setu/`
 - [x] `setu_feedback` — Record user feedback
 - [x] `setu_task` — Create active task with constraints and artifact archiving
 - [x] `setu_research` — Save research findings with open questions support
@@ -93,7 +97,7 @@
 - [x] Default on startup (`default_agent: "setu"` in config)
 - [x] Mode-aware enforcement (Setu/Build/Plan awareness)
 - [x] Agent file contains ONLY soul (identity, covenant, philosophy)
-- [x] Plugin hooks enforce behavior (Phase 0, gears, verification)
+- [x] Plugin hooks enforce behavior (hydration, gears, verification)
 
 **Context Persistence:**
 - [x] `.setu/` directory structure
@@ -153,7 +157,7 @@
 
 ## v1.1.0: Gearbox — Artifact-Driven State (SHIPPED)
 
-> **Theme:** Replace binary Phase 0 with artifact-existence Gearbox. Phase 0 remains as the initial context gate; gears layer RPI workflow enforcement on top.
+> **Theme:** Replace binary initial-gate language with hydration + artifact-existence Gearbox. Hydration remains the initial context gate; gears layer RPI workflow enforcement on top.
 > **Status:** Implementation complete and shipped as part of v1.2.0.
 
 ### Gearbox Architecture
@@ -203,7 +207,7 @@ Check: Does .setu/RESEARCH.md exist?
   - Removed competing in-memory state machine
 
 - [x] **Discipline Guards** — `src/context/setu-state.ts`
-  - Question blocking at research/plan transitions
+  - Decision blocking at research/plan transitions (`question` tool when available, `setu_context` fallback otherwise)
   - Safety blocking for destructive actions
   - Overwrite protection requiring prior reads
 
