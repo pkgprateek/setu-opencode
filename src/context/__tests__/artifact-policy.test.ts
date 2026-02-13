@@ -65,4 +65,21 @@ describe('artifact-policy', () => {
 
     expect(mode).toBe('remake');
   });
+
+  test('plan mode does not treat substring path matches as existing files', () => {
+    const mode = decidePlanArtifactMode({
+      hasExistingPlan: true,
+      existingPlanContent: '## File-level Edit List\n- src/component.tsx\n',
+      activeTask: {
+        task: 'Implement component changes',
+        constraints: [],
+        startedAt: new Date().toISOString(),
+        status: 'in_progress',
+      },
+      objective: 'Update component implementation',
+      fileEdits: '- src/component.ts\n- src/component.tsx',
+    });
+
+    expect(mode).toBe('append');
+  });
 });

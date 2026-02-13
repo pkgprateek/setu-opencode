@@ -100,13 +100,18 @@ If you need to update the context or plan, you can continue working.`;
         );
       }
       
-      // Confirm context in hydration state
-      confirmContext();
-
-      // setu_context is the fallback decision-resolution checkpoint when native
-      // question tooling is unavailable in a runtime.
-      if (context?.sessionID) {
-        clearQuestionBlocked(context.sessionID);
+      // Confirm context in hydration state.
+      // Always attempt to clear question blocking in finally so fallback
+      // decision resolution remains consistent even if confirmation throws.
+      try {
+        confirmContext();
+      } catch (error) {
+        errorLog('Failed to confirm context:', error);
+        throw error;
+      } finally {
+        if (context?.sessionID) {
+          clearQuestionBlocked(context.sessionID);
+        }
       }
       
       // Persist to .setu/ if collector is available

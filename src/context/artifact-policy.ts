@@ -1,4 +1,5 @@
 import type { ActiveTask } from './types';
+import { normalize } from 'path';
 
 export type ArtifactMode = 'append' | 'remake';
 
@@ -33,6 +34,10 @@ function parseFilePaths(fileEdits: string): string[] {
     .filter((line) => /[./\\]/.test(line));
 }
 
+function normalizePathForComparison(filePath: string): string {
+  return normalize(filePath).replace(/\\/g, '/').toLowerCase();
+}
+
 export function decideResearchArtifactMode(input: {
   hasExistingResearch: boolean;
   activeTask: ActiveTask | null;
@@ -64,8 +69,11 @@ export function decidePlanArtifactMode(input: {
   if (incomingFiles.length === 0) return 'append';
   if (!input.existingPlanContent) return incomingFiles.length <= 2 ? 'append' : 'remake';
 
-  const existing = input.existingPlanContent.toLowerCase();
-  const newFiles = incomingFiles.filter((filePath) => !existing.includes(filePath.toLowerCase()));
+  const existingPaths = parseFilePaths(input.existingPlanContent);
+  const existingSet = new Set(existingPaths.map((filePath) => normalizePathForComparison(filePath)));
+  const newFiles = incomingFiles.filter(
+    (filePath) => !existingSet.has(normalizePathForComparison(filePath))
+  );
 
   return newFiles.length <= 2 ? 'append' : 'remake';
 }
