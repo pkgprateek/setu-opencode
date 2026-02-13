@@ -54,7 +54,7 @@ Need the full architecture set? See [docs/DIAGRAMS.md](./docs/DIAGRAMS.md).
 
 ## How It Works (No Willpower Required)
 
-Your agent automatically progresses through three phases. Can't skip. Can't rush.
+Setu hydrates each session — gathering context and understanding your codebase before any gears engage. Your agent then automatically progresses through three phases. Can't skip. Can't rush.
 
 **🔍 Scout: Understand First, Build Never**
 
@@ -280,6 +280,16 @@ Completion is coupled to evidence, not confidence.
 | `setu-rules-creation` | Create effective AGENTS.md files |
 
 Skills load on-demand, not at startup.
+
+---
+
+## What's Next
+
+**v1.3** — Parallel orchestration engine with flexible task model  
+**v2.0** — DAG Swarm: Parallel execution with goal verification  
+**v3.0** — Setu Claude Code + MCP integration for multi-platform support  
+
+See [ROADMAP.md](./ROADMAP.md) for full details.
 
 ---
 
