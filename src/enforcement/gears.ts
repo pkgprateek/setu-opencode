@@ -6,6 +6,7 @@ import {
   isReadOnlyTool
 } from '../constants';
 import { isReadOnlyBashCommand } from './hydration';
+import { debugLog } from '../debug';
 
 export type Gear = 'scout' | 'architect' | 'builder';
 
@@ -220,10 +221,11 @@ export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockR
     }
     default: {
       const unknownGear = String(gear);
+      debugLog(`Unknown gear '${unknownGear}' encountered in shouldBlock; blocking by default.`);
       return {
         blocked: true,
         reason: 'unknown_gear',
-        details: `Gear '${unknownGear}' is not recognized. Blocking by default.`,
+        details: `Gear '${unknownGear}' is not recognized. Blocking by default. [received_gear=${unknownGear}]`,
         gear: 'scout',
       };
     }

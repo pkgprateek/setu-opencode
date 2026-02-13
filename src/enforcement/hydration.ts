@@ -51,9 +51,15 @@ export function isReadOnlyBashCommand(command: string): boolean {
   const trimmed = command.trim();
   if (!trimmed) return false;
 
+  // Reject control/null bytes to prevent parser confusion/bypass.
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: security validation
+  if (/[\x00-\x1F\x7F]/.test(trimmed)) {
+    return false;
+  }
+
   // SECURITY: reject shell metacharacters and multiline/continued commands.
   // Fail-closed: hydration allows only single simple read-only commands.
-  const dangerousPattern = /(;|&&|\|\||\||`|\$\(|>|>>|2>|>&|>\||&|\n|\r|\\\n)/;
+  const dangerousPattern = /(;|&&|\|\||\||`|\$\(|>|>>|2>|>&|>\||<|&|\(|\)|\n|\r|\\\n)/;
   if (dangerousPattern.test(trimmed)) {
     return false;
   }
