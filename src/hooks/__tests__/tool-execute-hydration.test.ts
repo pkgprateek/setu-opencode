@@ -35,7 +35,7 @@ describe('tool-execute before hook hydration enforcement', () => {
         { tool: 'write', sessionID: 's1', callID: 'c1' },
         { args: { filePath: 'a.txt', content: 'x' } }
       )
-    ).rejects.toThrow('Blocked by hydration gate');
+    ).rejects.toThrow('Wait:');
 
     const securityLog = readFileSync(join(projectDir, '.setu', 'security.log'), 'utf-8');
     expect(securityLog).toContain('HYDRATION_BLOCKED');
@@ -56,35 +56,35 @@ describe('tool-execute before hook hydration enforcement', () => {
         { tool: 'bash', sessionID: 's5', callID: 'c5-bash' },
         { args: { command: 'rm -rf /tmp/demo' } }
       )
-    ).rejects.toThrow('Blocked by hydration gate');
+    ).rejects.toThrow('Wait:');
 
     await expect(
       hook(
         { tool: 'delete', sessionID: 's5', callID: 'c5-delete' },
         { args: { filePath: 'a.txt' } }
       )
-    ).rejects.toThrow('Blocked by hydration gate');
+    ).rejects.toThrow('Wait:');
 
     await expect(
       hook(
         { tool: 'execute', sessionID: 's5', callID: 'c5-execute' },
         { args: {} }
       )
-    ).rejects.toThrow('Blocked by hydration gate');
+    ).rejects.toThrow('Wait:');
 
     await expect(
       hook(
         { tool: 'multi_edit', sessionID: 's5', callID: 'c5-multiedit' },
         { args: { edits: [] } }
       )
-    ).rejects.toThrow('Blocked by hydration gate');
+    ).rejects.toThrow('Wait:');
 
     await expect(
       hook(
         { tool: 'unknown_dangerous_tool', sessionID: 's5', callID: 'c5-unknown' },
         { args: {} }
       )
-    ).rejects.toThrow('Blocked by hydration gate');
+    ).rejects.toThrow('Wait:');
 
     const securityLog = readFileSync(join(projectDir, '.setu', 'security.log'), 'utf-8');
     expect(securityLog).toContain('tool:bash');

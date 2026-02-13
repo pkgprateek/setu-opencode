@@ -34,7 +34,7 @@ describe('tool-execute before hook safety flow', () => {
         { tool: 'bash', sessionID, callID: 'hard-1' },
         { args: { command: 'rm -rf /tmp/demo' } }
       )
-    ).rejects.toThrow('Execution paused by safety policy');
+    ).rejects.toThrow('Wait:');
   });
 
   test('ask flow requires approval and re-approval every attempt', async () => {
@@ -59,7 +59,7 @@ describe('tool-execute before hook safety flow', () => {
         { tool: 'bash', sessionID, callID: 'ask-1' },
         { args: { command: 'npm publish' } }
       )
-    ).rejects.toThrow('Safety confirmation required');
+    ).rejects.toThrow('Wait:');
 
     // Question call is allowed.
     await expect(
@@ -106,7 +106,7 @@ describe('tool-execute before hook safety flow', () => {
         { tool: 'bash', sessionID, callID: 'ask-3' },
         { args: { command: 'npm publish' } }
       )
-    ).rejects.toThrow('Safety confirmation required');
+    ).rejects.toThrow('Wait:');
   });
 
   test('unrelated question response does not deny pending safety confirmation', async () => {
@@ -131,7 +131,7 @@ describe('tool-execute before hook safety flow', () => {
         { tool: 'bash', sessionID, callID: 'unrelated-1' },
         { args: { command: 'npm publish' } }
       )
-    ).rejects.toThrow('Safety confirmation required');
+    ).rejects.toThrow('Wait:');
 
     await expect(
       beforeHook(

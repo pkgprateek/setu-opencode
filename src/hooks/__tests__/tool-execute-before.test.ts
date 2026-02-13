@@ -9,7 +9,7 @@ mock.module('../../debug', () => ({
 }));
 
 describe('tool-execute before hook protocol gating', () => {
-  test('blocks non-question tools while protocol decision is pending', async () => {
+  test('allows read-only tools while protocol decision is pending', async () => {
     const sessionID = 'protocol-pending-session';
     setQuestionBlocked(sessionID, 'Need architecture clarification');
 
@@ -22,7 +22,57 @@ describe('tool-execute before hook protocol gating', () => {
         { tool: 'read', sessionID, callID: 'call-1' },
         { args: { filePath: 'README.md' } }
       )
-    ).rejects.toThrow('Clarification required before continuing');
+    ).resolves.toBeUndefined();
+
+    await expect(
+      hook(
+        { tool: 'write', sessionID, callID: 'call-1b' },
+        { args: { filePath: 'README.md', content: 'x' } }
+      )
+    ).rejects.toThrow('Wait:');
+
+    clearDisciplineState(sessionID);
+  });
+
+  test('allows read-only bash and blocks mutating bash while clarification is pending', async () => {
+    const sessionID = 'protocol-pending-bash-session';
+    setQuestionBlocked(sessionID, 'Need deployment confirmation');
+
+    const hook = createToolExecuteBeforeHook(
+      () => 'setu'
+    );
+
+    await expect(
+      hook(
+        { tool: 'bash', sessionID, callID: 'call-1c' },
+        { args: { command: 'git status' } }
+      )
+    ).resolves.toBeUndefined();
+
+    await expect(
+      hook(
+        { tool: 'bash', sessionID, callID: 'call-1d' },
+        { args: { command: 'git commit -m "x"' } }
+      )
+    ).rejects.toThrow('Wait:');
+
+    clearDisciplineState(sessionID);
+  });
+
+  test('allows setu_doctor while clarification is pending', async () => {
+    const sessionID = 'protocol-pending-doctor-session';
+    setQuestionBlocked(sessionID, 'Need output format preference');
+
+    const hook = createToolExecuteBeforeHook(
+      () => 'setu'
+    );
+
+    await expect(
+      hook(
+        { tool: 'setu_doctor', sessionID, callID: 'call-1e' },
+        { args: { verbose: true } }
+      )
+    ).resolves.toBeUndefined();
 
     clearDisciplineState(sessionID);
   });

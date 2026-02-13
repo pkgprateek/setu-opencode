@@ -50,7 +50,7 @@ describe('tool-execute read-before-write guards', () => {
         { tool: 'edit', sessionID, callID: 'edit-1' },
         { args: { filePath: 'hello.txt', oldString: 'hello', newString: 'hi' } }
       )
-    ).rejects.toThrow('Read required before overwrite');
+    ).rejects.toThrow('Wait:');
   });
 
   test('allows edit after file was read', async () => {
@@ -92,7 +92,7 @@ describe('tool-execute read-before-write guards', () => {
         { tool: 'edit', sessionID, callID: 'edit-3' },
         { args: { filePath: 'missing.txt', oldString: 'hello', newString: 'hi' } }
       )
-    ).rejects.toThrow('File does not exist');
+    ).rejects.toThrow('Wait:');
   });
 
   test('blocks path traversal attempts', async () => {
