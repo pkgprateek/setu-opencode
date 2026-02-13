@@ -62,7 +62,7 @@ Key points:
 
 Key directories:
 - `src/hooks/` — OpenCode lifecycle interception
-- `src/enforcement/` — Gear state machine, Phase 0 context gate, discipline guards
+- `src/enforcement/` — Gear state machine, Hydration Gate, discipline guards
 - `src/security/` — Path validation, secrets detection, audit logging
 - `src/tools/` — Agent-facing tools
 - `skills/` — On-demand skill definitions

@@ -55,7 +55,7 @@ This means the agent **CANNOT** freely edit - OpenCode enforces this.
 |------|---------|
 | `system-transform` | Injects lean persona (~500 tokens) |
 | `chat.message` | Tracks current agent for mode-aware behavior |
-| `tool.execute.before` | Phase 0 context gate + gear-based enforcement |
+| `tool.execute.before` | Hydration Gate + gear-based enforcement |
 | `tool.execute.after` | Tracks verification steps |
 | `config` | Sets Setu as default agent, creates agent file |
 | `event` | Handles session lifecycle, context loading |
@@ -72,7 +72,7 @@ Setu adapts based on which mode the user is in:
 
 | Mode | Setu Behavior |
 |------|---------------|
-| **Setu** | Full enforcement: Phase 0 + gears + discipline guards + verification + context persistence |
+| **Setu** | Full enforcement: Hydration Gate + gears + discipline guards + verification + context persistence |
 | **Build** | Light enforcement: Verification reminders, context tracking |
 | **Plan** | Deferred: OpenCode handles blocking, Setu tracks context only |
 
@@ -93,7 +93,7 @@ When other discipline plugins are detected, Setu enters **minimal mode**:
 |---------|-------------------|---------|
 | Context injection | **Disabled** (other plugin handles) | Enabled |
 | Auto-inject AGENTS.md | **Disabled** | Enabled |
-| Phase 0 context gate | Enabled | Enabled |
+| Hydration Gate | Enabled | Enabled |
 | Gear enforcement | Enabled | Enabled |
 | Verification enforcement | Enabled | Enabled |
 | Context persistence | Enabled (uses `.setu/`) | Enabled |
