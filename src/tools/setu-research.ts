@@ -8,6 +8,7 @@ import { decideResearchArtifactMode, setQuestionBlocked } from '../context';
 import { getErrorMessage } from '../utils/error-handling';
 import { removeControlChars, removeInstructionBoundaries, removeSystemPatterns } from '../utils/sanitization';
 import { validateProjectDir } from '../utils/path-validation';
+import { debugLog } from '../debug';
 
 const MAX_INLINE_RESEARCH_CHARS = 120_000;
 const CHUNK_SIZE_CHARS = 40_000;
@@ -54,6 +55,7 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
     constraints: tool.schema.string().optional().describe('Discovered constraints, limitations, or technical debt'),
     patterns: tool.schema.string().optional().describe('Observed patterns in the codebase (architecture, naming, testing)'),
     learnings: tool.schema.string().optional().describe('What worked/failed during research'),
+    risks: tool.schema.string().optional().describe('Known risks/unknowns discovered during research'),
     openQuestions: tool.schema.string().optional().describe('Unresolved questions needing user input (e.g., stack choice, deployment target)')
   },
   async execute(args, context) {
@@ -74,6 +76,7 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
       constraints: args.constraints ? sanitizeResearchText(args.constraints) : undefined,
       patterns: args.patterns ? sanitizeResearchText(args.patterns) : undefined,
       learnings: args.learnings ? sanitizeResearchText(args.learnings) : undefined,
+      risks: args.risks ? sanitizeResearchText(args.risks) : undefined,
       openQuestions: (args.openQuestions && typeof args.openQuestions === 'string' && args.openQuestions.trim().length > 0)
         ? sanitizeResearchText(args.openQuestions)
         : undefined
@@ -99,7 +102,8 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
         activeTask,
         summary: sanitizedArgs.summary,
       });
-    } catch {
+    } catch (error) {
+      debugLog(`Failed to evaluate research artifact mode; defaulting to remake: ${getErrorMessage(error)}`);
       researchMode = 'remake';
     }
 
@@ -113,8 +117,9 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
 
       let chunkCount = 0;
       if (content.length > MAX_INLINE_RESEARCH_CHARS) {
+        const originalLength = content.length;
         chunkCount = await persistResearchChunks(projectDir, content);
-        content += `\n## Persistence Notes\n\nResearch exceeded inline threshold and was persisted in ${chunkCount} chunk files under .setu/research_chunks/.\n`;
+        content = `# Research Summary\n\n> Full research payload (${originalLength} chars) persisted in ${chunkCount} chunk files under \.setu/research_chunks/\n\nSee chunk files for complete research content.`;
       }
 
       await writeFile(researchPath, content);
@@ -142,6 +147,7 @@ function formatResearch(args: {
   constraints?: string;
   patterns?: string;
   learnings?: string;
+  risks?: string;
   openQuestions?: string;
 }): string {
   let content = `# Research Summary
@@ -171,7 +177,7 @@ ${args.patterns}
 ${args.learnings}
 `;
 
-  const risks = args.learnings ? toBulletedListFromLines(args.learnings) : '- No explicit risks recorded yet.';
+  const risks = args.risks ? toBulletedListFromLines(args.risks) : '- No explicit risks recorded yet.';
   content += `
 ## Risks / Unknowns
 
