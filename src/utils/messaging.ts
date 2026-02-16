@@ -1,5 +1,4 @@
 export function formatGuidanceMessage(
-  _title: string,
   why: string,
   nextStep: string,
   safeAlternative?: string

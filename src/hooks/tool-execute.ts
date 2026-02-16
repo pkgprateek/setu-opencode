@@ -302,7 +302,6 @@ export function createToolExecuteBeforeHook(
     if (disciplineState.questionBlocked && !isAllowedDuringQuestionBlock(input.tool, output.args)) {
       throw new Error(
         formatGuidanceMessage(
-          'Awaiting user clarification',
           disciplineState.questionReason ?? 'A required implementation decision is still unanswered.',
           'Ask the user one direct question, then wait for their response.',
           'Read-only inspection is allowed while waiting (read/glob/grep, safe bash, setu_doctor).'
@@ -347,7 +346,6 @@ export function createToolExecuteBeforeHook(
         if (isMutating || input.tool === 'task') {
           throw new Error(
             formatGuidanceMessage(
-              'Overwrite guard active',
               `Pending discipline step: read '${requiredPath}' first.`,
               `Use read on '${requiredPath}' before any further changes.`,
               'Do not use bash/write/edit to bypass this guard.'
@@ -368,7 +366,6 @@ export function createToolExecuteBeforeHook(
         } else if (pendingSafety.status === 'pending' && pendingSafety.actionFingerprint === actionFingerprint) {
           throw new Error(
             formatGuidanceMessage(
-              'Safety confirmation required',
               pendingSafety.reasons.join('; '),
               'Resolve user decision with question tool if available, otherwise use setu_context as explicit checkpoint.',
               'Use a lower-risk alternative if possible.'
@@ -377,7 +374,6 @@ export function createToolExecuteBeforeHook(
         } else if (pendingSafety.status === 'denied' && pendingSafety.actionFingerprint === actionFingerprint) {
           throw new Error(
             formatGuidanceMessage(
-              'Safety confirmation denied',
               pendingSafety.reasons.join('; '),
               'Do not execute this action. Choose a safer alternative or re-ask for explicit approval.',
               'Prefer a local, non-production, non-destructive path.'
@@ -399,7 +395,6 @@ export function createToolExecuteBeforeHook(
           );
           throw new Error(
             formatGuidanceMessage(
-              'Safety confirmation required',
               safetyDecision.reasons.join('; '),
                'Resolve user decision with question tool if available, otherwise use setu_context as explicit checkpoint.',
                'Use a lower-risk alternative if possible.'
@@ -409,7 +404,6 @@ export function createToolExecuteBeforeHook(
 
         throw new Error(
           formatGuidanceMessage(
-            'Execution paused by safety policy',
             safetyDecision.reasons.join('; '),
             'Do not execute this action. Choose a safer alternative.',
             'Use a lower-risk alternative if possible.'
@@ -447,7 +441,6 @@ export function createToolExecuteBeforeHook(
       if (envConflict.hasConflict) {
         throw new Error(
           formatGuidanceMessage(
-            'Potential environment conflict',
             envConflict.reason ?? 'Command can conflict with active development processes.',
             'Stop the dev server first, then run build/verification commands.',
             'If you must continue, run the command manually after confirming local state.'
@@ -564,7 +557,6 @@ export function createToolExecuteBeforeHook(
         if (!fileExists && input.tool === 'edit') {
           throw new Error(
             formatGuidanceMessage(
-              'File does not exist',
               `Cannot edit '${filePath}' because it does not exist.`,
               `Create '${filePath}' with write first, then read and edit as needed.`,
               'Use write for new files and edit only for existing files.'
@@ -581,7 +573,6 @@ export function createToolExecuteBeforeHook(
 
           throw new Error(
             formatGuidanceMessage(
-              'Read required before overwrite',
               `Target file already exists: '${filePath}'.`,
               `Read '${filePath}' first, then update it.`,
               'Use edit for in-place updates after reading the file.'
@@ -653,7 +644,6 @@ export function createToolExecuteBeforeHook(
         );
         throw new Error(
           formatGuidanceMessage(
-            'Execution paused by gear policy',
             createGearBlockMessage(gearBlockResult),
             'Create required artifacts or confirm a reduced-scope request.',
             'Use setu_research first, then setu_plan when needed.'
