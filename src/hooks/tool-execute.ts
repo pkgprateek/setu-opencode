@@ -10,7 +10,7 @@
  * - tool.execute.after: Tracks verification steps, file reads, searches
  */
 
-import { basename, isAbsolute, normalize, resolve } from 'path';
+import { isAbsolute, normalize, resolve } from 'path';
 import { existsSync } from 'fs';
 import {
   determineGear,
@@ -90,45 +90,6 @@ export interface VerificationState {
  */
 const GIT_COMMIT_PATTERN = /\bgit\b(?:\s+[-\w.=\/]+)*\s+commit\b/i;
 const GIT_PUSH_PATTERN = /\bgit\b(?:\s+[-\w.=\/]+)*\s+push\b/i;
-
-/**
- * Package manifest and critical config file patterns for dependency safety
- * Blocks direct edits to these files to prevent accidental corruption
- * 
- * Extended to cover:
- * - Package manifests (package.json, lockfiles)
- * - Package manager configs (.npmrc, .yarnrc) - can add malicious registries
- * - Build configs with executable code (eslint, babel, webpack, vite)
- */
-const PACKAGE_MANIFEST_PATTERNS = [
-  // Package manifests
-  /package\.json$/,
-  /package-lock\.json$/,
-  /yarn\.lock$/,
-  /pnpm-lock\.yaml$/,
-  /bun\.lockb$/,
-  
-  // Package manager configs (can add malicious registries)
-  /\.npmrc$/,
-  /\.yarnrc$/,
-  /\.yarnrc\.yml$/,
-  
-  // Build configs with executable code (run during build/lint)
-  // Note: Only JS/TS configs that execute code; JSON configs are safer
-  /\.eslintrc\.(js|cjs|mjs)$/,
-  /eslint\.config\.(js|cjs|mjs|ts)$/,
-  /babel\.config\.(js|cjs|mjs|ts)$/,
-  /\.babelrc\.(js|cjs|mjs)$/,
-  /webpack\.config\.(js|cjs|mjs|ts)$/,
-  /vite\.config\.(js|cjs|mjs|ts)$/,
-  /rollup\.config\.(js|cjs|mjs|ts)$/,
-  /postcss\.config\.(js|cjs|mjs)$/,
-  /tailwind\.config\.(js|cjs|mjs|ts)$/,
-  
-  // Pre/post scripts (shell injection risk)
-  /\.husky\//,
-  /\.git\/hooks\//,
-] as const;
 
 const MAX_STRINGIFY_DEPTH = 20;
 
@@ -499,38 +460,9 @@ export function createToolExecuteBeforeHook(
       }
     }
     
-    // DEPENDENCY SAFETY ENFORCEMENT
-    // Block direct edits to package manifests to prevent accidental corruption
-    // Applies to: package.json, lockfiles
-    // Reason: Direct edits can corrupt manifests; use package managers instead
+    // PATH TRAVERSAL PREVENTION
     if (input.tool === 'write' || input.tool === 'edit') {
       const filePath = getStringProp(output.args, 'filePath') ?? '';
-      
-      // Normalize path separators for cross-platform pattern matching (Windows uses backslash)
-      const normalizedPath = filePath.replace(/\\/g, '/');
-      
-      const isPackageManifest = PACKAGE_MANIFEST_PATTERNS.some(pattern => 
-        pattern.test(normalizedPath)
-      );
-      
-      if (isPackageManifest) {
-        logSecurityEvent(
-          projectDir,
-          SecurityEventType.DEPENDENCY_EDIT_BLOCKED,
-          `Blocked ${input.tool} to ${basename(filePath)}`,
-          { sessionId: input.sessionID, tool: input.tool }
-        );
-        debugLog(`Dependency Safety BLOCKED: ${input.tool} to ${filePath}`);
-        throw new Error(
-          `⚠️ [Dependency Safety] Direct edits to '${basename(filePath)}' blocked.\n\n` +
-          `Package manifests should be modified via package manager commands:\n` +
-          `  • npm/pnpm/yarn/bun install <package>\n` +
-          `  • npm/pnpm/yarn/bun remove <package>\n\n` +
-          `If you need to edit this file directly, explain why to the user first.`
-        );
-      }
-      
-      // PATH TRAVERSAL PREVENTION
       // Validate file paths are within project directory
       if (getProjectDir) {
         const pathValidation = validateFilePath(projectDir, filePath, { 
