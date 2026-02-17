@@ -72,6 +72,7 @@ async function persistResearchChunks(projectDir: string, content: string): Promi
 export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<typeof tool> => tool({
   description: 'Save research findings to .setu/RESEARCH.md. Call this when you understand the task.',
   args: {
+    task: tool.schema.string().describe('Research task description - what you are investigating'),
     summary: tool.schema.string().describe('Research findings in markdown format. Include codebase analysis, patterns found, and relevant context.'),
     constraints: tool.schema.string().optional().describe('Discovered constraints, limitations, or technical debt'),
     patterns: tool.schema.string().optional().describe('Observed patterns in the codebase (architecture, naming, testing)'),
