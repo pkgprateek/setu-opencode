@@ -62,7 +62,7 @@ describe('system-transform gear messages', () => {
       expect(scoutMessage?.includes('Discovery Phase')).toBe(true);
       expect(scoutMessage?.includes('non-destructive discovery tools')).toBe(true);
       expect(scoutMessage?.includes('You are not required to plan yet')).toBe(true);
-      expect(scoutMessage?.includes('You may write/update research artifacts in .setu/')).toBe(true);
+      expect(scoutMessage?.includes('You may update research artifacts via setu_research')).toBe(true);
       expect(scoutMessage?.includes('Action:')).toBe(false);
     } finally {
       rmSync(testDir, { recursive: true, force: true });

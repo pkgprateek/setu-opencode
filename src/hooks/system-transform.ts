@@ -174,7 +174,7 @@ export function createSystemTransformHook(
               '[Setu] Scout Mode: Discovery Phase\n' +
               'Use any available discovery/read tools and any non-destructive discovery tools to gather evidence.\n' +
               'You are not required to plan yet; continue research until confidence is high.\n' +
-              'You may write/update research artifacts in .setu/; any edits outside .setu/ are blocked in this phase.'
+              'You may update research artifacts via setu_research; generic file edits are restricted in this phase.'
             );
             break;
           case 'architect':
