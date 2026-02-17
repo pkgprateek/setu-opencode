@@ -1,9 +1,7 @@
 import { existsSync } from 'fs';
 import { join, normalize, isAbsolute, resolve, sep } from 'path';
 import { 
-  isSideEffectTool, 
-  isSetuTool,
-  isReadOnlyTool
+  isSideEffectTool
 } from '../constants';
 import { isReadOnlyBashCommand } from './hydration';
 import { debugLog } from '../debug';
@@ -166,9 +164,6 @@ export interface GearBlockResult {
   gear: Gear;
 }
 
-/** Scout gear: only these Setu tools are allowed (hoisted to module scope for performance) */
-const SCOUT_ALLOWED_SETU_TOOLS = new Set(['setu_task', 'setu_context', 'setu_research', 'setu_doctor', 'setu_feedback']);
-
 export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockResult {
   let isReadOnlyBash = false;
   if (tool === 'bash' && typeof (args as Record<string, unknown> | undefined)?.command === 'string') {
@@ -182,9 +177,8 @@ export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockR
 
   switch (gear) {
     case 'scout': {
-      // Only read-only tools or approved Setu tools allowed
-      const isScoutAllowedSetuTool = isSetuTool(tool) && SCOUT_ALLOWED_SETU_TOOLS.has(tool);
-      if (!isReadOnlyTool(tool) && !isScoutAllowedSetuTool && !isReadOnlyBash) {
+      // Block side-effect tools (write, edit, patch, etc.)
+      if (isSideEffectTool(tool)) {
         return {
           blocked: true,
           reason: 'scout_blocked',
@@ -192,20 +186,26 @@ export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockR
           gear
         };
       }
-      return { blocked: false, gear };
-    }
-    case 'architect': {
-      // Read + write to .setu/ only
-      // If it's a side effect tool, it MUST be targeting .setu/ path
-      if (!isReadOnlyTool(tool) && !isSetuTool(tool) && !isReadOnlyBash) {
+      
+      // Block non-read-only bash commands
+      if (tool === 'bash' && !isReadOnlyBash) {
         return {
           blocked: true,
-          reason: 'architect_blocked',
-          details: `Tool '${tool}' blocked in Architect gear. Only Setu or read-only tools are allowed.`,
+          reason: 'scout_blocked',
+          details: `Bash command blocked in Scout gear. Use read-only commands only.`,
           gear
         };
       }
-      if (tool !== 'bash' && isSideEffectTool(tool) && !isSetuPath(args)) {
+      
+      // Allow everything else (read-only tools, setu tools, research tools, safe bash)
+      return { blocked: false, gear };
+    }
+    case 'architect': {
+      // Allow: read-only tools, setu tools, research tools, read-only bash
+      // Block: side-effect tools outside .setu/, non-read-only bash
+      
+      // Block side-effect tools outside .setu/ (write, edit, patch, multiedit, etc.)
+      if (isSideEffectTool(tool) && !isSetuPath(args)) {
         return {
           blocked: true,
           reason: 'architect_blocked',
@@ -213,6 +213,18 @@ export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockR
           gear
         };
       }
+      
+      // Block non-read-only bash (prevents cat > src/main.ts bypass)
+      if (tool === 'bash' && !isReadOnlyBash) {
+        return {
+          blocked: true,
+          reason: 'architect_blocked',
+          details: `Non-read-only bash blocked in Architect gear. Use write/edit tools for file changes, or read-only commands for inspection.`,
+          gear
+        };
+      }
+      
+      // Allow everything else (research tools, read-only tools, setu tools, read-only bash, side-effect in .setu/)
       return { blocked: false, gear };
     }
     case 'builder': {
@@ -241,15 +253,15 @@ export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockR
 export function createGearBlockMessage(result: GearBlockResult): string {
   switch (result.gear) {
     case 'scout':
-      return `Wait: Call setu_research({ task: "...", summary: "..." }) first to document findings and advance.`;
+      return `Call setu_research({ task: "...", summary: "..." }) first to document findings and advance.`;
 
     case 'architect':
-      return `Wait: Call setu_plan({ objective: "...", steps: "..." }) first, then ask user "Ready?".`;
+      return `Research phase complete. You may continue researching or call setu_plan({ objective: "...", steps: "..." }) when ready to create implementation plan.`;
 
     case 'builder':
       // Builder never blocks via gears (verification is a separate gate)
       return '';
     default:
-      return `Wait: Return to Scout gear and re-establish workflow artifacts.`;
+      return `Return to Scout gear and re-establish workflow artifacts.`;
   }
 }
