@@ -171,22 +171,39 @@ export function createSystemTransformHook(
         switch (gearState.current) {
           case 'scout':
             output.system.unshift(
-              '[Setu] Scout Mode: Read-only. Write/edit/delete tools are BLOCKED.\n' +
-              'Action: Call setu_research({ task: "..." }) to document findings and unlock write access.'
+              '[Setu] Scout Mode: Discovery Phase\n' +
+              'Use any available discovery/read tools and any non-destructive discovery tools to gather evidence.\n' +
+              'You are not required to plan yet; continue research until confidence is high.\n' +
+              'You may write/update research artifacts in .setu/; any edits outside .setu/ are blocked in this phase.'
             );
             break;
           case 'architect':
             output.system.unshift(
-              '[Setu] Architect Mode: Planning only. Cannot modify source code yet.\n' +
-              'Action: Call setu_plan({ objective: "...", steps: "..." }) to create PLAN.md.'
+              '[Setu] Architect Mode: Synthesis Phase\n' +
+              'Research findings saved. You may continue discovery or plan when ready.\n' +
+              'Call setu_plan() only when you have sufficient information to execute confidently.\n' +
+              'No forced transition—quality over speed.\n' +
+              'After setu_plan: show user "Ready to execute: [objective]. Reply \'go\' or tell me adjustments"'
             );
             break;
           case 'builder':
             output.system.unshift(
-              '[Setu] Builder Mode: Execute the plan.\n' +
-              'Action: Follow PLAN.md steps. Run setu_verify() before declaring done.'
+              '[Setu] Builder Mode: Execution Phase\n' +
+              'Prioritize implementation; do targeted discovery only when blocked or validating assumptions.\n' +
+              'Execute PLAN.md steps. Run setu_verify() before declaring done.'
             );
             break;
+        }
+        
+        // AGENTS.md warning: only for Setu agent, only when both AGENTS.md and CLAUDE.md are missing
+        // Use existing currentAgent and filesExist variables (already defined earlier)
+        if (currentAgent.toLowerCase() === 'setu') {
+          if (!filesExist.agentsMd && !filesExist.claudeMd) {
+            // Use push (not unshift) so it doesn't outrank core gear/safety guidance
+            output.system.push(
+              '[Setu] No AGENTS.md found; run /init for project rules if desired.'
+            );
+          }
         }
       }
 
