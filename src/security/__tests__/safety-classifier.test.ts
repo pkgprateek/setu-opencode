@@ -14,10 +14,11 @@ describe('safety classifier', () => {
     expect(result.action).toBe('ask');
   });
 
-  test('asks for shell file mutation commands', () => {
+  test('does not flag shell file creation commands', () => {
+    // After simplification, only destructive commands trigger safety
+    // File creation via shell (touch, cat > file, etc.) is allowed
     const result = classifyHardSafety('bash', { command: 'touch hello.txt' });
-    expect(result.hardSafety).toBe(true);
-    expect(result.action).toBe('ask');
+    expect(result.hardSafety).toBe(false);
   });
 
   test('asks for sensitive file writes', () => {
