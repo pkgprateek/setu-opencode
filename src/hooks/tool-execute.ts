@@ -112,7 +112,7 @@ function hasReadTargetFile(collector: ContextCollector | null, projectDir: strin
   });
 }
 
-function stableStringify(value: unknown, depth = 0): string {
+function stableStringify(value: unknown, depth = 0, seen = new WeakSet<object>()): string {
   if (depth > MAX_STRINGIFY_DEPTH) {
     return JSON.stringify('[MaxDepth]');
   }
@@ -121,13 +121,19 @@ function stableStringify(value: unknown, depth = 0): string {
     return JSON.stringify(value);
   }
 
+  // Circular reference protection
+  if (seen.has(value)) {
+    return JSON.stringify('[Circular]');
+  }
+  seen.add(value);
+
   if (Array.isArray(value)) {
-    return `[${value.map((item) => stableStringify(item, depth + 1)).join(',')}]`;
+    return `[${value.map((item) => stableStringify(item, depth + 1, seen)).join(',')}]`;
   }
 
   const entries = Object.entries(value as Record<string, unknown>)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, val]) => `${JSON.stringify(key)}:${stableStringify(val, depth + 1)}`);
+    .map(([key, val]) => `${JSON.stringify(key)}:${stableStringify(val, depth + 1, seen)}`);
   return `{${entries.join(',')}}`;
 }
 
@@ -346,6 +352,16 @@ export function createToolExecuteBeforeHook(
       const safetyDecision = classifyHardSafety(input.tool, output.args);
       if (!consumedApproval && safetyDecision.hardSafety) {
         if (safetyDecision.action === 'ask') {
+          // Log safety confirmation request
+          logSecurityEvent(
+            projectDir,
+            SecurityEventType.SAFETY_BLOCKED,
+            `Safety confirmation required for ${input.tool}: ${safetyDecision.reasons.join('; ')}`,
+            { sessionId: input.sessionID, tool: input.tool }
+          );
+          // SECURITY: Clear any stale pending confirmation before setting new one
+          // Prevents confusion when a different action fingerprint is processed
+          clearPendingSafetyConfirmation(input.sessionID);
           setPendingSafetyConfirmation(input.sessionID, {
             actionFingerprint,
             reasons: safetyDecision.reasons,
@@ -362,6 +378,14 @@ export function createToolExecuteBeforeHook(
              )
            );
         }
+
+        // Log hard block for destructive commands
+        logSecurityEvent(
+          projectDir,
+          SecurityEventType.SAFETY_BLOCKED,
+          `Hard blocked ${input.tool}: ${safetyDecision.reasons.join('; ')}`,
+          { sessionId: input.sessionID, tool: input.tool }
+        );
 
         throw new Error(
           formatGuidanceMessage(
@@ -629,17 +653,18 @@ export function createToolExecuteAfterHook(
     }
 
     if (input.tool === 'question') {
-      clearQuestionBlocked(input.sessionID);
-
       const pendingSafety = getPendingSafetyConfirmation(input.sessionID);
+
       if (pendingSafety) {
         if (isQuestionRelatedToPending(output, pendingSafety)) {
           const decision = getQuestionDecision(output);
           if (decision === 'approved') {
             approvePendingSafetyConfirmation(input.sessionID, pendingSafety.actionFingerprint);
+            clearQuestionBlocked(input.sessionID);
             debugLog('Safety confirmation approved by user');
           } else if (decision === 'denied') {
             denyPendingSafetyConfirmation(input.sessionID, pendingSafety.actionFingerprint);
+            clearQuestionBlocked(input.sessionID);
             debugLog('Safety confirmation denied by user');
           } else {
             debugLog('Safety confirmation unresolved; keeping pending state');
@@ -647,6 +672,9 @@ export function createToolExecuteAfterHook(
         } else {
           debugLog('Question response unrelated to pending safety confirmation; keeping pending state');
         }
+      } else {
+        // No pending safety - safe to clear question block for any question
+        clearQuestionBlocked(input.sessionID);
       }
 
       debugLog('Question answered; cleared question block');
