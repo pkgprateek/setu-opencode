@@ -32,6 +32,22 @@ describe('artifact-policy', () => {
     expect(mode).toBe('remake');
   });
 
+  test('research mode returns remake when no existing research', () => {
+    // Tests early-return branch: hasExistingResearch: false
+    const mode = decideResearchArtifactMode({
+      hasExistingResearch: false,
+      activeTask: {
+        task: 'Implement authentication middleware with JWT',
+        constraints: [],
+        startedAt: new Date().toISOString(),
+        status: 'in_progress',
+      },
+      summary: 'Initial research on JWT implementation.',
+    });
+
+    expect(mode).toBe('remake');
+  });
+
   test('plan mode appends for small file delta', () => {
     const mode = decidePlanArtifactMode({
       hasExistingPlan: true,
@@ -64,6 +80,42 @@ describe('artifact-policy', () => {
     });
 
     expect(mode).toBe('remake');
+  });
+
+  test('plan mode returns remake when no existing plan', () => {
+    // Tests early-return branch: hasExistingPlan: false
+    const mode = decidePlanArtifactMode({
+      hasExistingPlan: false,
+      existingPlanContent: '',
+      activeTask: {
+        task: 'Implement JWT auth middleware',
+        constraints: [],
+        startedAt: new Date().toISOString(),
+        status: 'in_progress',
+      },
+      objective: 'Create initial implementation plan',
+      fileEdits: '- src/a.ts\n- src/b.ts',
+    });
+
+    expect(mode).toBe('remake');
+  });
+
+  test('plan mode returns append when fileEdits is empty', () => {
+    // Tests early-return branch: fileEdits: ''
+    const mode = decidePlanArtifactMode({
+      hasExistingPlan: true,
+      existingPlanContent: '## File-level Edit List\n- src/a.ts\n',
+      activeTask: {
+        task: 'Implement JWT auth middleware',
+        constraints: [],
+        startedAt: new Date().toISOString(),
+        status: 'in_progress',
+      },
+      objective: 'Improve JWT auth middleware behavior',
+      fileEdits: '',
+    });
+
+    expect(mode).toBe('append');
   });
 
   test('plan mode does not treat substring path matches as existing files', () => {
