@@ -403,6 +403,7 @@ Detects common issues that cause "ghost loops":
 - Git: uncommitted changes, detached HEAD
 - Dependencies: missing node_modules, outdated lockfile
 - Runtime: missing Node.js, TypeScript issues
+- Project Rules: validates AGENTS.md and CLAUDE.md (or compatible project policy files)
 
 Run this before starting complex tasks to ensure a clean environment.`,
     
