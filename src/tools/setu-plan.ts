@@ -1,184 +1,274 @@
 import { tool } from '@opencode-ai/plugin';
 import { validateProjectDir } from '../utils/path-validation';
 import { join } from 'path';
-import { writeFile } from 'fs/promises';
-import { existsSync } from 'fs';
-import { setQuestionBlocked } from '../context';
-import { resetProgress } from '../context/active';
+import { writeFile, readFile } from 'fs/promises';
+import { decidePlanArtifactMode } from '../context';
+import { loadActiveTask, resetProgress } from '../context/active';
 import { ensureSetuDir } from '../context/storage';
 import { clearResults } from '../context/results';
 import { getErrorMessage } from '../utils/error-handling';
-import { createPromptSanitizer } from '../utils/sanitization';
+import { createPromptMultilineSanitizer, createPromptSanitizer } from '../utils/sanitization';
 import { debugLog } from '../debug';
 
-// Create sanitizers for different field lengths
+// PLAN_TEMPLATE is embedded to ensure it's available at runtime
+export const PLAN_TEMPLATE = `# Plan Template
+
+## Objective
+[One sentence: what this plan accomplishes]
+
+## Context Summary
+[2-3 sentences from RESEARCH.md for subagent context]
+
+## Non-goals
+[What is intentionally out of scope]
+
+## Assumptions / Constraints
+[Assumptions and constraints: stack, runtime, env]
+
+## File-level Edit List
+- [file path 1]
+- [file path 2]
+
+## Steps
+# Phase 1: [Phase Name]
+## Task 1.1: [Task Name]
+- Step 1: [Atomic action]
+  - Why: [Justification]
+  - Edit(s): [Files]
+  - Commands: [Commands]
+
+## Task 1.2: [Next Task]
+- Step 1: [Action]
+  - Why: [Reason]
+  - Edit(s): [Files]
+  - Commands: [Commands]
+
+## Expected Output
+[What success looks like]
+
+## Rollback Note
+[How to revert]
+
+## Acceptance Tests
+- [Test 1]
+- [Test 2]
+
+## Verify Protocol
+build -> lint -> test
+
+## Success Criteria
+Plan is complete only if expected output, acceptance tests, and verify protocol pass.
+`;
+
 const sanitizeObjective = createPromptSanitizer(500);
-const sanitizeContextSummary = createPromptSanitizer(1000);
-const sanitizeSteps = createPromptSanitizer(10000); // Steps can be longer
-const sanitizeSuccessCriteria = createPromptSanitizer(2000);
+const sanitizeContextSummary = createPromptMultilineSanitizer(1000);
+const sanitizeSteps = createPromptMultilineSanitizer(10000);
+const sanitizeSection = createPromptMultilineSanitizer(2000);
 
-export function countStructuredSteps(rawSteps: string): number {
-  const lines = rawSteps.split('\n');
-  let count = 0;
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    if (
-      /^(#{2,6})\s*(?:step|task|phase|item)?\s*\d*[:.-]?\s+.+$/i.test(trimmed) ||
-      /^\d+\s*[.)-:]\s+.+$/.test(trimmed) ||
-      /^[-*]\s+.+$/.test(trimmed)
-    ) {
-      count++;
-    }
-  }
-  return count;
-}
-
-export function normalizeUnstructuredSteps(rawSteps: string): string {
-  const compact = rawSteps.replace(/\s+/g, ' ').trim();
-  if (!compact) {
-    return `## Step 1: Implement requested change\n- Apply the requested update safely.\n\n## Step 2: Verify result\n- Validate output and report completion.`;
-  }
-
-  const sentenceCandidates = compact
-    .split(/(?<=[.!?])\s+/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, 6);
-
-  const first = sentenceCandidates[0] ?? 'Implement the requested change.';
-  const second = sentenceCandidates[1] ?? 'Verify the result and confirm completion.';
-
-  return `## Step 1: Execute request\n- ${first}\n\n## Step 2: Verify outcome\n- ${second}`;
-}
-
-export function normalizeStepsInput(rawSteps: string): { steps: string; stepCount: number } {
-  const structuredCount = countStructuredSteps(rawSteps);
-  if (structuredCount > 0) {
-    return { steps: rawSteps, stepCount: structuredCount };
-  }
-
-  const normalized = normalizeUnstructuredSteps(rawSteps);
-  return {
-    steps: normalized,
-    stepCount: countStructuredSteps(normalized),
-  };
+function countSteps(steps: string): number {
+  return steps.match(/^-\s+Step\s+\d+:/gim)?.length ?? 0;
 }
 
 export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<typeof tool> => tool({
-  description: 'Create execution plan in .setu/PLAN.md. Requires RESEARCH.md to exist. Resets step progress to 0.',
+  description: 'Create execution plan in .setu/PLAN.md. Requires RESEARCH.md.',
   args: {
     objective: tool.schema.string().describe('One sentence: what this plan accomplishes'),
-    contextSummary: tool.schema.string().describe('2-3 sentences from RESEARCH.md for subagent context'),
-    steps: tool.schema.string().describe('Full step definitions using the atomic format (see PLAN_TEMPLATE)'),
-    successCriteria: tool.schema.string().describe('Truths, artifacts, and key links that prove completion')
+    contextSummary: tool.schema.string().optional().describe('2-3 sentences from RESEARCH.md'),
+    nonGoals: tool.schema.string().optional().describe('What is out of scope'),
+    assumptions: tool.schema.string().optional().describe('Stack, runtime, constraints'),
+    fileEdits: tool.schema.string().describe('Files to modify'),
+    steps: tool.schema.string().describe('Phase > Task > Step with Why/Edit(s)/Commands. See PLAN_TEMPLATE.md'),
+    expectedOutput: tool.schema.string().optional().describe('What success looks like'),
+    rollbackNote: tool.schema.string().optional().describe('How to revert'),
+    acceptanceTests: tool.schema.string().optional().describe('Bullet list of tests'),
+    verifyProtocol: tool.schema.string().optional().describe('Defaults to build -> lint -> test')
   },
-  async execute(args, context) {
+  async execute(args): Promise<string> {
     const projectDir = getProjectDir();
 
-    // Validate projectDir to prevent directory traversal
     try {
       validateProjectDir(projectDir);
     } catch (error) {
       throw new Error(`Invalid project directory: ${getErrorMessage(error)}`);
     }
 
-    // Validate required fields
-    if (!args.objective?.trim()) {
-      throw new Error('objective is required and cannot be empty');
+    if (!args.objective?.trim()) throw new Error('objective is required');
+    if (!args.steps?.trim()) throw new Error('steps is required');
+
+    // Async check for RESEARCH.md existence
+    let hasResearch = false;
+    try {
+      await readFile(join(projectDir, '.setu', 'RESEARCH.md'), 'utf-8');
+      hasResearch = true;
+    } catch (error) {
+      // Only ENOENT means "file not found" - other errors (EACCES, EMFILE, etc.) should be rethrown
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+        hasResearch = false;
+      } else {
+        // Rethrow non-ENOENT errors with original context
+        throw new Error(`Failed to check RESEARCH.md: ${getErrorMessage(error)}`);
+      }
+    }
+    if (!hasResearch) {
+      throw new Error('RESEARCH.md required. Run setu_research first.');
     }
 
-    if (!args.steps?.trim()) {
-      throw new Error('steps is required and cannot be empty');
-    }
+    const stepCount = countSteps(args.steps);
+    if (stepCount > 100) throw new Error(`Too many steps (${stepCount}). Max is 100.`);
 
-    // Validate step count to prevent DoS (max 100 steps) and normalize unstructured plans
-    const normalizedStepsResult = normalizeStepsInput(args.steps);
-    const stepCount = normalizedStepsResult.stepCount;
-    if (stepCount > 100) {
-      throw new Error(`Too many steps (${stepCount}). Maximum is 100.`);
-    }
-
-    // Check precondition: RESEARCH.md must exist
-    if (!existsSync(join(projectDir, '.setu', 'RESEARCH.md'))) {
-      throw new Error('RESEARCH.md required before creating PLAN.md. Run setu_research first.');
-    }
-
-    // Sanitize inputs before persisting (content may be injected into prompts later)
-    // Validate null/undefined at API boundaries per guidelines
-    const sanitizedArgs = {
+    const sanitized = {
       objective: sanitizeObjective(args.objective),
       contextSummary: sanitizeContextSummary(args.contextSummary ?? ''),
-      steps: sanitizeSteps(normalizedStepsResult.steps), // Steps can be longer
-      successCriteria: sanitizeSuccessCriteria(args.successCriteria ?? '')
+      nonGoals: sanitizeSection(args.nonGoals ?? ''),
+      assumptions: sanitizeSection(args.assumptions ?? ''),
+      fileEdits: sanitizeSection(args.fileEdits ?? ''),
+      steps: sanitizeSteps(args.steps),
+      expectedOutput: sanitizeSection(args.expectedOutput ?? ''),
+      rollbackNote: sanitizeSection(args.rollbackNote ?? ''),
+      acceptanceTests: sanitizeSection(args.acceptanceTests ?? ''),
+      verifyProtocol: sanitizeSection(args.verifyProtocol ?? 'build -> lint -> test')
     };
+
+    const planPath = join(projectDir, '.setu', 'PLAN.md');
+    // Async read for existing plan
+    let existingPlan = '';
+    try {
+      existingPlan = await readFile(planPath, 'utf-8');
+    } catch (error) {
+      // Only ENOENT means "file not found" - other errors should be rethrown
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+        existingPlan = '';
+      } else {
+        throw new Error(`Failed to read existing PLAN.md: ${getErrorMessage(error)}`);
+      }
+    }
+    const planMode = decidePlanArtifactMode({
+      hasExistingPlan: existingPlan.length > 0,
+      existingPlanContent: existingPlan,
+      activeTask: loadActiveTask(projectDir),
+      objective: sanitized.objective,
+      fileEdits: sanitized.fileEdits,
+    });
+
+    const content = planMode === 'append' && existingPlan
+      ? `${existingPlan.trimEnd()}\n\n## Revisions (${new Date().toISOString()})\n\n${formatPlan(sanitized, true)}`
+      : formatPlan(sanitized);
     
-    // Format the plan using template structure
-    const content = formatPlan(sanitizedArgs);
-    
-    // Ensure .setu/ directory exists (defensive - may have been deleted since RESEARCH.md check)
     ensureSetuDir(projectDir);
     
-    // Write PLAN.md
     try {
-      await writeFile(join(projectDir, '.setu', 'PLAN.md'), content);
+      await writeFile(planPath, content);
     } catch (error) {
-      throw new Error(`Failed to save plan: ${getErrorMessage(error)}. Check .setu/ directory permissions.`);
+      throw new Error(`Failed to save plan: ${getErrorMessage(error)}`);
     }
     
-    // CRITICAL: Reset progress to step 0 — new plan means fresh start
-    resetProgress(projectDir);
-    
-    let resultsCleared = true;
-    // Clear old results for fresh start (best-effort, non-critical)
-    try {
-      clearResults(projectDir);
-    } catch (error) {
-      // Log but don't fail — stale results won't break execution
-      debugLog(`Failed to clear old results: ${getErrorMessage(error)}`);
-      resultsCleared = false;
-    }
-    
-    // Trigger user approval before execution begins
-    if (context?.sessionID) {
-      setQuestionBlocked(
-        context.sessionID,
-        `Plan created with ${stepCount} steps. Ask the user to review and approve the plan before executing.`
-      );
+    if (planMode === 'remake') {
+      resetProgress(projectDir);
+      try {
+        clearResults(projectDir);
+      } catch (e) {
+        debugLog(`clearResults failed for projectDir=${projectDir}:`, e);
+      }
     }
 
-    // SECURITY: Log gear transition (architect → builder unlocks write operations)
-    debugLog(`[AUDIT] Gear transition: architect → builder. Plan created with ${stepCount} steps. Project: ${projectDir}`);
+    debugLog(`[AUDIT] Plan ${planMode === 'append' ? 'revised' : 'created'}. Steps: ${stepCount}. Project: ${projectDir}`);
     
-    return `Plan created with ${stepCount} steps. Gear shifted: architect → builder. Progress reset to Step 0. ${resultsCleared ? 'Old results cleared.' : 'Warning: failed to clear old results.'}\n\n**Action required**: Ask the user to confirm this plan before executing.`;
+    const fileCount = sanitized.fileEdits.split('\n').filter(l => l.trim().startsWith('-')).length;
+    const filePreview = sanitized.fileEdits.split('\n').slice(0, 3).map(l => l.replace(/^-\s*/, '').trim()).join(', ');
+    const filesText = fileCount > 3 ? `${filePreview}... (+${fileCount - 3} more)` : filePreview;
+    const stepPreview = sanitized.steps.split('\n').filter(l => l.trim().startsWith('- Step')).slice(0, 3).map(l => l.replace(/^-\s+Step\s+\d+:\s*/, '')).join('; ');
+    
+    return `Plan ${planMode === 'append' ? 'revised' : 'created'} (${stepCount} steps).
+
+**Ready to execute**: ${sanitized.objective}
+**Files**: ${filesText || 'No files listed'}
+
+**Plan preview**: ${stepPreview || 'See PLAN.md for full details'}
+
+Reply "go" to start, or tell me what to adjust.`;
   }
 });
 
-/**
- * Format plan content from args
- */
 function formatPlan(args: {
   objective: string;
   contextSummary: string;
+  nonGoals: string;
+  assumptions: string;
+  fileEdits: string;
   steps: string;
-  successCriteria: string;
-}): string {
-  return `# Plan
-
-## Objective
-
+  expectedOutput: string;
+  rollbackNote: string;
+  acceptanceTests: string;
+  verifyProtocol: string;
+}, isRevision = false): string {
+  const h = isRevision ? '###' : '##';
+  
+  if (isRevision) {
+    return `${h} Objective Update
 ${args.objective}
 
-## Context Summary
-
+${h} Context Update
 ${args.contextSummary}
 
-## Steps
+${h} Non-goals
+${args.nonGoals}
 
+${h} Assumptions / Constraints
+${args.assumptions}
+
+${h} File-level Edit List
+${args.fileEdits}
+
+${h} Steps
 ${args.steps}
 
-## Success Criteria
+${h} Expected Output
+${args.expectedOutput}
 
-${args.successCriteria}
+${h} Rollback Note
+${args.rollbackNote}
+
+${h} Acceptance Tests
+${args.acceptanceTests}
+
+${h} Verify Protocol
+${args.verifyProtocol}
+`;
+  }
+
+  return `# Plan
+
+${h} Objective
+${args.objective}
+
+${h} Context Summary
+${args.contextSummary}
+
+${h} Non-goals
+${args.nonGoals}
+
+${h} Assumptions / Constraints
+${args.assumptions}
+
+${h} File-level Edit List
+${args.fileEdits}
+
+${h} Steps
+${args.steps}
+
+${h} Expected Output
+${args.expectedOutput}
+
+${h} Rollback Note
+${args.rollbackNote}
+
+${h} Acceptance Tests
+${args.acceptanceTests}
+
+${h} Verify Protocol
+${args.verifyProtocol}
+
+${h} Success Criteria
+Plan is complete only if expected output, acceptance tests, and verify protocol pass.
 `;
 }

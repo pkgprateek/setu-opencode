@@ -5,7 +5,7 @@
  * for forensics and debugging.
  */
 
-import { existsSync, appendFileSync } from 'fs';
+import { appendFileSync } from 'fs';
 import { join } from 'path';
 import { ensureSetuDir } from '../context/feedback';
 import { debugLog } from '../debug';
@@ -21,16 +21,17 @@ export enum SecurityEventType {
   PATH_TRAVERSAL_BLOCKED = 'PATH_TRAVERSAL_BLOCKED',
   SENSITIVE_FILE_BLOCKED = 'SENSITIVE_FILE_BLOCKED',
   CONSTRAINT_VIOLATION = 'CONSTRAINT_VIOLATION',
-  PHASE0_BLOCKED = 'PHASE0_BLOCKED',
+  HYDRATION_BLOCKED = 'HYDRATION_BLOCKED',
   GIT_DISCIPLINE_BLOCKED = 'GIT_DISCIPLINE_BLOCKED',
   DEPENDENCY_EDIT_BLOCKED = 'DEPENDENCY_EDIT_BLOCKED',
   GEAR_BLOCKED = 'GEAR_BLOCKED',
-  
+  SAFETY_BLOCKED = 'SAFETY_BLOCKED',
+
   // Warning events
   BYPASS_ATTEMPT_DETECTED = 'BYPASS_ATTEMPT_DETECTED',
   SECRETS_DETECTED = 'SECRETS_DETECTED',
   PROMPT_INJECTION_SANITIZED = 'PROMPT_INJECTION_SANITIZED',
-  
+
   // Info events
   RATE_LIMIT_TRIGGERED = 'RATE_LIMIT_TRIGGERED',
   CONSTRAINT_ENFORCED = 'CONSTRAINT_ENFORCED'
@@ -55,10 +56,11 @@ const EVENT_SEVERITY: Record<SecurityEventType, SecurityEvent['severity']> = {
   [SecurityEventType.PATH_TRAVERSAL_BLOCKED]: 'high',
   [SecurityEventType.SENSITIVE_FILE_BLOCKED]: 'medium',
   [SecurityEventType.CONSTRAINT_VIOLATION]: 'medium',
-  [SecurityEventType.PHASE0_BLOCKED]: 'low',
+  [SecurityEventType.HYDRATION_BLOCKED]: 'low',
   [SecurityEventType.GIT_DISCIPLINE_BLOCKED]: 'medium',
   [SecurityEventType.DEPENDENCY_EDIT_BLOCKED]: 'medium',
   [SecurityEventType.GEAR_BLOCKED]: 'medium',
+  [SecurityEventType.SAFETY_BLOCKED]: 'high',
   [SecurityEventType.BYPASS_ATTEMPT_DETECTED]: 'high',
   [SecurityEventType.SECRETS_DETECTED]: 'critical',
   [SecurityEventType.PROMPT_INJECTION_SANITIZED]: 'medium',
@@ -103,15 +105,21 @@ function formatSecurityEvent(event: SecurityEvent): string {
 /**
  * Sanitize event details to prevent log injection
  * 
- * Normalizes newlines (CRLF/CR/LF) to single spaces and collapses repeated whitespace.
- * This prevents attackers from injecting fake log entries via newline characters.
+ * Strips null bytes and C0/C1 control characters, normalizes newlines (CRLF/CR/LF) 
+ * to single spaces, and collapses repeated whitespace.
+ * This prevents attackers from injecting fake log entries via newline or control characters.
  * 
  * @param details - Raw event details
  * @returns Sanitized details safe for logging
  */
 function sanitizeLogDetails(details: string): string {
-  // Replace all CRLF, CR, and LF with a single space
+  // SECURITY: Strip control characters but preserve CR/LF for newline normalization
+  // C0 controls (0x00-0x1F): exclude CR (0x0D) and LF (0x0A) so they can be normalized
+  // C1 controls (0x7F-0x9F): strip all
+  // This prevents log injection while ensuring proper newline handling
   return details
+    .replace(/[\x00-\x09\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g, '')
+    // Replace all CRLF, CR, and LF with a single space
     .replace(/\r\n|\r|\n/g, ' ')
     // Collapse multiple spaces into one
     .replace(/\s+/g, ' ')
@@ -157,18 +165,14 @@ export function logSecurityEvent(
     const setuDir = ensureSetuDir(projectDir);
     const logPath = join(setuDir, SECURITY_LOG);
     
-    // Add header if file doesn't exist
-    // Use atomic operation to prevent TOCTOU race
-    if (!existsSync(logPath)) {
-      const header = `# Setu Security Log\n# This file records security-relevant events for forensics\n# Format: [timestamp] SEVERITY | EVENT_TYPE | session:id | tool:name | details\n${'='.repeat(80)}\n\n`;
-      try {
-        // Atomic write with exclusive flag - fails if file exists
-        appendFileSync(logPath, header, { flag: 'wx' });
-      } catch (err: unknown) {
-        // File was created by another process - that's fine, skip header
-        if (err && typeof err === 'object' && 'code' in err && err.code !== 'EEXIST') {
-          throw err; // Re-throw non-EEXIST errors
-        }
+    // Write header atomically on first create; 'wx' fails with EEXIST if another
+    // process already created the file — that race is safe to ignore.
+    const header = `# Setu Security Log\n# This file records security-relevant events for forensics\n# Format: [timestamp] SEVERITY | EVENT_TYPE | session:id | tool:name | details\n${'='.repeat(80)}\n\n`;
+    try {
+      appendFileSync(logPath, header, { flag: 'wx' });
+    } catch (err: unknown) {
+      if (!(err && typeof err === 'object' && 'code' in err && err.code === 'EEXIST')) {
+        throw err;
       }
     }
     

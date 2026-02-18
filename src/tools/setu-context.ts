@@ -1,5 +1,5 @@
 /**
- * setu_context tool - Confirm context for Phase 0
+ * setu_context tool - Confirm context for hydration
  * 
  * This tool allows the agent to mark that context has been confirmed,
  * which unlocks side-effect tools (write, edit, bash commands).
@@ -15,8 +15,8 @@
  */
 
 import { tool } from '@opencode-ai/plugin';
-import { type Phase0State } from '../enforcement';
-import { type ContextCollector } from '../context';
+import { type HydrationState } from '../enforcement';
+import { clearQuestionBlocked, type ContextCollector } from '../context';
 import { errorLog } from '../debug';
 import { sanitizeContextInput } from '../security/prompt-sanitization';
 import { logSecurityEvent, SecurityEventType } from '../security/audit-log';
@@ -24,31 +24,31 @@ import { logSecurityEvent, SecurityEventType } from '../security/audit-log';
 export interface SetuContextResult {
   success: boolean;
   message: string;
-  phase0Active: boolean;
+  hydrationActive: boolean;
 }
 
 /**
- * Create a tool that confirms Phase 0 context, unlocks side-effect tools, and optionally persists the confirmed context.
+ * Create a tool that confirms hydration context, unlocks side-effect tools, and optionally persists the confirmed context.
  *
  * When executed the tool marks context as confirmed, may persist the provided summary/task/plan via a ContextCollector,
- * and returns a formatted status message including how long Phase 0 took.
+ * and returns a formatted status message including how long hydration took.
  *
- * @param getPhase0State - Accessor that returns the current Phase 0 state
- * @param confirmContext - Callback used to mark Phase 0 context as confirmed
+ * @param getHydrationState - Accessor that returns the current hydration state
+ * @param confirmContext - Callback used to mark hydration context as confirmed
  * @param getContextCollector - Optional accessor that returns a ContextCollector or `null`; if provided and non-null,
  *                              the collector is used to persist the confirmed context to disk
  * @param getProjectDir - Optional accessor for project directory (defaults to process.cwd())
  * @returns A tool definition that performs the context confirmation, optional persistence, and produces a status string
  */
 export function createSetuContextTool(
-  getPhase0State: () => Phase0State,
+  getHydrationState: () => HydrationState,
   confirmContext: () => void,
   getContextCollector?: () => ContextCollector | null,
   getProjectDir?: () => string
 ): ReturnType<typeof tool> {
   return tool({
     description: `Confirm that context has been gathered and understood. 
-This unlocks side-effect tools (write, edit, bash commands) that are blocked during Phase 0.
+This unlocks side-effect tools (write, edit, bash commands) that are blocked during hydration.
 
 Call this tool after:
 1. Reading relevant files (entry points, configs, key modules)
@@ -75,8 +75,12 @@ Once confirmed, context is persisted to .setu/ for continuity.`,
     },
     
     async execute(args, context): Promise<string> {
-      const state = getPhase0State();
+      const state = getHydrationState();
       const projectDir = getProjectDir ? getProjectDir() : process.cwd();
+
+      if (context?.sessionID) {
+        clearQuestionBlocked(context.sessionID);
+      }
       
       if (state.contextConfirmed) {
         return `Context was already confirmed. Side-effect tools are already unlocked.
@@ -100,8 +104,19 @@ If you need to update the context or plan, you can continue working.`;
         );
       }
       
-      // Confirm context in Phase 0 state
-      confirmContext();
+      // Confirm context in hydration state.
+      // Always attempt to clear question blocking in finally so fallback
+      // decision resolution remains consistent even if confirmation throws.
+      try {
+        confirmContext();
+      } catch (error) {
+        errorLog('Failed to confirm context:', error);
+        throw error;
+      } finally {
+        if (context?.sessionID) {
+          clearQuestionBlocked(context.sessionID);
+        }
+      }
       
       // Persist to .setu/ if collector is available
       if (getContextCollector) {
@@ -124,7 +139,7 @@ If you need to update the context or plan, you can continue working.`;
         ? `\n\n**Plan:**\n${sanitizedPlan}` 
         : '';
       
-      return `**Phase 0 Complete** (${duration}s)
+      return `**Hydration Complete** (${duration}s)
 
 **Understanding:**
 ${sanitizedSummary}

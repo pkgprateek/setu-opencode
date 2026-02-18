@@ -1,3 +1,5 @@
+import { errorLog } from '../debug';
+
 /**
  * Discipline guards - safety mechanisms that can activate at any gear.
  * These are NOT workflow phases. Gears handle workflow order.
@@ -9,7 +11,16 @@ export interface SetuDisciplineState {
   questionReason?: string;
   /** Whether a safety classifier triggered a block */
   safetyBlocked: boolean;
+  /** Optional pending safety confirmation for risky actions */
+  pendingSafetyConfirmation?: PendingSafetyConfirmation;
   /** When this state was last updated (for TTL) */
+  updatedAt: number;
+}
+
+export interface PendingSafetyConfirmation {
+  actionFingerprint: string;
+  reasons: string[];
+  status: 'pending' | 'approved' | 'denied';
   updatedAt: number;
 }
 
@@ -87,6 +98,114 @@ export function clearSafetyBlocked(sessionID: string): void {
   sessionStates.set(sessionID, {
     ...state,
     safetyBlocked: false,
+    updatedAt: Date.now(),
+  });
+}
+
+export function setPendingSafetyConfirmation(
+  sessionID: string,
+  payload: { actionFingerprint: string; reasons: string[] }
+): void {
+  const fingerprint = payload.actionFingerprint?.trim();
+  if (!fingerprint) {
+    throw new Error('actionFingerprint is required for safety confirmation');
+  }
+
+  const reasons = payload.reasons
+    .map((reason) => reason.trim())
+    .filter((reason) => reason.length > 0);
+
+  if (reasons.length === 0) {
+    throw new Error('reasons must include at least one non-empty entry');
+  }
+
+  const state = getDisciplineState(sessionID);
+  sessionStates.set(sessionID, {
+    ...state,
+    pendingSafetyConfirmation: {
+      actionFingerprint: fingerprint,
+      reasons,
+      status: 'pending',
+      updatedAt: Date.now(),
+    },
+    updatedAt: Date.now(),
+  });
+}
+
+export function getPendingSafetyConfirmation(sessionID: string): PendingSafetyConfirmation | null {
+  const state = getDisciplineState(sessionID);
+  const pending = state.pendingSafetyConfirmation;
+  if (!pending) {
+    return null;
+  }
+
+  if (isStale(pending.updatedAt, STATE_TTL_MS)) {
+    sessionStates.set(sessionID, {
+      ...state,
+      pendingSafetyConfirmation: undefined,
+      updatedAt: Date.now(),
+    });
+    return null;
+  }
+
+  return pending;
+}
+
+export function approvePendingSafetyConfirmation(sessionID: string, actionFingerprint: string): boolean {
+  const state = getDisciplineState(sessionID);
+  const pending = state.pendingSafetyConfirmation;
+  if (!pending || pending.actionFingerprint !== actionFingerprint) {
+    // Log fingerprint mismatch as structured security event (redacted)
+    const expected = pending?.actionFingerprint ? `${pending.actionFingerprint.slice(0, 8)}...` : 'none';
+    const got = actionFingerprint ? `${actionFingerprint.slice(0, 8)}...` : 'empty';
+    errorLog(
+      `[setu] safety_confirmation_fingerprint_mismatch (approve) session=${sessionID} expected=${expected} got=${got}`
+    );
+    return false;
+  }
+
+  sessionStates.set(sessionID, {
+    ...state,
+    pendingSafetyConfirmation: {
+      ...pending,
+      status: 'approved',
+      updatedAt: Date.now(),
+    },
+    updatedAt: Date.now(),
+  });
+  return true;
+}
+
+export function denyPendingSafetyConfirmation(sessionID: string, actionFingerprint: string): boolean {
+  const state = getDisciplineState(sessionID);
+  const pending = state.pendingSafetyConfirmation;
+  if (!pending || pending.actionFingerprint !== actionFingerprint) {
+    // Log fingerprint mismatch as structured security event (redacted)
+    const expected = pending?.actionFingerprint ? `${pending.actionFingerprint.slice(0, 8)}...` : 'none';
+    const got = actionFingerprint ? `${actionFingerprint.slice(0, 8)}...` : 'empty';
+    errorLog(
+      `[setu] safety_confirmation_fingerprint_mismatch (deny) session=${sessionID} expected=${expected} got=${got}`
+    );
+    return false;
+  }
+
+  sessionStates.set(sessionID, {
+    ...state,
+    pendingSafetyConfirmation: {
+      ...pending,
+      status: 'denied',
+      updatedAt: Date.now(),
+    },
+    updatedAt: Date.now(),
+  });
+  return true;
+}
+
+export function clearPendingSafetyConfirmation(sessionID: string): void {
+  const state = getDisciplineState(sessionID);
+  sessionStates.set(sessionID, {
+    ...state,
+    pendingSafetyConfirmation: undefined,
     updatedAt: Date.now(),
   });
 }

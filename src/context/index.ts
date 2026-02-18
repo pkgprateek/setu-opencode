@@ -106,7 +106,11 @@ export {
 } from './project-rules';
 
 // Discipline guards (safety, question blocking, overwrite protection)
-export type { SetuDisciplineState, OverwriteRequirementState } from './setu-state';
+export type {
+  SetuDisciplineState,
+  OverwriteRequirementState,
+  PendingSafetyConfirmation,
+} from './setu-state';
 
 export {
   getDisciplineState,
@@ -115,8 +119,19 @@ export {
   clearQuestionBlocked,
   setSafetyBlocked,
   clearSafetyBlocked,
+  setPendingSafetyConfirmation,
+  getPendingSafetyConfirmation,
+  approvePendingSafetyConfirmation,
+  denyPendingSafetyConfirmation,
+  clearPendingSafetyConfirmation,
   clearDisciplineState,
   setOverwriteRequirement,
   getOverwriteRequirement,
   clearOverwriteRequirement,
 } from './setu-state';
+
+export type { ArtifactMode } from './artifact-policy';
+export {
+  decideResearchArtifactMode,
+  decidePlanArtifactMode,
+} from './artifact-policy';

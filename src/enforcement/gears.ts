@@ -1,10 +1,10 @@
 import { existsSync } from 'fs';
 import { join, normalize, isAbsolute, resolve, sep } from 'path';
 import { 
-  isSideEffectTool, 
-  isSetuTool,
-  isReadOnlyTool
+  isSideEffectTool
 } from '../constants';
+import { isReadOnlyBashCommand } from './hydration';
+import { debugLog } from '../debug';
 
 export type Gear = 'scout' | 'architect' | 'builder';
 
@@ -164,15 +164,38 @@ export interface GearBlockResult {
   gear: Gear;
 }
 
-/** Scout gear: only these Setu tools are allowed (hoisted to module scope for performance) */
-const SCOUT_ALLOWED_SETU_TOOLS = new Set(['setu_task', 'setu_context', 'setu_research', 'setu_doctor', 'setu_feedback']);
-
+/**
+ * Determine if a tool should be blocked based on the current gear.
+ *
+ * IMPORTANT: This is a post-hydration enforcement check that assumes hydration/context
+ * has already been confirmed. For pre-hydration checks (blocking unknown tools before
+ * context is confirmed), use shouldBlockDuringHydration() which implements fail-closed
+ * security for unknown tools.
+ *
+ * Calling shouldBlock() directly without passing the hydration gate may allow unknown
+ * tools to execute. For defense-in-depth, ensure shouldBlockDuringHydration() is called
+ * first for any tool execution before reaching this gear-based check.
+ *
+ * @param gear - Current gear (scout, architect, builder)
+ * @param tool - Tool name being invoked
+ * @param args - Tool arguments
+ * @returns GearBlockResult indicating if the tool is blocked and why
+ */
 export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockResult {
+  let isReadOnlyBash = false;
+  if (tool === 'bash' && typeof (args as Record<string, unknown> | undefined)?.command === 'string') {
+    try {
+      isReadOnlyBash = isReadOnlyBashCommand((args as Record<string, unknown>).command as string);
+    } catch {
+      // Fail closed: treat unparseable command as mutating.
+      isReadOnlyBash = false;
+    }
+  }
+
   switch (gear) {
     case 'scout': {
-      // Only read-only tools or approved Setu tools allowed
-      const isScoutAllowedSetuTool = isSetuTool(tool) && SCOUT_ALLOWED_SETU_TOOLS.has(tool);
-      if (!isReadOnlyTool(tool) && !isScoutAllowedSetuTool) {
+      // Block side-effect tools (write, edit, patch, etc.)
+      if (isSideEffectTool(tool)) {
         return {
           blocked: true,
           reason: 'scout_blocked',
@@ -180,19 +203,25 @@ export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockR
           gear
         };
       }
-      return { blocked: false, gear };
-    }
-    case 'architect': {
-      // Read + write to .setu/ only
-      // If it's a side effect tool, it MUST be targeting .setu/ path
-      if (!isReadOnlyTool(tool) && !isSetuTool(tool)) {
+      
+      // Block non-read-only bash commands
+      if (tool === 'bash' && !isReadOnlyBash) {
         return {
           blocked: true,
-          reason: 'architect_blocked',
-          details: `Tool '${tool}' blocked in Architect gear. Only Setu or read-only tools are allowed.`,
+          reason: 'scout_blocked',
+          details: `Bash command blocked in Scout gear. Use read-only commands only.`,
           gear
         };
       }
+      
+      // Allow everything else (read-only tools, setu tools, research tools, safe bash)
+      return { blocked: false, gear };
+    }
+    case 'architect': {
+      // Allow: read-only tools, setu tools, research tools, read-only bash
+      // Block: side-effect tools outside .setu/, non-read-only bash
+      
+      // Block side-effect tools outside .setu/ (write, edit, patch, multiedit, etc.)
       if (isSideEffectTool(tool) && !isSetuPath(args)) {
         return {
           blocked: true,
@@ -201,11 +230,33 @@ export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockR
           gear
         };
       }
+      
+      // Block non-read-only bash (prevents cat > src/main.ts bypass)
+      if (tool === 'bash' && !isReadOnlyBash) {
+        return {
+          blocked: true,
+          reason: 'architect_blocked',
+          details: `Non-read-only bash blocked in Architect gear. Use write/edit tools for file changes, or read-only commands for inspection.`,
+          gear
+        };
+      }
+      
+      // Allow everything else (research tools, read-only tools, setu tools, read-only bash, side-effect in .setu/)
       return { blocked: false, gear };
     }
     case 'builder': {
       // All allowed (verification gate handled elsewhere)
       return { blocked: false, gear };
+    }
+    default: {
+      const unknownGear = String(gear);
+      debugLog(`Unknown gear '${unknownGear}' encountered in shouldBlock; blocking by default.`);
+      return {
+        blocked: true,
+        reason: 'unknown_gear',
+        details: `Gear '${unknownGear}' is not recognized. Blocking by default. [received_gear=${unknownGear}]`,
+        gear: 'scout',
+      };
     }
   }
 }
@@ -219,25 +270,15 @@ export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockR
 export function createGearBlockMessage(result: GearBlockResult): string {
   switch (result.gear) {
     case 'scout':
-      return `🔍 [Scout Gear] ${result.details || 'Observation only.'}
-
-Before making changes, gather context:
-  1. Read relevant files to understand the codebase
-  2. Use \`setu_research\` to save findings to .setu/RESEARCH.md
-  
-Once RESEARCH.md exists, you'll shift to Architect gear.`;
+      return `Call setu_research({ task: "...", summary: "..." }) first to document findings and advance.`;
 
     case 'architect':
-      return `📐 [Architect Gear] ${result.details || 'Planning phase.'}
-
-You have research context. Now create a plan:
-  1. Write to .setu/ directory only (PLAN.md, etc.)
-  2. Use \`setu_plan\` to create .setu/PLAN.md
-  
-Once PLAN.md exists, you'll shift to Builder gear.`;
+      return `Research phase complete. You may continue researching or call setu_plan({ objective: "...", steps: "..." }) when ready to create implementation plan.`;
 
     case 'builder':
       // Builder never blocks via gears (verification is a separate gate)
       return '';
+    default:
+      return `Return to Scout gear and re-establish workflow artifacts.`;
   }
 }

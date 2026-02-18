@@ -104,8 +104,6 @@ export function createSystemTransformHook(
       return;
     }
     
-    // isDefault was used for style-based branching; now always true since styles were removed
-    // Keeping parameter for backward compatibility with getStateInjection signature
     const isDefault = true;
     
     // Get file availability for context injection
@@ -149,17 +147,22 @@ export function createSystemTransformHook(
       }
     }
     
-    // Add verification reminder when needed (only in builder gear — verification is irrelevant in scout/architect)
-    const verificationState = getVerificationState();
-    const currentGear = getProjectDir ? determineGear(getProjectDir()).current : 'scout';
-    if (!verificationState.complete && currentGear === 'builder') {
-      const stepsNeeded = ['build', 'test', 'lint'].filter(
-        s => !verificationState.stepsRun.has(s)
-      );
+    // Add verification reminder when needed
+    // Wrapped in try/catch to prevent verification check errors from crashing OpenCode
+    try {
+      const verificationState = getVerificationState();
+      if (!verificationState.complete) {
+        const stepsNeeded = ['build', 'test', 'lint'].filter(
+          s => !verificationState.stepsRun.has(s)
+        );
 
-      if (stepsNeeded.length > 0) {
-        output.system.push(`[Verify before done: ${stepsNeeded.join(', ')}]`);
+        if (stepsNeeded.length > 0) {
+          output.system.push(`[Verify before done: ${stepsNeeded.join(', ')}]`);
+        }
       }
+    } catch (error) {
+      // Log error but don't crash - verification reminder is enhancement, not critical
+      debugLog('system-transform: verification check failed:', getErrorMessage(error));
     }
 
     // Gear, discipline, and overwrite injection — wrapped for graceful degradation
@@ -174,38 +177,57 @@ export function createSystemTransformHook(
         switch (gearState.current) {
           case 'scout':
             output.system.unshift(
-              '[SETU: Workflow] Research the codebase and task. Save findings with setu_research.'
+              '[Setu] Scout Mode: Discovery Phase\n' +
+              'Use any available discovery/read tools and any non-destructive discovery tools to gather evidence.\n' +
+              'You are not required to plan yet; continue research until confidence is high.\n' +
+              'You may update research artifacts via setu_research; generic file edits are restricted in this phase.'
             );
             break;
           case 'architect':
             output.system.unshift(
-              '[SETU: Workflow] Create an implementation plan. Save with setu_plan. Ask user to confirm before executing.'
+              '[Setu] Architect Mode: Synthesis Phase\n' +
+              'Research findings saved. You may continue discovery or plan when ready.\n' +
+              'Call setu_plan() only when you have sufficient information to execute confidently.\n' +
+              'No forced transition—quality over speed.\n' +
+              'After setu_plan: show user "Ready to execute: [objective]. Reply \'go\' or tell me adjustments"'
             );
             break;
           case 'builder':
             output.system.unshift(
-              '[SETU: Workflow] Execute the plan step by step. Run setu_verify before declaring done.'
+              '[Setu] Builder Mode: Execution Phase\n' +
+              'Prioritize implementation; do targeted discovery only when blocked or validating assumptions.\n' +
+              'Execute PLAN.md steps. Run setu_verify() before declaring done.'
             );
             break;
+        }
+        
+        // AGENTS.md warning: only for Setu agent, only when both AGENTS.md and CLAUDE.md are missing
+        // Only run when getSetuFilesExist is available (filesExist was actually populated)
+        if (isSetuAgent && getSetuFilesExist) {
+          if (!filesExist.agentsMd && !filesExist.claudeMd) {
+            // Use push (not unshift) so it doesn't outrank core gear/safety guidance
+            output.system.push(
+              '[Setu] No AGENTS.md found; run /init for project rules if desired.'
+            );
+          }
         }
       }
 
       const disciplineState = getDisciplineState(input.sessionID);
       if (disciplineState.questionBlocked) {
         output.system.unshift(
-          `[SETU: Clarification Required]\n` +
-            `Your next assistant response must be a single native question tool call.\n` +
-            `Do not ask in plain chat text. Use the native question tool with recommendations first.\n` +
-            `Do not execute implementation tools until the question is answered.`
+          `[SETU: Clarification Required] Ask one direct question to the user, then wait. Do not run mutating tools until they answer.`
         );
       }
 
       const overwriteRequirement = getOverwriteRequirement(input.sessionID);
       if (overwriteRequirement?.pending) {
-        // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional sanitization of control chars
         // Sanitize filePath before interpolation: strip control chars and newlines
+        // Convert CR/LF to spaces first, then strip C0 (except CR/LF already handled) and C1 controls
+        // Uses same ranges as sanitizeLogDetails for consistency: [\x00-\x09\x0B-\x0C\x0E-\x1F\x7F-\x9F]
         const safePath = (overwriteRequirement.filePath ?? '')
-          .replace(/[\x00-\x1f\x7f]/g, '');
+          .replace(/\r\n|\r|\n/g, ' ')
+          .replace(/[\x00-\x09\x0b-\x0c\x0e-\x1f\x7f-\x9f]/g, '');
         output.system.unshift(
           `[SETU: Overwrite Guard]\n` +
             `Pending requirement: read '${safePath}' before any mutation.\n\n` +

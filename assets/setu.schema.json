@@ -82,7 +82,7 @@
         "failClosedForUnknownTools": {
           "type": "boolean",
           "default": true,
-          "description": "Block unknown tools in Phase 0 (fail-closed security model)"
+          "description": "Block unknown tools during Hydration Gate (fail-closed security model)"
         }
       },
       "additionalProperties": false

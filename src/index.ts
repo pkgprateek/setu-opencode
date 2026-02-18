@@ -4,7 +4,7 @@
  * A master craftsman persona that transforms AI into a thoughtful, expert colleague.
  * 
  * Features:
- * - Enforcement: Phase 0 blocking, verification before completion
+ * - Enforcement: hydration gating, verification before completion
  * - Context persistence: .setu/ directory for session continuity
  * - Skills: Bootstrap, verification, rules creation, code quality, and more
  * 
@@ -52,7 +52,7 @@ interface SetuState {
   isFirstSession: boolean;
   verificationSteps: Set<VerificationStep>;
   verificationComplete: boolean;
-  phase0: {
+  hydration: {
     contextConfirmed: boolean;
     sessionId: string;
     startedAt: number;
@@ -80,7 +80,7 @@ interface SetuState {
  * - config: Set default_agent to "setu"
  * - experimental.chat.system.transform: Inject persona into system prompt
  * - chat.message: Track current agent
- * - tool.execute.before: Phase 0 enforcement (block side-effects until context confirmed)
+ * - tool.execute.before: hydration enforcement (block side-effects until context confirmed)
  * - tool.execute.after: Track verification steps, file reads, searches
  * - event: Handle session lifecycle, load context on start
  * - tool: Custom tools (setu_verify, setu_context, setu_feedback, setu_task, setu_research, setu_plan, setu_reset, setu_doctor)
@@ -125,7 +125,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
     isFirstSession: true,
     verificationSteps: new Set(),
     verificationComplete: false,
-    phase0: {
+    hydration: {
       contextConfirmed: false,
       sessionId: '',
       startedAt: Date.now()
@@ -197,18 +197,18 @@ export const SetuPlugin: Plugin = async (ctx) => {
     }
   };
   
-  const getPhase0State = () => state.phase0;
-  const confirmContext = () => {
-    state.phase0.contextConfirmed = true;
-    debugLog('Phase 0: Context confirmed - side-effect tools now allowed');
+  const getHydrationState = (): typeof state.hydration => ({ ...state.hydration });
+  const confirmContext = (): void => {
+    state.hydration.contextConfirmed = true;
+    debugLog('Hydration: Context confirmed - side-effect tools now allowed');
   };
-  const resetPhase0 = (sessionId: string) => {
-    state.phase0 = {
+  const resetHydration = (sessionId: string): void => {
+    state.hydration = {
       contextConfirmed: false,
       sessionId,
       startedAt: Date.now()
     };
-    debugLog('Phase 0: Reset for new session');
+    debugLog('Hydration: Reset for new session');
   };
   
   const getContextCollector = (): ContextCollector | null => state.contextCollector;
@@ -250,7 +250,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
   // Log plugin initialization (only in debug mode)
   debugLog('Plugin initialized');
   debugLog('Default mode: Setu (discipline layer)');
-  debugLog('Phase 0 enforcement: ACTIVE');
+  debugLog('Hydration enforcement: ACTIVE');
   debugLog('Context persistence: .setu/ directory');
   debugLog('Tools: setu_verify, setu_context, setu_feedback, setu_task');
   debugLog('Skills bundled: setu-bootstrap, setu-verification, setu-rules-creation');
@@ -260,7 +260,8 @@ export const SetuPlugin: Plugin = async (ctx) => {
     getCurrentAgent,
     getContextCollector,
     getProjectDir,
-    getVerificationState
+    getVerificationState,
+    getHydrationState
   );
   
   return {
@@ -300,7 +301,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
       createChatMessageHook(setCurrentAgent)
     ),
     
-    // Phase 0: Block side-effect tools until context is confirmed
+    // Hydration gate: block side-effect tools until context is confirmed
     // Consolidated enforcement (agent + policy)
     // Also enforces active task constraints (READ_ONLY, NO_PUSH, etc.)
     // Also enforces Git Discipline (verification before commit/push)
@@ -321,7 +322,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
         }
       }
       
-      // Delegate to the main before hook for Phase 0 enforcement
+      // Delegate to the main before hook for hydration enforcement
       return beforeHook(input, output);
     },
     
@@ -349,7 +350,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
         () => attemptTracker.clearAll(),
         setFirstSessionDone,
         confirmContext,
-        resetPhase0,
+        resetHydration,
         getContextCollector,
         refreshSetuFilesExist,  // Silent file existence check
         setProjectRules,         // Silent Exploration: store loaded rules
@@ -369,7 +370,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
     // Custom tools
     tool: {
       setu_verify: createSetuVerifyTool(markVerificationComplete, getProjectDir),
-      setu_context: createSetuContextTool(getPhase0State, confirmContext, getContextCollector, getProjectDir),
+      setu_context: createSetuContextTool(getHydrationState, confirmContext, getContextCollector, getProjectDir),
       setu_feedback: createSetuFeedbackTool(getProjectDir),
       setu_task: createSetuTaskTool(getProjectDir, resetVerificationState),
       setu_research: createSetuResearchTool(getProjectDir),

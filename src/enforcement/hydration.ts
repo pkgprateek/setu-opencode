@@ -1,5 +1,5 @@
 /**
- * Phase 0: Pre-emptive Context Gate
+ * Hydration Gate: Pre-emptive Context Gate
  *
  * The core insight: Block side-effect tools until context is confirmed.
  * Allow read-only tools so the agent can form smart questions.
@@ -14,10 +14,10 @@
  *
  * Security (fail-closed model):
  * - FAIL-CLOSED for unknown tools (block by default, whitelist safe tools)
- * - This prevents new/unknown tools from bypassing Phase 0
+ * - This prevents new/unknown tools from bypassing hydration safeguards
  *
  * Tool classification imported from constants.ts (single source of truth).
- * This module provides Phase 0-specific logic: blocking decisions, bash command parsing.
+ * This module provides hydration-specific logic: blocking decisions, bash command parsing.
  */
 
 import {
@@ -32,12 +32,12 @@ import { debugLog } from "../debug";
 // Re-export type guards for consumers of this module
 export { isSetuTool, isReadOnlyTool };
 
-export interface Phase0State {
+export interface HydrationState {
   /** Whether context has been confirmed by user response */
   contextConfirmed: boolean;
   /** Session ID for isolation */
   sessionId: string;
-  /** Timestamp when Phase 0 started */
+  /** Timestamp when hydration started */
   startedAt: number;
 }
 
@@ -49,6 +49,22 @@ export interface Phase0State {
  */
 export function isReadOnlyBashCommand(command: string): boolean {
   const trimmed = command.trim();
+  if (!trimmed) return false;
+
+  // Reject control/null bytes to prevent parser confusion/bypass.
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: security validation
+  if (/[\x00-\x1F\x7F]/.test(trimmed)) {
+    return false;
+  }
+
+  // SECURITY: reject shell metacharacters and multiline/continued commands.
+  // Fail-closed: hydration allows only single simple read-only commands.
+  // Includes parameter expansion ${...} to prevent command injection via variable expansion
+  // Note: \n and \r are already rejected by the control-character check above, so not duplicated here
+  const dangerousPattern = /(;|&&|\|\||\||`|\$\(|\$\{|>|>>|2>|>&|>\||<|&|\(|\)|\\\n)/;
+  if (dangerousPattern.test(trimmed)) {
+    return false;
+  }
 
   // Check for git write commands first (they start with git)
   for (const gitCmd of GIT_WRITE_COMMANDS) {
@@ -58,7 +74,8 @@ export function isReadOnlyBashCommand(command: string): boolean {
   }
 
   // Get the first word/command
-  const firstWord = trimmed.split(/\s+/)[0];
+  const words = trimmed.split(/\s+/);
+  const firstWord = words[0];
 
   // Check if it's a read-only command
   if (
@@ -70,7 +87,7 @@ export function isReadOnlyBashCommand(command: string): boolean {
   }
 
   // Check compound commands (e.g., "git status")
-  const firstTwoWords = trimmed.split(/\s+/).slice(0, 2).join(" ");
+  const firstTwoWords = words.slice(0, 2).join(" ");
   if (
     READ_ONLY_BASH_COMMANDS.includes(
       firstTwoWords as (typeof READ_ONLY_BASH_COMMANDS)[number],
@@ -83,7 +100,7 @@ export function isReadOnlyBashCommand(command: string): boolean {
 }
 
 /**
- * Phase 0 enforcement logic
+ * Hydration enforcement logic
  *
  * Allow exploration, block modification
  *
@@ -97,28 +114,28 @@ export function isSideEffectTool(toolName: string): boolean {
 }
 
 /**
- * Result of Phase 0 blocking check
+ * Result of hydration blocking check
  */
-export interface Phase0BlockResult {
+export interface HydrationBlockResult {
   blocked: boolean;
   reason?: string;
   details?: string;
 }
 
 /**
- * Known safe tools that are always allowed in Phase 0.
+ * Known safe tools that are always allowed during hydration.
  * 
  * FAIL-CLOSED SECURITY:
  * Unknown tools are blocked by default. Add tools here to whitelist them.
- * This prevents new/unknown tools from bypassing Phase 0.
+ * This prevents new/unknown tools from bypassing hydration safeguards.
  * 
  * NOTE: Only READ-ONLY tools should be here. Side-effect tools must go through
- * isSideEffectTool check to be blocked in Phase 0.
+ * isSideEffectTool check to be blocked during hydration.
  */
 const KNOWN_SAFE_TOOLS = [
   // Setu tools (via isSetuTool check)
   // Read-only tools (via isReadOnlyTool check)
-  'task',        // Subagent spawning - will get its own Phase 0
+  // NOTE: 'task' is intentionally NOT here - subagent spawning needs its own hydration gating
   'question',    // Interactive prompts
   'skill',       // Skill loading
   'lsp',         // Language server
@@ -134,19 +151,19 @@ function isKnownSafeTool(toolName: string): boolean {
 }
 
 /**
- * Decide whether a tool invocation should be blocked by Phase 0 safeguards.
+ * Decide whether a tool invocation should be blocked by hydration safeguards.
  * 
  * SECURITY: Uses FAIL-CLOSED model — unknown tools blocked by default.
  * Unknown tools are blocked by default and must be whitelisted.
  *
  * @param toolName - Name of the tool being invoked
  * @param args - Optional tool arguments; for `bash` the `command` string is examined to determine read-only status
- * @returns A Phase0BlockResult: `blocked` is `true` when the call should be prevented; `reason` is a block code (e.g., `bash_blocked`, `side_effect_blocked`) and `details` contains contextual information when available
+ * @returns A HydrationBlockResult: `blocked` is `true` when the call should be prevented; `reason` is a block code (e.g., `bash_blocked`, `side_effect_blocked`) and `details` contains contextual information when available
  */
-export function shouldBlockInPhase0(
+export function shouldBlockDuringHydration(
   toolName: string,
   args?: Record<string, unknown>,
-): Phase0BlockResult {
+): HydrationBlockResult {
   // Setu's own tools - always allowed
   if (isSetuTool(toolName)) {
     return { blocked: false };
@@ -156,7 +173,17 @@ export function shouldBlockInPhase0(
   if (isReadOnlyTool(toolName)) {
     return { blocked: false };
   }
-  
+
+  // SECURITY: Block 'task' tool during hydration - subagents need their own gating
+  // This prevents bypassing the Hydration Gate via subagent spawning
+  if (toolName === 'task') {
+    return {
+      blocked: true,
+      reason: 'task_blocked',
+      details: 'Subagent spawning blocked until context is confirmed.',
+    };
+  }
+
   // Known safe tools - allowed
   if (isKnownSafeTool(toolName)) {
     return { blocked: false };
@@ -164,7 +191,16 @@ export function shouldBlockInPhase0(
 
   // Check bash commands
   if (toolName === "bash") {
-    const command = (args?.command as string) || "";
+    const rawCommand = args?.command;
+    if (typeof rawCommand !== 'string') {
+      return {
+        blocked: true,
+        reason: 'invalid_command_type',
+        details: typeof rawCommand,
+      };
+    }
+
+    const command = rawCommand;
     if (isReadOnlyBashCommand(command)) {
       return { blocked: false };
     }
@@ -195,31 +231,17 @@ export function shouldBlockInPhase0(
 }
 
 /**
- * Create the Phase 0 blocking message - natural language, not technical jargon
+ * Create the hydration blocking message - natural language, not technical jargon
  *
  * This message is shown to the agent when it tries to use a blocked tool.
  * For common bash commands, suggest native alternatives with brief explanation.
  */
-export function createPhase0BlockMessage(
+export function createHydrationBlockMessage(
   reason?: string,
-  details?: string,
 ): string {
-  // Smart suggestions for common bash commands
-  if (reason === "bash_blocked" && details) {
-    const cmd = details.trim().split(/\s+/)[0];
-
-    // Map common commands to native tools with brief explanation
-    const alternatives: Record<string, string> = {
-      ls: "Using native tool instead (faster, cross-platform).",
-      find: "Using native tool instead (faster, cross-platform).",
-      cat: "Using native tool instead (faster, cross-platform).",
-    };
-
-    if (alternatives[cmd]) {
-      return alternatives[cmd];
-    }
+  if (reason === 'bash_blocked') {
+    return 'Wait: Call setu_context({ summary: "...", task: "..." }) first, then explore with read/search.';
   }
 
-  // Default message for other cases
-  return `I need to understand the context first before making changes. Let me read the relevant files and confirm my understanding.`;
+  return 'Wait: Call setu_context({ summary: "...", task: "..." }) first to confirm understanding.';
 }

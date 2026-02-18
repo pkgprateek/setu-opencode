@@ -147,32 +147,39 @@ setu_task({
 
 ---
 
-#### `setu_research` - Parallel Research
+#### `setu_research` - Save Research Findings
 
-Research with multiple subagents working in parallel.
+Document your understanding of the codebase before implementation.
 
 ```typescript
 setu_research({
-  summary: string,        // What to research (required)
-  constraints?: string,   // Any constraints to consider
-  patterns?: string,      // Patterns to look for
-  learnings?: string,     // Existing learnings to build upon
-  openQuestions?: string  // Unresolved questions requiring user input (triggers question blocking)
+  task?: string,          // Research task description - what you are investigating (optional)
+  summary: string,        // Research findings in markdown format (REQUIRED)
+  constraints?: string,   // Discovered constraints, limitations, or technical debt
+  patterns?: string,      // Observed patterns in the codebase (architecture, naming, testing)
+  learnings?: string,     // What worked/failed during research
+  risks?: string,         // Known risks/unknowns discovered during research
+  openQuestions?: string  // Unresolved questions needing user input (single string, not array)
 });
 ```
 
 **What happens**:
-1. Creates a single RESEARCH.md file
-2. If openQuestions is provided, triggers question blocking (user must answer before proceeding)
-3. Gear advances: Scout → Architect
+1. Validates summary is provided and not empty
+2. Sanitizes all inputs to prevent prompt injection
+3. Determines whether to append or remake RESEARCH.md based on task alignment
+4. Writes research to `.setu/RESEARCH.md`
+5. If openQuestions provided, triggers question blocking (user must answer)
+6. Gear advances: Scout → Architect
 
 **Example**:
 ```typescript
 setu_research({
-  summary: 'Implement authentication system',
-  constraints: 'Must use existing JWT middleware',
-  patterns: 'Look for auth patterns in src/auth/',
-  openQuestions: 'Should we support refresh tokens?'
+  summary: 'Researched JWT auth patterns. Using jose library. Existing middleware in src/middleware/.',
+  constraints: 'Must maintain backward compatibility with existing session-based auth',
+  patterns: 'Middleware pattern: auth.ts guards protected routes',
+  learnings: 'jose library is already a dependency, no new installs needed',
+  risks: 'Token refresh logic not yet understood',
+  openQuestions: 'Should we use access/refresh token pair or single long-lived token?'
 });
 
 // Result: RESEARCH.md created, now in Architect gear
@@ -188,8 +195,14 @@ Create PLAN.md with implementation steps.
 setu_plan({
   objective: string,        // One sentence: what this plan accomplishes
   contextSummary?: string,  // 2-3 sentences from RESEARCH.md for subagent context
-  steps: string,            // Full step definitions in markdown (headings, numbered, or bullets)
-  successCriteria?: string  // Truths, artifacts, and key links that prove completion
+  nonGoals?: string,        // What this plan explicitly does NOT cover
+  assumptions?: string,     // Prerequisites and context the plan assumes
+  fileEdits: string,        // List of files to be modified (bullet list)
+  steps: string,            // Full step definitions in markdown (Phase > Task > Step hierarchy)
+  expectedOutput?: string,  // What successful completion looks like
+  rollbackNote?: string,    // How to undo changes if needed
+  acceptanceTests?: string, // Tests to verify implementation
+  verifyProtocol?: string   // Defaults to "build -> lint -> test"
 });
 ```
 
@@ -201,16 +214,40 @@ setu_plan({
 5. Triggers user approval (question blocking)
 6. Gear advances: Architect → Builder (after approval)
 
-**Example**:
+**Example** (hierarchical Phase > Task > Step format):
 ```typescript
 setu_plan({
   objective: 'Implement JWT authentication',
   contextSummary: 'Uses jose library. Existing middleware pattern in src/middleware/.',
-  steps: '## Step 1: Add jose dependency\n- Install jose via npm\n\n## Step 2: Create auth middleware\n- Add JWT validation in src/middleware/auth.ts',
-  successCriteria: 'All auth routes return 401 without valid JWT. Tests pass.'
+  steps: `# Phase 1: Setup
+## Task 1.1: Install dependencies
+- Step 1: Add jose library
+  - Why: Need JWT signing/verification
+  - Edit(s): package.json
+  - Commands: npm install jose
+
+## Task 1.2: Configure environment
+- Step 1: Add JWT secret config
+  - Why: Auth requires secret key
+  - Edit(s): .env.example, src/config/auth.ts
+  - Commands: None
+
+# Phase 2: Implementation
+## Task 2.1: Create middleware
+- Step 1: Implement JWT validation
+  - Why: Protect routes from unauthorized access
+  - Edit(s): src/middleware/auth.ts
+  - Commands: bun test src/middleware`,
+  nonGoals: 'No refresh token logic, no OAuth integration',
+  assumptions: 'Node 20+, existing Express setup',
+  fileEdits: '- package.json\n- .env.example\n- src/config/auth.ts\n- src/middleware/auth.ts',
+  expectedOutput: 'All protected routes return 401 without valid JWT',
+  rollbackNote: 'Revert commits and remove jose dependency',
+  acceptanceTests: '- Valid JWT allows access\n- Invalid JWT returns 401\n- Missing JWT returns 401',
+  verifyProtocol: 'build -> lint -> test'
 });
 
-// Result: PLAN.md created, user approval required, then Builder gear
+// Result: PLAN.md created with hierarchical structure, user approval required, then Builder gear
 ```
 
 ---
@@ -272,10 +309,11 @@ setu_doctor({ verbose: true });
 User: Implement dark mode toggle
 Setu: [Scout gear] Let me research the current theming approach...
 Setu: Reading src/theme/, src/components/...
-Setu: setu_research({ summary: 'Dark mode toggle: reviewed src/theme/ and src/components/...' })
+Setu: setu_research({ task: 'Implement dark mode toggle' })
+Setu: [Spawning 3 research subagents...]
 Setu: Created RESEARCH.md. Advanced to Architect gear.
 Setu: [Architect gear] Creating implementation plan...
-Setu: setu_plan({ objective: 'Implement dark mode toggle', steps: '## Step 1: ...', successCriteria: '...' })
+Setu: setu_plan({ objective: 'Implement dark mode toggle', steps: '## Step 1: ...' })
 Setu: Created PLAN.md. User approval required, then Builder gear.
 Setu: [Builder gear] Executing step 1/4...
 Setu: [Step 1 complete] setu_verify() → All passed
@@ -284,7 +322,7 @@ Setu: Feature complete. All 4 steps verified.
 ```
 
 **Quick fix (wrong mode?)**:
-```
+```text
 User: Fix typo in README
 Setu: [Scout gear] This is a simple fix. For immediate execution, press Tab to switch to Build mode.
 User: [Presses Tab → Build mode]
@@ -471,7 +509,7 @@ Scans for:
 |---------|------|-------|-----|------|
 | **Enforcement** | ✅ Physical (hooks) | ❌ Prompt only | ❌ Prompt only | ❌ Prompt only |
 | **RPI Workflow** | ✅ Automatic (gears) | ❌ Manual | ✅ Semi-auto | ✅ Complex |
-| **Parallel Execution** | ✅ (read-only tools) | ❌ Sequential | ✅ (waves) | ✅ (agents) |
+| **Parallel Execution** | ✅ (subagents) | ❌ Sequential | ✅ (waves) | ✅ (agents) |
 | **Setup** | ✅ One line | ⚠️ CLI install | ❌ 40+ files | ❌ Complex |
 | **Complexity** | 🟢 Low | 🟡 Medium | 🔴 High | 🔴 Very High |
 | **Context Management** | ✅ JIT | ⚠️ Git-backed | ✅ Fresh agents | ❌ Database |

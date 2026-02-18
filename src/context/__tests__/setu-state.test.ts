@@ -9,6 +9,11 @@ import {
   setOverwriteRequirement,
   getOverwriteRequirement,
   clearOverwriteRequirement,
+  setPendingSafetyConfirmation,
+  getPendingSafetyConfirmation,
+  approvePendingSafetyConfirmation,
+  denyPendingSafetyConfirmation,
+  clearPendingSafetyConfirmation,
 } from '../setu-state';
 
 describe('discipline guards', () => {
@@ -50,5 +55,86 @@ describe('discipline guards', () => {
     expect(getOverwriteRequirement(sessionID)?.filePath).toBe('hello.txt');
     clearOverwriteRequirement(sessionID);
     expect(getOverwriteRequirement(sessionID)).toBeNull();
+  });
+
+  test('pending safety confirmation lifecycle', () => {
+    const sessionID = 'state-pending-safety';
+    const actionFingerprint = 'bash:{"command":"npm publish"}';
+
+    setPendingSafetyConfirmation(sessionID, {
+      actionFingerprint,
+      reasons: ['Production-impacting command detected'],
+    });
+    expect(getPendingSafetyConfirmation(sessionID)?.status).toBe('pending');
+
+    approvePendingSafetyConfirmation(sessionID, actionFingerprint);
+    expect(getPendingSafetyConfirmation(sessionID)?.status).toBe('approved');
+
+    // Simulate consumption by the before-hook (clears after single use)
+    clearPendingSafetyConfirmation(sessionID);
+    expect(getPendingSafetyConfirmation(sessionID)).toBeNull();
+    clearDisciplineState(sessionID);
+  });
+
+  test('approve/deny with wrong fingerprint does not change state', () => {
+    const sessionID = 'state-fingerprint-mismatch';
+    const correctFingerprint = 'bash:{"command":"npm publish"}';
+    const wrongFingerprint = 'bash:{"command":"rm -rf /"}';
+
+    setPendingSafetyConfirmation(sessionID, {
+      actionFingerprint: correctFingerprint,
+      reasons: ['Production-impacting command detected'],
+    });
+    expect(getPendingSafetyConfirmation(sessionID)?.status).toBe('pending');
+
+    // Attempt to approve with wrong fingerprint - should not change state
+    approvePendingSafetyConfirmation(sessionID, wrongFingerprint);
+    expect(getPendingSafetyConfirmation(sessionID)?.status).toBe('pending');
+
+    // Attempt to deny with wrong fingerprint - should not change state
+    denyPendingSafetyConfirmation(sessionID, wrongFingerprint);
+    expect(getPendingSafetyConfirmation(sessionID)?.status).toBe('pending');
+
+    clearDisciplineState(sessionID);
+  });
+
+  test('setPendingSafetyConfirmation throws for empty actionFingerprint', () => {
+    const sessionID = 'state-empty-fingerprint';
+
+    expect(() => {
+      setPendingSafetyConfirmation(sessionID, {
+        actionFingerprint: '',
+        reasons: ['Test reason'],
+      });
+    }).toThrow('actionFingerprint is required');
+
+    expect(() => {
+      setPendingSafetyConfirmation(sessionID, {
+        actionFingerprint: '   ',
+        reasons: ['Test reason'],
+      });
+    }).toThrow('actionFingerprint is required');
+
+    clearDisciplineState(sessionID);
+  });
+
+  test('setPendingSafetyConfirmation throws for empty reasons', () => {
+    const sessionID = 'state-empty-reasons';
+
+    expect(() => {
+      setPendingSafetyConfirmation(sessionID, {
+        actionFingerprint: 'test:fingerprint',
+        reasons: [],
+      });
+    }).toThrow('reasons must include at least one non-empty entry');
+
+    expect(() => {
+      setPendingSafetyConfirmation(sessionID, {
+        actionFingerprint: 'test:fingerprint',
+        reasons: ['', '  ', ''],
+      });
+    }).toThrow('reasons must include at least one non-empty entry');
+
+    clearDisciplineState(sessionID);
   });
 });

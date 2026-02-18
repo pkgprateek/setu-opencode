@@ -12,7 +12,7 @@
 // ============================================================================
 
 /**
- * Setu's own tools - always allowed regardless of Phase 0 state
+ * Setu's own tools - always allowed regardless of hydration state
  * These are tools provided by this plugin
  */
 export const SETU_TOOLS = [
@@ -27,7 +27,7 @@ export const SETU_TOOLS = [
 ] as const;
 
 /**
- * Read-only tools that are always allowed during Phase 0.
+ * Read-only tools that are always allowed during hydration.
  * These let the agent "look but don't touch".
  * 
  * This is the single source of truth for parallelizable read-only tools.
@@ -43,7 +43,7 @@ export const SETU_TOOLS = [
 export const READ_ONLY_TOOLS = ['read', 'glob', 'grep', 'list', 'webfetch', 'todoread'] as const;
 
 /**
- * Side-effect tools that are blocked in Phase 0.
+ * Side-effect tools that are blocked during hydration.
  * These can modify files or state.
  * 
  * Includes OpenCode native tools that write or modify:
@@ -55,7 +55,7 @@ export const READ_ONLY_TOOLS = ['read', 'glob', 'grep', 'list', 'webfetch', 'tod
 export const SIDE_EFFECT_TOOLS = ['write', 'edit', 'patch', 'multiedit'] as const;
 
 /**
- * All tools that should be blocked in Phase 0 (for prompt guidance).
+ * All tools that should be blocked during hydration (for prompt guidance).
  * Combines SIDE_EFFECT_TOOLS with 'bash' which requires special handling.
  */
 export const BLOCKED_TOOLS = [...SIDE_EFFECT_TOOLS, 'bash'] as const;
@@ -63,22 +63,21 @@ export const BLOCKED_TOOLS = [...SIDE_EFFECT_TOOLS, 'bash'] as const;
 /**
  * Bash commands that are read-only (exploration allowed).
  * 
- * Strictly matches the Phase 0 allowlist from AGENTS.md:
- * - Basic file viewing: cat, head, tail, grep, find
+ * Strictly matches the hydration allowlist from AGENTS.md:
+ * - Basic file viewing: ls, cat, head, tail, grep, find
  * - Environment info: pwd, echo, which, env
  * - Git read-only: git status, git log, git diff, git branch, git show
  * 
- * Note: 'ls' is intentionally excluded — use glob or list tools instead.
- * This enforces efficient tool usage and avoids shell spawning overhead.
+ * Native tools are preferred for performance, but safe read-only bash commands are allowed.
  */
 export const READ_ONLY_BASH_COMMANDS = [
-  'cat', 'head', 'tail', 'grep', 'find',
+  'ls', 'cat', 'head', 'tail', 'grep', 'find',
   'pwd', 'echo', 'which', 'env',
   'git status', 'git log', 'git diff', 'git branch', 'git show'
 ] as const;
 
 /**
- * Git write operations that are blocked in Phase 0.
+ * Git write operations that are blocked during hydration.
  */
 export const GIT_WRITE_COMMANDS = [
   'git add', 'git commit', 'git push', 'git pull', 'git merge',

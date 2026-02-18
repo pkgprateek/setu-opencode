@@ -2,6 +2,37 @@
 
 ## [Unreleased]
 
+### Changed
+- **Hydration terminology standardized** — Internal/runtime references now consistently use Hydration Gate naming instead of legacy Phase 0 terms.
+- **Decision gate is capability-aware** — Clarification/approval flows now resolve via native `question` tool when available, with `setu_context` fallback to avoid deadlocks.
+- **User-facing enforcement guidance simplified** — Block messages now provide concise reason + next action without verbose internal policy text.
+
+### Added
+- **Plan contract validation** — `setu_plan` now enforces required sections/fields (goal, non-goals, assumptions, file edits, atomic steps, expected output, rollback, acceptance tests, verify protocol).
+- **Artifact lifecycle policy** — Deterministic append vs remake behavior for research/plan artifact updates.
+- **Research durability for oversized payloads** — Large research payloads are additionally persisted in `.setu/research_chunks/` to avoid silent loss.
+- **New regression tests** — Added coverage for hydration enforcement naming, plan contract validation, research chunking, artifact policy, and gear-path handling.
+
+## [1.2.1] - 2026-02-12
+
+### Fixed
+- **Hydration enforcement now active** — Side-effect tools (write, edit, bash) are properly gated until context is confirmed via `setu_context`
+- **Read-before-write protection extended to edit** — Agent must read existing files before editing them, not just before writing
+- **Safety confirmation flow implemented** — Production-impacting commands (npm publish, kubectl apply, etc.) now prompt for user confirmation instead of being hard-blocked
+- **Question resolution moved to after hook** — Safety approvals/denials are now properly parsed from question tool responses after the question completes
+
+### Added
+- **Comprehensive test coverage** — 10 new unit tests for Phase 0, safety flow, and read-before-write guards (83 → 93 tests)
+- **Action fingerprinting** — Safety confirmations are matched to specific actions and consumed after single use
+- **Debug observability** — Added logging for enforcement decisions and safety classifications
+
+### Documentation
+- **Architecture diagram added** — README now references `assets/architecture.svg`, derived from the internal architecture model
+- **Install path clarified** — README now distinguishes current manual `opencode.json` setup from planned `init` command UX
+- **Roadmap wording tightened** — sequencing language cleaned up for first public release preparation
+
+## [1.2.0] - 2025-02-10
+
 ### Added
 - **Discipline guards**: Lightweight question/safety/overwrite blocking that operates independently of gears
   - `setQuestionBlocked()` / `clearQuestionBlocked()`: Force user interaction when research has open questions or plan needs approval

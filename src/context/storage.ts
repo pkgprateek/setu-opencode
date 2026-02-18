@@ -224,7 +224,7 @@ export function saveContext(projectDir: string, context: SetuContext): void {
 /**
  * In-memory context collector for the current session
  * 
- * Tracks reads/searches during Phase 0, then persists on confirmation.
+ * Tracks reads/searches during hydration, then persists on confirmation.
  */
 export interface ContextCollector {
   /** Get the current in-memory context */

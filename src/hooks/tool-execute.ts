@@ -10,24 +10,33 @@
  * - tool.execute.after: Tracks verification steps, file reads, searches
  */
 
-import { basename, isAbsolute, normalize, resolve } from 'path';
+import { isAbsolute, normalize, resolve } from 'path';
 import { existsSync } from 'fs';
 import {
   determineGear,
+  shouldBlockDuringHydration,
+  createHydrationBlockMessage,
+  isReadOnlyBashCommand,
   shouldBlock as shouldBlockByGear,
-  createGearBlockMessage
+  createGearBlockMessage,
+  type HydrationState,
 } from '../enforcement';
+import { getErrorMessage } from '../utils/error-handling';
 import {
   type ContextCollector,
   formatContextForInjection,
   contextToSummary,
   getDisciplineState,
-  setSafetyBlocked,
+  setQuestionBlocked,
   clearQuestionBlocked,
-  clearSafetyBlocked,
   setOverwriteRequirement,
   getOverwriteRequirement,
   clearOverwriteRequirement,
+  setPendingSafetyConfirmation,
+  getPendingSafetyConfirmation,
+  approvePendingSafetyConfirmation,
+  denyPendingSafetyConfirmation,
+  clearPendingSafetyConfirmation,
 } from '../context';
 import { loadActiveTask, shouldBlockDueToConstraint } from '../context/active';
 import { debugLog } from '../debug';
@@ -83,44 +92,7 @@ export interface VerificationState {
 const GIT_COMMIT_PATTERN = /\bgit\b(?:\s+[-\w.=\/]+)*\s+commit\b/i;
 const GIT_PUSH_PATTERN = /\bgit\b(?:\s+[-\w.=\/]+)*\s+push\b/i;
 
-/**
- * Package manifest and critical config file patterns for dependency safety
- * Blocks direct edits to these files to prevent accidental corruption
- * 
- * Extended to cover:
- * - Package manifests (package.json, lockfiles)
- * - Package manager configs (.npmrc, .yarnrc) - can add malicious registries
- * - Build configs with executable code (eslint, babel, webpack, vite)
- */
-const PACKAGE_MANIFEST_PATTERNS = [
-  // Package manifests
-  /package\.json$/,
-  /package-lock\.json$/,
-  /yarn\.lock$/,
-  /pnpm-lock\.yaml$/,
-  /bun\.lockb$/,
-  
-  // Package manager configs (can add malicious registries)
-  /\.npmrc$/,
-  /\.yarnrc$/,
-  /\.yarnrc\.yml$/,
-  
-  // Build configs with executable code (run during build/lint)
-  // Note: Only JS/TS configs that execute code; JSON configs are safer
-  /\.eslintrc\.(js|cjs|mjs)$/,
-  /eslint\.config\.(js|cjs|mjs|ts)$/,
-  /babel\.config\.(js|cjs|mjs|ts)$/,
-  /\.babelrc\.(js|cjs|mjs)$/,
-  /webpack\.config\.(js|cjs|mjs|ts)$/,
-  /vite\.config\.(js|cjs|mjs|ts)$/,
-  /rollup\.config\.(js|cjs|mjs|ts)$/,
-  /postcss\.config\.(js|cjs|mjs)$/,
-  /tailwind\.config\.(js|cjs|mjs|ts)$/,
-  
-  // Pre/post scripts (shell injection risk)
-  /\.husky\//,
-  /\.git\/hooks\//,
-] as const;
+const MAX_STRINGIFY_DEPTH = 20;
 
 function normalizeForComparison(projectDir: string, filePath: string): string {
   const resolvedPath = isAbsolute(filePath)
@@ -141,6 +113,109 @@ function hasReadTargetFile(collector: ContextCollector | null, projectDir: strin
   });
 }
 
+function stableStringify(value: unknown, depth = 0, seen = new WeakSet<object>()): string {
+  if (depth > MAX_STRINGIFY_DEPTH) {
+    return JSON.stringify('[MaxDepth]');
+  }
+
+  // Handle undefined explicitly - JSON.stringify(undefined) returns undefined (not a string)
+  if (value === undefined) {
+    return JSON.stringify('undefined');
+  }
+
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value);
+  }
+
+  // Circular reference protection
+  if (seen.has(value)) {
+    return JSON.stringify('[Circular]');
+  }
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item, depth + 1, seen)).join(',')}]`;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, val]) => `${JSON.stringify(key)}:${stableStringify(val, depth + 1, seen)}`);
+  return `{${entries.join(',')}}`;
+}
+
+function createActionFingerprint(tool: string, args: Record<string, unknown>): string {
+  return `${tool}:${stableStringify(args)}`;
+}
+
+type QuestionDecision = 'approved' | 'denied' | 'unknown';
+
+function stringifyUnknown(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return '';
+  }
+}
+
+function getQuestionDecision(output: { title: string; output: string; metadata: unknown }): QuestionDecision {
+  const content = `${output.title}\n${output.output}\n${stringifyUnknown(output.metadata)}`.toLowerCase();
+
+  if (content.includes('proceed - i understand the risk')) {
+    return 'approved';
+  }
+
+  if (content.includes('cancel - use a safer alternative')) {
+    return 'denied';
+  }
+
+  return 'unknown';
+}
+
+function isQuestionRelatedToPending(
+  output: { title: string; output: string; metadata: unknown },
+  pending: { actionFingerprint: string; reasons: string[] }
+): boolean {
+  const content = `${output.title}\n${output.output}\n${stringifyUnknown(output.metadata)}`.toLowerCase();
+
+  if (
+    content.includes('proceed - i understand the risk') ||
+    content.includes('cancel - use a safer alternative')
+  ) {
+    return true;
+  }
+
+  const fingerprint = pending.actionFingerprint.toLowerCase();
+  if (fingerprint && content.includes(fingerprint)) {
+    return true;
+  }
+
+  return pending.reasons.some((reason) => {
+    const normalized = reason.toLowerCase().trim();
+    return normalized.length >= 8 && content.includes(normalized);
+  });
+}
+
+function isAllowedDuringQuestionBlock(tool: string, args: Record<string, unknown>): boolean {
+  if (tool === 'question' || tool === 'setu_context' || tool === 'setu_doctor') {
+    return true;
+  }
+
+  if (isReadOnlyTool(tool)) {
+    return true;
+  }
+
+  if (tool === 'bash') {
+    const command = getStringProp(args, 'command');
+    return typeof command === 'string' && isReadOnlyBashCommand(command);
+  }
+
+  return false;
+}
+
 /**
  * Create a before-execution hook that enforces Gearbox rules for tool execution.
  *
@@ -158,13 +233,15 @@ function hasReadTargetFile(collector: ContextCollector | null, projectDir: strin
  * @param getContextCollector - Optional accessor for a ContextCollector used to obtain and format confirmed context for injection
  * @param getProjectDir - Optional accessor for project directory (used for constraint loading and gear determination)
  * @param getVerificationState - Optional accessor for verification state (used for git discipline enforcement)
+ * @param getHydrationState - Optional accessor returning HydrationState; provides current hydration state used for security gating/decision-making during tool execution
  * @returns A hook function invoked before tool execution that enforces Gearbox rules and may throw an Error when a tool is blocked
  */
 export function createToolExecuteBeforeHook(
   getCurrentAgent?: () => string,
   getContextCollector?: () => ContextCollector | null,
   getProjectDir?: () => string,
-  getVerificationState?: () => VerificationState
+  getVerificationState?: () => VerificationState,
+  getHydrationState?: () => HydrationState
 ): (input: ToolExecuteBeforeInput, output: ToolExecuteBeforeOutput) => Promise<void> {
   // Direct mutation tools only. 'task' is intentionally excluded: it's not a
   // direct mutator, but launches subagents that may mutate. It receives partial
@@ -190,33 +267,71 @@ export function createToolExecuteBeforeHook(
     const collector = getContextCollector ? getContextCollector() : null;
     const disciplineState = getDisciplineState(input.sessionID);
     const isMutating = isMutatingToolName(input.tool);
+    // actionFingerprint is computed inside isMutating block to avoid serializing large payloads for read-only tools
 
     if (input.tool === 'question') {
-      clearQuestionBlocked(input.sessionID);
-      debugLog('Question answered; cleared question block');
       return;
     }
 
-    if (disciplineState.questionBlocked) {
+    if (disciplineState.questionBlocked && !isAllowedDuringQuestionBlock(input.tool, output.args)) {
       throw new Error(
         formatGuidanceMessage(
-          'Clarification required before continuing',
           disciplineState.questionReason ?? 'A required implementation decision is still unanswered.',
-          'Answer the active structured question first.',
-          'After clarification, Setu will continue the protocol automatically.'
+          'Ask the user one direct question, then wait for their response.',
+          'Read-only inspection is allowed while waiting (read/glob/grep, safe bash, setu_doctor).'
         )
       );
     }
 
-    if (isMutating && disciplineState.safetyBlocked) {
-      throw new Error(
-        formatGuidanceMessage(
-          'Safety block active',
-          'Previous action triggered safety block in this session.',
-          'Address the safety condition before continuing.',
-          'Use safer alternatives or explicitly confirm intent with the user.'
-        )
-      );
+    // Hydration gate - wrapped in try/catch to prevent gate errors from crashing the hook
+    // On error: log, record security event, and fail-open (allow tool to proceed)
+    let hydrationBlocked = false;
+    try {
+      const hydrationState = getHydrationState?.();
+      if (!hydrationState?.contextConfirmed) {
+        if (!getHydrationState) {
+          debugLog('Hydration accessor missing - defaulting to unconfirmed context');
+        }
+
+        const hydrationResult = shouldBlockDuringHydration(input.tool, output.args);
+        if (hydrationResult.blocked) {
+          hydrationBlocked = true;
+          // SECURITY: Log failure should not mask the hydration block message
+          // Swallow logging errors to ensure agent receives the correct block reason
+          try {
+            logSecurityEvent(
+              projectDir,
+              SecurityEventType.HYDRATION_BLOCKED,
+              `Blocked ${input.tool} during hydration gate (${hydrationResult.reason ?? 'unknown'})`,
+              { sessionId: input.sessionID, tool: input.tool }
+            );
+          } catch (logError) {
+            // Log failure is secondary to blocking - use debug logger for audit trail
+            debugLog(`logSecurityEvent failed during hydration block: ${getErrorMessage(logError)}`);
+          }
+          throw new Error(createHydrationBlockMessage(hydrationResult.reason));
+        }
+      }
+    } catch (error) {
+      // If this was an intentional block, re-throw to enforce the block
+      if (hydrationBlocked) {
+        throw error;
+      }
+      // Log full context for forensics
+      debugLog(`Hydration gate error for session=${input.sessionID}, tool=${input.tool}:`, getErrorMessage(error));
+      // Record security event - gate failure is a security-relevant event
+      try {
+        logSecurityEvent(
+          projectDir,
+          SecurityEventType.HYDRATION_BLOCKED,
+          `Hydration gate error: ${getErrorMessage(error)}`,
+          { sessionId: input.sessionID, tool: input.tool }
+        );
+      } catch {
+        // If logging fails, we can't do much - just continue
+      }
+      // Fail-open: allow the tool to proceed rather than crashing OpenCode
+      debugLog('Hydration gate failed - failing open (allowing tool execution)');
     }
 
     const pendingOverwrite = getOverwriteRequirement(input.sessionID);
@@ -238,7 +353,6 @@ export function createToolExecuteBeforeHook(
         if (isMutating || input.tool === 'task') {
           throw new Error(
             formatGuidanceMessage(
-              'Overwrite guard active',
               `Pending discipline step: read '${requiredPath}' first.`,
               `Use read on '${requiredPath}' before any further changes.`,
               'Do not use bash/write/edit to bypass this guard.'
@@ -249,21 +363,81 @@ export function createToolExecuteBeforeHook(
     }
 
     if (isMutating) {
+      // Compute actionFingerprint only when needed for mutating tools
+      // This avoids serializing large write payloads for read-only operations
+      const actionFingerprint = createActionFingerprint(input.tool, output.args);
+      let consumedApproval = false;
+      const pendingSafety = getPendingSafetyConfirmation(input.sessionID);
+      if (pendingSafety) {
+        if (pendingSafety.status === 'approved' && pendingSafety.actionFingerprint === actionFingerprint) {
+          // One-time approval: consume it now. Next retry requires fresh approval.
+          clearPendingSafetyConfirmation(input.sessionID);
+          consumedApproval = true;
+        } else if (pendingSafety.status === 'pending' && pendingSafety.actionFingerprint === actionFingerprint) {
+          throw new Error(
+            formatGuidanceMessage(
+              pendingSafety.reasons.join('; '),
+              'Resolve user decision with question tool if available, otherwise use setu_context as explicit checkpoint.',
+              'Use a lower-risk alternative if possible.'
+            )
+          );
+        } else if (pendingSafety.status === 'denied' && pendingSafety.actionFingerprint === actionFingerprint) {
+          throw new Error(
+            formatGuidanceMessage(
+              pendingSafety.reasons.join('; '),
+              'Do not execute this action. Choose a safer alternative or re-ask for explicit approval.',
+              'Prefer a local, non-production, non-destructive path.'
+            )
+          );
+        }
+      }
+
       const safetyDecision = classifyHardSafety(input.tool, output.args);
-      if (safetyDecision.hardSafety) {
-        setSafetyBlocked(input.sessionID);
+      if (!consumedApproval && safetyDecision.hardSafety) {
+        if (safetyDecision.action === 'ask') {
+          // Log safety confirmation request
+          logSecurityEvent(
+            projectDir,
+            SecurityEventType.SAFETY_BLOCKED,
+            `Safety confirmation required for ${input.tool}: ${safetyDecision.reasons.join('; ')}`,
+            { sessionId: input.sessionID, tool: input.tool }
+          );
+          // SECURITY: Clear any stale pending confirmation before setting new one
+          // Prevents confusion when a different action fingerprint is processed
+          clearPendingSafetyConfirmation(input.sessionID);
+          setPendingSafetyConfirmation(input.sessionID, {
+            actionFingerprint,
+            reasons: safetyDecision.reasons,
+          });
+          setQuestionBlocked(
+            input.sessionID,
+            `Safety confirmation needed: ${safetyDecision.reasons.join('; ')}`
+          );
+          throw new Error(
+            formatGuidanceMessage(
+              safetyDecision.reasons.join('; '),
+               'Resolve user decision with question tool if available, otherwise use setu_context as explicit checkpoint.',
+               'Use a lower-risk alternative if possible.'
+             )
+           );
+        }
+
+        // Log hard block for destructive commands
+        logSecurityEvent(
+          projectDir,
+          SecurityEventType.SAFETY_BLOCKED,
+          `Hard blocked ${input.tool}: ${safetyDecision.reasons.join('; ')}`,
+          { sessionId: input.sessionID, tool: input.tool }
+        );
 
         throw new Error(
           formatGuidanceMessage(
-            'Execution paused by safety policy',
             safetyDecision.reasons.join('; '),
-            'Confirm explicitly before running this action.',
+            'Do not execute this action. Choose a safer alternative.',
             'Use a lower-risk alternative if possible.'
           )
         );
       }
-
-      clearSafetyBlocked(input.sessionID);
     }
     
     // Context injection for task tool (subagent prompts)
@@ -295,7 +469,6 @@ export function createToolExecuteBeforeHook(
       if (envConflict.hasConflict) {
         throw new Error(
           formatGuidanceMessage(
-            'Potential environment conflict',
             envConflict.reason ?? 'Command can conflict with active development processes.',
             'Stop the dev server first, then run build/verification commands.',
             'If you must continue, run the command manually after confirming local state.'
@@ -354,38 +527,9 @@ export function createToolExecuteBeforeHook(
       }
     }
     
-    // DEPENDENCY SAFETY ENFORCEMENT
-    // Block direct edits to package manifests to prevent accidental corruption
-    // Applies to: package.json, lockfiles
-    // Reason: Direct edits can corrupt manifests; use package managers instead
+    // PATH TRAVERSAL PREVENTION
     if (input.tool === 'write' || input.tool === 'edit') {
       const filePath = getStringProp(output.args, 'filePath') ?? '';
-      
-      // Normalize path separators for cross-platform pattern matching (Windows uses backslash)
-      const normalizedPath = filePath.replace(/\\/g, '/');
-      
-      const isPackageManifest = PACKAGE_MANIFEST_PATTERNS.some(pattern => 
-        pattern.test(normalizedPath)
-      );
-      
-      if (isPackageManifest) {
-        logSecurityEvent(
-          projectDir,
-          SecurityEventType.DEPENDENCY_EDIT_BLOCKED,
-          `Blocked ${input.tool} to ${basename(filePath)}`,
-          { sessionId: input.sessionID, tool: input.tool }
-        );
-        debugLog(`Dependency Safety BLOCKED: ${input.tool} to ${filePath}`);
-        throw new Error(
-          `⚠️ [Dependency Safety] Direct edits to '${basename(filePath)}' blocked.\n\n` +
-          `Package manifests should be modified via package manager commands:\n` +
-          `  • npm/pnpm/yarn/bun install <package>\n` +
-          `  • npm/pnpm/yarn/bun remove <package>\n\n` +
-          `If you need to edit this file directly, explain why to the user first.`
-        );
-      }
-      
-      // PATH TRAVERSAL PREVENTION
       // Validate file paths are within project directory
       if (getProjectDir) {
         const pathValidation = validateFilePath(projectDir, filePath, { 
@@ -407,8 +551,18 @@ export function createToolExecuteBeforeHook(
         }
       }
 
-      if (input.tool === 'write' && getProjectDir && filePath) {
+      if ((input.tool === 'write' || input.tool === 'edit') && getProjectDir && filePath) {
         const fileExists = existsSync(normalizeForComparison(projectDir, filePath));
+        if (!fileExists && input.tool === 'edit') {
+          throw new Error(
+            formatGuidanceMessage(
+              `Cannot edit '${filePath}' because it does not exist.`,
+              `Create '${filePath}' with write first, then read and edit as needed.`,
+              'Use write for new files and edit only for existing files.'
+            )
+          );
+        }
+
         if (fileExists && !hasReadTargetFile(collector, projectDir, filePath)) {
           setOverwriteRequirement(input.sessionID, {
             pending: true,
@@ -418,7 +572,6 @@ export function createToolExecuteBeforeHook(
 
           throw new Error(
             formatGuidanceMessage(
-              'Read required before overwrite',
               `Target file already exists: '${filePath}'.`,
               `Read '${filePath}' first, then update it.`,
               'Use edit for in-place updates after reading the file.'
@@ -490,7 +643,6 @@ export function createToolExecuteBeforeHook(
         );
         throw new Error(
           formatGuidanceMessage(
-            'Execution paused by gear policy',
             createGearBlockMessage(gearBlockResult),
             'Create required artifacts or confirm a reduced-scope request.',
             'Use setu_research first, then setu_plan when needed.'
@@ -540,6 +692,37 @@ export function createToolExecuteAfterHook(
     // Only operate when in Setu agent mode
     const currentAgent = getCurrentAgent ? getCurrentAgent() : 'setu';
     if (currentAgent.toLowerCase() !== 'setu') {
+      return;
+    }
+
+    if (input.tool === 'question') {
+      const pendingSafety = getPendingSafetyConfirmation(input.sessionID);
+
+      if (pendingSafety) {
+        if (isQuestionRelatedToPending(output, pendingSafety)) {
+          const decision = getQuestionDecision(output);
+          if (decision === 'approved') {
+            approvePendingSafetyConfirmation(input.sessionID, pendingSafety.actionFingerprint);
+            clearQuestionBlocked(input.sessionID);
+            debugLog('Safety confirmation approved by user');
+            debugLog('Question answered; cleared question block');
+          } else if (decision === 'denied') {
+            denyPendingSafetyConfirmation(input.sessionID, pendingSafety.actionFingerprint);
+            clearQuestionBlocked(input.sessionID);
+            debugLog('Safety confirmation denied by user');
+            debugLog('Question answered; cleared question block');
+          } else {
+            debugLog('Safety confirmation unresolved; keeping pending state');
+          }
+        } else {
+          debugLog('Question response unrelated to pending safety confirmation; keeping pending state');
+        }
+      } else {
+        // No pending safety - safe to clear question block for any question
+        clearQuestionBlocked(input.sessionID);
+        debugLog('Question answered; cleared question block');
+      }
+
       return;
     }
     

@@ -5,7 +5,7 @@
  * Generates .opencode/agents/setu.md at plugin initialization.
  * 
  * IMPORTANT: This file contains ONLY Setu's soul (identity, covenant, philosophy).
- * Behavioral enforcement (Phase 0 context gate, gear-based workflow, verification, discipline guards) is handled by plugin hooks.
+ * Behavioral enforcement (hydration context gate, gear-based workflow, verification, discipline guards) is handled by plugin hooks.
  */
 
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
@@ -25,7 +25,7 @@ import { getErrorMessage } from '../utils/error-handling';
  * - Philosophy
  * 
  * Does NOT contain:
- * - Phase 0 instructions (enforced by hooks)
+ * - Hydration instructions (enforced by hooks)
  * - Verification protocol (enforced by hooks)
  * - Git discipline (user responsibility)
  * - "Read these files" instructions (plugin handles)
@@ -87,6 +87,10 @@ You're a craftsman, an artist, an engineer who thinks like a designer. Every lin
 5. Iterate Relentlessly — The first version is never good enough. Refine until it's *insanely great*.
 6. Simplify Ruthlessly — If there's a way to remove complexity without losing power, find it. Elegance is when there's nothing left to take away.
 7. Leave It Better — Every interaction should improve the codebase. Document discoveries. Flag technical debt. Help the next developer.
+
+## Your Disciplined Workflow
+You follow a 3-phase workflow: Scout (discovery) → Architect (synthesis) → Builder (execution).
+The system will guide you through each phase dynamically based on your current state.
 
 ## Interaction Style
 Be concise but precise. If request is ambiguous, ask clarifying questions. If request is dangerous, block and explain why. Do not chat; engineer.

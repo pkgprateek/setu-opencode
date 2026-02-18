@@ -20,7 +20,7 @@ import { type ActiveBatchesMap, disposeSessionBatch } from './tool-execute';
  * @param resetAttemptTracker - Resets attempt tracking when a new session starts
  * @param setFirstSessionDone - Marks that the first session has completed
  * @param confirmContext - Callback to mark context as confirmed
- * @param resetPhase0 - Optional callback to reset Phase 0 state for the given `sessionId`
+ * @param resetHydration - Optional callback to reset hydration state for the given `sessionId`
  * @param getContextCollector - Optional accessor that returns a `ContextCollector` (or `null`) used to load or update session context from disk
  * @param checkFilesExist - Optional callback to silently check file existence without errors
  * @param setProjectRules - Optional callback to store loaded project rules (Silent Exploration)
@@ -33,7 +33,7 @@ export function createEventHook(
   resetAttemptTracker: () => void,
   setFirstSessionDone: () => void,
   confirmContext: () => void,
-  resetPhase0?: (sessionId: string) => void,
+  resetHydration?: (sessionId: string) => void,
   getContextCollector?: () => ContextCollector | null,
   checkFilesExist?: () => { active: boolean; context: boolean; agentsMd: boolean; claudeMd: boolean },
   setProjectRules?: (rules: ProjectRules | null) => void,
@@ -53,8 +53,8 @@ export function createEventHook(
         resetAttemptTracker();
         setFirstSessionDone();
         
-        if (resetPhase0) {
-          resetPhase0(sessionId);
+        if (resetHydration) {
+          resetHydration(sessionId);
         }
         
         // Resolve project directory once for all operations in this session
@@ -95,7 +95,7 @@ export function createEventHook(
               if (ctx.filesRead.length > 0) {
                 debugLog(`Files read: ${ctx.filesRead.length} files`);
               }
-              // Mark as confirmed so Phase 0 doesn't block unnecessarily
+              // Mark as confirmed so hydration doesn't block unnecessarily
               // User can still update context if needed
               confirmContext();
             }

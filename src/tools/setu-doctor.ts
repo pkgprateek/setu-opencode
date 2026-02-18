@@ -198,6 +198,39 @@ async function checkDependencies(projectDir: string): Promise<HealthCheck[]> {
 }
 
 /**
+ * Check project rules (AGENTS.md, CLAUDE.md)
+ */
+function checkProjectRules(projectDir: string): HealthCheck[] {
+  const checks: HealthCheck[] = [];
+  
+  const hasAgentsMd = existsSync(join(projectDir, 'AGENTS.md'));
+  const hasClaudeMd = existsSync(join(projectDir, 'CLAUDE.md'));
+  
+  if (hasAgentsMd) {
+    checks.push({
+      name: 'project-rules',
+      status: 'healthy',
+      message: 'AGENTS.md found'
+    });
+  } else if (hasClaudeMd) {
+    checks.push({
+      name: 'project-rules',
+      status: 'healthy',
+      message: 'CLAUDE.md found (AGENTS.md compatible)'
+    });
+  } else {
+    checks.push({
+      name: 'project-rules',
+      status: 'warning',
+      message: 'No AGENTS.md or CLAUDE.md found',
+      fix: 'Run /init in OpenCode to generate project rules'
+    });
+  }
+  
+  return checks;
+}
+
+/**
  * Check build/runtime environment
  */
 async function checkRuntime(projectDir: string): Promise<HealthCheck[]> {
@@ -280,6 +313,9 @@ async function runDoctorChecks(projectDir: string): Promise<DoctorResult> {
   ]);
   
   allChecks.push(...gitChecks, ...depChecks, ...runtimeChecks);
+  
+  // Add project rules check (synchronous, no need for Promise.all)
+  allChecks.push(...checkProjectRules(projectDir));
   
   // Determine overall status
   const hasErrors = allChecks.some(c => c.status === 'error');
@@ -367,6 +403,7 @@ Detects common issues that cause "ghost loops":
 - Git: uncommitted changes, detached HEAD
 - Dependencies: missing node_modules, outdated lockfile
 - Runtime: missing Node.js, TypeScript issues
+- Project Rules: validates AGENTS.md and CLAUDE.md (or compatible project policy files)
 
 Run this before starting complex tasks to ensure a clean environment.`,
     
@@ -376,7 +413,7 @@ Run this before starting complex tasks to ensure a clean environment.`,
       )
     },
     
-    async execute(args: { verbose?: boolean }): Promise<string> {
+    async execute(args: { verbose?: boolean }, _context?: unknown): Promise<string> {
       const projectDir = getProjectDir();
       const result = await runDoctorChecks(projectDir);
 
