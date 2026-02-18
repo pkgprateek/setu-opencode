@@ -83,7 +83,7 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
     acceptanceTests: tool.schema.string().describe('Bullet list of tests'),
     verifyProtocol: tool.schema.string().optional().describe('Defaults to build -> lint -> test')
   },
-  async execute(args) {
+  async execute(args): Promise<string> {
     const projectDir = getProjectDir();
 
     try {
@@ -134,8 +134,13 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
     let existingPlan = '';
     try {
       existingPlan = await readFile(planPath, 'utf-8');
-    } catch {
-      existingPlan = '';
+    } catch (error) {
+      // Only ENOENT means "file not found" - other errors should be rethrown
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+        existingPlan = '';
+      } else {
+        throw new Error(`Failed to read existing PLAN.md: ${getErrorMessage(error)}`);
+      }
     }
     const planMode = decidePlanArtifactMode({
       hasExistingPlan: existingPlan.length > 0,

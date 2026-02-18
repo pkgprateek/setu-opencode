@@ -21,6 +21,7 @@ import {
   createGearBlockMessage,
   type HydrationState,
 } from '../enforcement';
+import { getErrorMessage } from '../utils/error-handling';
 import {
   type ContextCollector,
   formatContextForInjection,
@@ -282,22 +283,48 @@ export function createToolExecuteBeforeHook(
       );
     }
 
-    const hydrationState = getHydrationState?.();
-    if (!hydrationState?.contextConfirmed) {
-      if (!getHydrationState) {
-        debugLog('Hydration accessor missing - defaulting to unconfirmed context');
-      }
+    // Hydration gate - wrapped in try/catch to prevent gate errors from crashing the hook
+    // On error: log, record security event, and fail-open (allow tool to proceed)
+    let hydrationBlocked = false;
+    try {
+      const hydrationState = getHydrationState?.();
+      if (!hydrationState?.contextConfirmed) {
+        if (!getHydrationState) {
+          debugLog('Hydration accessor missing - defaulting to unconfirmed context');
+        }
 
-      const hydrationResult = shouldBlockDuringHydration(input.tool, output.args);
-      if (hydrationResult.blocked) {
+        const hydrationResult = shouldBlockDuringHydration(input.tool, output.args);
+        if (hydrationResult.blocked) {
+          hydrationBlocked = true;
+          logSecurityEvent(
+            projectDir,
+            SecurityEventType.HYDRATION_BLOCKED,
+            `Blocked ${input.tool} during hydration gate (${hydrationResult.reason ?? 'unknown'})`,
+            { sessionId: input.sessionID, tool: input.tool }
+          );
+          throw new Error(createHydrationBlockMessage(hydrationResult.reason));
+        }
+      }
+    } catch (error) {
+      // If this was an intentional block, re-throw to enforce the block
+      if (hydrationBlocked) {
+        throw error;
+      }
+      // Log full context for forensics
+      debugLog(`Hydration gate error for session=${input.sessionID}, tool=${input.tool}:`, getErrorMessage(error));
+      // Record security event - gate failure is a security-relevant event
+      try {
         logSecurityEvent(
           projectDir,
           SecurityEventType.HYDRATION_BLOCKED,
-          `Blocked ${input.tool} during hydration gate (${hydrationResult.reason ?? 'unknown'})`,
+          `Hydration gate error: ${getErrorMessage(error)}`,
           { sessionId: input.sessionID, tool: input.tool }
         );
-        throw new Error(createHydrationBlockMessage(hydrationResult.reason));
+      } catch {
+        // If logging fails, we can't do much - just continue
       }
+      // Fail-open: allow the tool to proceed rather than crashing OpenCode
+      debugLog('Hydration gate failed - failing open (allowing tool execution)');
     }
 
     const pendingOverwrite = getOverwriteRequirement(input.sessionID);

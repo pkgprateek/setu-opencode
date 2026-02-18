@@ -61,16 +61,26 @@ async function persistResearchChunks(projectDir: string, content: string): Promi
   await mkdir(chunksDir, { recursive: true });
 
   // Clean up stale chunk files from previous runs
+  // Use stricter regex: research.part-NN.md where NN is exactly 2 digits
+  const chunkFileRegex = /^research\.part-\d{2}\.md$/;
   try {
     const files = await readdir(chunksDir);
-    const staleFiles = files.filter(
-      (file) => file.startsWith('research.part-') && file.endsWith('.md')
-    );
-    for (const file of staleFiles) {
-      await unlink(join(chunksDir, file));
+    const staleFiles = files.filter((file) => chunkFileRegex.test(file));
+    // Parallel removal for efficiency
+    await Promise.all(staleFiles.map((file) => unlink(join(chunksDir, file))));
+  } catch (error) {
+    // Only ignore ENOENT (dir doesn't exist) and permission errors
+    // Surface other errors (corruption, disk issues, etc.)
+    if (error && typeof error === 'object' && 'code' in error) {
+      if (error.code === 'ENOENT' || error.code === 'EACCES' || error.code === 'EPERM') {
+        // Safe to ignore - directory doesn't exist or permission denied
+        debugLog(`persistResearchChunks: ignoring cleanup error (${error.code})`);
+      } else {
+        throw new Error(`Failed to clean up stale research chunks: ${getErrorMessage(error)}`);
+      }
+    } else {
+      throw new Error(`Failed to clean up stale research chunks: ${getErrorMessage(error)}`);
     }
-  } catch {
-    // Directory might not exist yet or other error - safe to continue
   }
 
   for (let i = 0; i < chunks.length; i++) {
@@ -92,7 +102,7 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
     risks: tool.schema.string().optional().describe('Known risks/unknowns discovered during research'),
     openQuestions: tool.schema.string().optional().describe('Unresolved questions needing user input (e.g., stack choice, deployment target)')
   },
-  async execute(args) {
+  async execute(args): Promise<string> {
     const projectDir = getProjectDir();
 
     try {

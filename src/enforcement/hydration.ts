@@ -60,7 +60,8 @@ export function isReadOnlyBashCommand(command: string): boolean {
   // SECURITY: reject shell metacharacters and multiline/continued commands.
   // Fail-closed: hydration allows only single simple read-only commands.
   // Includes parameter expansion ${...} to prevent command injection via variable expansion
-  const dangerousPattern = /(;|&&|\|\||\||`|\$\(|\$\{|>|>>|2>|>&|>\||<|&|\(|\)|\n|\r|\\\n)/;
+  // Note: \n and \r are already rejected by the control-character check above, so not duplicated here
+  const dangerousPattern = /(;|&&|\|\||\||`|\$\(|\$\{|>|>>|2>|>&|>\||<|&|\(|\)|\\\n)/;
   if (dangerousPattern.test(trimmed)) {
     return false;
   }

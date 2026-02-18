@@ -6,15 +6,15 @@ export type HardSafetyAction = 'ask' | 'block';
  * Structured category for safety classification.
  * Action determination is derived from this enum, not from reason text.
  * 'destructive' → block (irrecoverable operations like rm -rf, git reset --hard)
- * 'production' | 'mutation' | 'sensitive' → ask (reversible but risky)
+ * 'production' | 'sensitive' → ask (reversible but risky)
+ * Note: 'mutation' category removed - no longer needed after FILE_MUTATION_BASH_PATTERNS removal
  */
-export type SafetyCategory = 'destructive' | 'production' | 'mutation' | 'sensitive';
+export type SafetyCategory = 'destructive' | 'production' | 'sensitive';
 
 /** Maps category to enforcement action. Single source of truth. */
 const CATEGORY_ACTION: Record<SafetyCategory, HardSafetyAction> = {
   destructive: 'block',
   production: 'ask',
-  mutation: 'ask',
   sensitive: 'ask',
 };
 
@@ -33,8 +33,9 @@ export interface SafetyDecision {
 const DESTRUCTIVE_BASH_PATTERNS: RegExp[] = [
   // Covers: rm with dangerous flags anywhere on line, including escaped/prefixed invocations
   // Also matches common invocation prefixes like sudo, env, su (with optional flags/whitespace)
+  // Also matches environment variable assignments (KEY=VALUE) before the command
   // Bounded to prevent ReDoS on adversarial input
-  /(?:\b(?:sudo|env|su)\b(?:\s+-\S+)*\s+)?(?:\\?rm|command\s+rm)\b[^\n]{0,500}(?:-\w*[rf]|--recursive|--force|--no-preserve-root)/i,
+  /(?:\b(?:sudo|env|su)\b(?:\s+(?:-\S+|[A-Za-z_]\w*=[^\s'"]*|[A-Za-z_]\w*='[^']*'|[A-Za-z_]\w*="[^"]*"))*\s+)?(?:\\?rm|command\s+rm)\b[^\n]{0,500}(?:-\w*[rf]|--recursive|--force|--no-preserve-root)/i,
   /\bgit\s+reset\s+--hard\b/i,
   /\bgit\s+clean\b[^\n]*\s-(?:[^\n]*f|[^\n]*d|[^\n]*x)/i,
   /\bmkfs\b/i,

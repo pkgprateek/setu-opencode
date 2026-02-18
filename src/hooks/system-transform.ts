@@ -148,15 +148,21 @@ export function createSystemTransformHook(
     }
     
     // Add verification reminder when needed
-    const verificationState = getVerificationState();
-    if (!verificationState.complete) {
-      const stepsNeeded = ['build', 'test', 'lint'].filter(
-        s => !verificationState.stepsRun.has(s)
-      );
+    // Wrapped in try/catch to prevent verification check errors from crashing OpenCode
+    try {
+      const verificationState = getVerificationState();
+      if (!verificationState.complete) {
+        const stepsNeeded = ['build', 'test', 'lint'].filter(
+          s => !verificationState.stepsRun.has(s)
+        );
 
-      if (stepsNeeded.length > 0) {
-        output.system.push(`[Verify before done: ${stepsNeeded.join(', ')}]`);
+        if (stepsNeeded.length > 0) {
+          output.system.push(`[Verify before done: ${stepsNeeded.join(', ')}]`);
+        }
       }
+    } catch (error) {
+      // Log error but don't crash - verification reminder is enhancement, not critical
+      debugLog('system-transform: verification check failed:', getErrorMessage(error));
     }
 
     // Gear, discipline, and overwrite injection — wrapped for graceful degradation
@@ -196,8 +202,8 @@ export function createSystemTransformHook(
         }
         
         // AGENTS.md warning: only for Setu agent, only when both AGENTS.md and CLAUDE.md are missing
-        // Use existing isSetuAgent boolean (defined earlier)
-        if (isSetuAgent) {
+        // Only run when getSetuFilesExist is available (filesExist was actually populated)
+        if (isSetuAgent && getSetuFilesExist) {
           if (!filesExist.agentsMd && !filesExist.claudeMd) {
             // Use push (not unshift) so it doesn't outrank core gear/safety guidance
             output.system.push(

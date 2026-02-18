@@ -147,30 +147,39 @@ setu_task({
 
 ---
 
-#### `setu_research` - Parallel Research
+#### `setu_research` - Save Research Findings
 
-Research with multiple subagents working in parallel.
+Document your understanding of the codebase before implementation.
 
 ```typescript
 setu_research({
-  task: string,           // What to research
-  focus?: string[],       // Specific areas: ['security', 'patterns', 'testing']
-  openQuestions?: string[] // Unresolved questions requiring user input
+  task?: string,          // Research task description - what you are investigating (optional)
+  summary: string,        // Research findings in markdown format (REQUIRED)
+  constraints?: string,   // Discovered constraints, limitations, or technical debt
+  patterns?: string,      // Observed patterns in the codebase (architecture, naming, testing)
+  learnings?: string,     // What worked/failed during research
+  risks?: string,         // Known risks/unknowns discovered during research
+  openQuestions?: string  // Unresolved questions needing user input (single string, not array)
 });
 ```
 
 **What happens**:
-1. Spawns 3 parallel subagents
-2. Each researches different aspect
-3. Results merged into RESEARCH.md
-4. If openQuestions provided, triggers question blocking (user must answer)
-5. Gear advances: Scout → Architect
+1. Validates summary is provided and not empty
+2. Sanitizes all inputs to prevent prompt injection
+3. Determines whether to append or remake RESEARCH.md based on task alignment
+4. Writes research to `.setu/RESEARCH.md`
+5. If openQuestions provided, triggers question blocking (user must answer)
+6. Gear advances: Scout → Architect
 
 **Example**:
 ```typescript
 setu_research({
-  task: 'Implement authentication system',
-  focus: ['security', 'patterns']
+  summary: 'Researched JWT auth patterns. Using jose library. Existing middleware in src/middleware/.',
+  constraints: 'Must maintain backward compatibility with existing session-based auth',
+  patterns: 'Middleware pattern: auth.ts guards protected routes',
+  learnings: 'jose library is already a dependency, no new installs needed',
+  risks: 'Token refresh logic not yet understood',
+  openQuestions: 'Should we use access/refresh token pair or single long-lived token?'
 });
 
 // Result: RESEARCH.md created, now in Architect gear
