@@ -197,12 +197,12 @@ export const SetuPlugin: Plugin = async (ctx) => {
     }
   };
   
-  const getHydrationState = () => ({ ...state.hydration });
-  const confirmContext = () => {
+  const getHydrationState = (): typeof state.hydration => ({ ...state.hydration });
+  const confirmContext = (): void => {
     state.hydration.contextConfirmed = true;
     debugLog('Hydration: Context confirmed - side-effect tools now allowed');
   };
-  const resetHydration = (sessionId: string) => {
+  const resetHydration = (sessionId: string): void => {
     state.hydration = {
       contextConfirmed: false,
       sessionId,
