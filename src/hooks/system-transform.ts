@@ -217,8 +217,9 @@ export function createSystemTransformHook(
       const overwriteRequirement = getOverwriteRequirement(input.sessionID);
       if (overwriteRequirement?.pending) {
         // Sanitize filePath before interpolation: strip control chars and newlines
+        // Convert both CR and LF to spaces to preserve word boundaries
         const safePath = (overwriteRequirement.filePath ?? '')
-          .replace(/\n/g, ' ')
+          .replace(/\r\n|\r|\n/g, ' ')
           .replace(/[\x00-\x09\x0b-\x1f\x7f]/g, '');
         output.system.unshift(
           `[SETU: Overwrite Guard]\n` +
