@@ -3,5 +3,5 @@ export function formatGuidanceMessage(
   nextStep: string,
   safeAlternative?: string
 ): string {
-  return `Wait: ${why} ${nextStep}${safeAlternative ? ` ${safeAlternative}` : ''}`;
+  return `Wait: ${why}. ${nextStep}${safeAlternative ? ` ${safeAlternative}` : ''}`;
 }
