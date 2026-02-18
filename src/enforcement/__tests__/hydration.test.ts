@@ -18,7 +18,7 @@ describe('hydration bash safety parsing', () => {
     expect(isReadOnlyBashCommand('$(rm -rf /)')).toBe(false);
     expect(isReadOnlyBashCommand('`rm -rf /`')).toBe(false);
     expect(isReadOnlyBashCommand('(rm -rf /)')).toBe(false);
-    // biome-ignore lint/suspicious/noControlCharactersInRegex: test null-byte hardening
+    // Null byte injection test (not a regex, so no suppression needed)
     expect(isReadOnlyBashCommand('git status\x00rm -rf /')).toBe(false);
   });
 
