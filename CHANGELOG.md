@@ -13,10 +13,10 @@
 - **Research durability for oversized payloads** — Large research payloads are additionally persisted in `.setu/research_chunks/` to avoid silent loss.
 - **New regression tests** — Added coverage for hydration enforcement naming, plan contract validation, research chunking, artifact policy, and gear-path handling.
 
-## [1.2.1] - 2025-02-12
+## [1.2.1] - 2026-02-12
 
 ### Fixed
-- **Phase 0 enforcement now active** — Side-effect tools (write, edit, bash) are properly gated until context is confirmed via `setu_context`
+- **Hydration enforcement now active** — Side-effect tools (write, edit, bash) are properly gated until context is confirmed via `setu_context`
 - **Read-before-write protection extended to edit** — Agent must read existing files before editing them, not just before writing
 - **Safety confirmation flow implemented** — Production-impacting commands (npm publish, kubectl apply, etc.) now prompt for user confirmation instead of being hard-blocked
 - **Question resolution moved to after hook** — Safety approvals/denials are now properly parsed from question tool responses after the question completes

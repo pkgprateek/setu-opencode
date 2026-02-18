@@ -38,7 +38,6 @@
   "files": [
     "dist",
     "skills",
-    "PLAN_TEMPLATE.md",
     "README.md"
   ],
   "peerDependencies": {

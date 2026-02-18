@@ -54,7 +54,7 @@
 
 ## Current State (v1.2.2-candidate — Track A+ hardening complete)
 
-### Shipped (v1.2.1 - February 2025)
+### Shipped (v1.2.1 - February 2026)
 
 **Critical Fixes:**
 - [x] **FR-02 / AT-01: Hydration enforcement** — Wired hydration gating into live enforcement path
