@@ -305,7 +305,7 @@ setu_doctor({ verbose: true });
 ### Typical Workflow
 
 **Starting a new feature**:
-```
+```text
 User: Implement dark mode toggle
 Setu: [Scout gear] Let me research the current theming approach...
 Setu: Reading src/theme/, src/components/...
@@ -322,7 +322,7 @@ Setu: Feature complete. All 4 steps verified.
 ```
 
 **Quick fix (wrong mode?)**:
-```
+```text
 User: Fix typo in README
 Setu: [Scout gear] This is a simple fix. For immediate execution, press Tab to switch to Build mode.
 User: [Presses Tab → Build mode]
@@ -388,7 +388,7 @@ read("package.json")
 
 ### Three Layers
 
-```
+```text
 ┌─────────────────────────────────────┐
 │  Layer 3: Tools (User Interface)    │
 │  - setu_context                     │
@@ -415,7 +415,7 @@ read("package.json")
 
 ### Key Files
 
-```
+```text
 src/
 ├── index.ts              # Plugin entry, hook registration
 ├── agent/
@@ -464,7 +464,7 @@ src/
 
 ### Context Files
 
-```
+```text
 .setu/
 ├── context.json          # Machine-parseable context
 ├── active.json           # Current task, constraints
@@ -565,7 +565,7 @@ opencode  # Load plugin from dist/
 - Prefer `const` over `let`
 
 ### Commit Messages
-```
+```text
 type(scope): summary
 
 Context in 1-2 sentences.

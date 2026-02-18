@@ -61,8 +61,8 @@ async function persistResearchChunks(projectDir: string, content: string): Promi
   await mkdir(chunksDir, { recursive: true });
 
   // Clean up stale chunk files from previous runs
-  // Use stricter regex: research.part-NN.md where NN is exactly 2 digits
-  const chunkFileRegex = /^research\.part-\d{2}\.md$/;
+  // Use stricter regex: research.part-NN.md where NN is 2 or more digits
+  const chunkFileRegex = /^research\.part-\d{2,}\.md$/;
   try {
     const files = await readdir(chunksDir);
     const staleFiles = files.filter((file) => chunkFileRegex.test(file));
@@ -138,8 +138,13 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
       // Async read for existing research
       try {
         existingResearch = await readFile(researchPath, 'utf-8');
-      } catch {
-        existingResearch = '';
+      } catch (error) {
+        // Only ENOENT means "file not found" - other errors (EACCES, EMFILE, etc.) should be rethrown
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+          existingResearch = '';
+        } else {
+          throw new Error(`Failed to read existing RESEARCH.md: ${getErrorMessage(error)}`);
+        }
       }
       const hasExistingResearch = existingResearch.length > 0;
 

@@ -73,14 +73,14 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
   description: 'Create execution plan in .setu/PLAN.md. Requires RESEARCH.md.',
   args: {
     objective: tool.schema.string().describe('One sentence: what this plan accomplishes'),
-    contextSummary: tool.schema.string().describe('2-3 sentences from RESEARCH.md'),
-    nonGoals: tool.schema.string().describe('What is out of scope'),
-    assumptions: tool.schema.string().describe('Stack, runtime, constraints'),
+    contextSummary: tool.schema.string().optional().describe('2-3 sentences from RESEARCH.md'),
+    nonGoals: tool.schema.string().optional().describe('What is out of scope'),
+    assumptions: tool.schema.string().optional().describe('Stack, runtime, constraints'),
     fileEdits: tool.schema.string().describe('Files to modify'),
     steps: tool.schema.string().describe('Phase > Task > Step with Why/Edit(s)/Commands. See PLAN_TEMPLATE.md'),
-    expectedOutput: tool.schema.string().describe('What success looks like'),
-    rollbackNote: tool.schema.string().describe('How to revert'),
-    acceptanceTests: tool.schema.string().describe('Bullet list of tests'),
+    expectedOutput: tool.schema.string().optional().describe('What success looks like'),
+    rollbackNote: tool.schema.string().optional().describe('How to revert'),
+    acceptanceTests: tool.schema.string().optional().describe('Bullet list of tests'),
     verifyProtocol: tool.schema.string().optional().describe('Defaults to build -> lint -> test')
   },
   async execute(args): Promise<string> {

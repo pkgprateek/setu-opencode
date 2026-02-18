@@ -296,12 +296,19 @@ export function createToolExecuteBeforeHook(
         const hydrationResult = shouldBlockDuringHydration(input.tool, output.args);
         if (hydrationResult.blocked) {
           hydrationBlocked = true;
-          logSecurityEvent(
-            projectDir,
-            SecurityEventType.HYDRATION_BLOCKED,
-            `Blocked ${input.tool} during hydration gate (${hydrationResult.reason ?? 'unknown'})`,
-            { sessionId: input.sessionID, tool: input.tool }
-          );
+          // SECURITY: Log failure should not mask the hydration block message
+          // Swallow logging errors to ensure agent receives the correct block reason
+          try {
+            logSecurityEvent(
+              projectDir,
+              SecurityEventType.HYDRATION_BLOCKED,
+              `Blocked ${input.tool} during hydration gate (${hydrationResult.reason ?? 'unknown'})`,
+              { sessionId: input.sessionID, tool: input.tool }
+            );
+          } catch (logError) {
+            // Log failure is secondary to blocking - use debug logger for audit trail
+            debugLog(`logSecurityEvent failed during hydration block: ${getErrorMessage(logError)}`);
+          }
           throw new Error(createHydrationBlockMessage(hydrationResult.reason));
         }
       }
