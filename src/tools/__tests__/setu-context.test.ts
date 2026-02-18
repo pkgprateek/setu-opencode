@@ -3,7 +3,7 @@ import { createSetuContextTool } from '../setu-context';
 import { clearDisciplineState, getDisciplineState, setQuestionBlocked } from '../../context';
 
 describe('setu_context decision checkpoint behavior', () => {
-  test('clears question block even when hydration is already confirmed', async () => {
+  test('clears question block when hydration is confirmed via callback', async () => {
     const sessionID = 'setu-context-clears-question-block';
     setQuestionBlocked(sessionID, 'Need output format preference');
 
@@ -29,17 +29,19 @@ describe('setu_context decision checkpoint behavior', () => {
           summary: 'Task context understood',
           task: 'Create a quote file',
         },
+        // Type-safe context with properly typed metadata and ask functions
         {
           sessionID,
           messageID: 'test-msg-1',
           agent: 'setu',
           abort: new AbortController().signal,
-          metadata: {},
-          ask: async () => {},
-        } as any
+          metadata: { test: true },
+          ask: async () => ({ answer: 'test' }),
+        } as unknown as Parameters<typeof toolDef.execute>[1]
       );
 
-      expect(result).toContain('confirmed');
+      // Assert specific happy-path message (not just "confirmed" which appears in both paths)
+      expect(result).toContain('Hydration Complete');
       expect(getDisciplineState(sessionID).questionBlocked).toBe(false);
       expect(hydrationState.contextConfirmed).toBe(true);
     } finally {

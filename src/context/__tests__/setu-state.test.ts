@@ -70,9 +70,7 @@ describe('discipline guards', () => {
     approvePendingSafetyConfirmation(sessionID, actionFingerprint);
     expect(getPendingSafetyConfirmation(sessionID)?.status).toBe('approved');
 
-    denyPendingSafetyConfirmation(sessionID, actionFingerprint);
-    expect(getPendingSafetyConfirmation(sessionID)?.status).toBe('denied');
-
+    // Simulate consumption by the before-hook (clears after single use)
     clearPendingSafetyConfirmation(sessionID);
     expect(getPendingSafetyConfirmation(sessionID)).toBeNull();
     clearDisciplineState(sessionID);

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, mock, beforeEach } from 'bun:test';
-import { mkdtempSync, rmSync, mkdirSync, readFileSync } from 'fs';
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { createToolExecuteBeforeHook, createToolExecuteAfterHook } from '../tool-execute';
@@ -19,9 +19,8 @@ describe('tool-execute before hook safety flow', () => {
     const setuDir = join(projectDir, '.setu');
     mkdirSync(setuDir, { recursive: true });
     // Create required artifacts for builder gear
-    const fs = require('fs');
-    fs.writeFileSync(join(setuDir, 'RESEARCH.md'), '# Research', 'utf-8');
-    fs.writeFileSync(join(setuDir, 'PLAN.md'), '# Plan', 'utf-8');
+    writeFileSync(join(setuDir, 'RESEARCH.md'), '# Research', 'utf-8');
+    writeFileSync(join(setuDir, 'PLAN.md'), '# Plan', 'utf-8');
   });
 
   afterEach(() => {

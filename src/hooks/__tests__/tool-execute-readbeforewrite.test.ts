@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach, afterEach, mock } from 'bun:test';
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'fs';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { createToolExecuteBeforeHook } from '../tool-execute';
@@ -163,6 +163,11 @@ describe('tool-execute read-before-write guards', () => {
   });
 
   test('blocks null byte injection in file path', async () => {
+    // Create a file that the null byte attack would target if successful
+    // (the path after the null byte: 'hello.txt.sh')
+    const targetFile = join(projectDir, 'hello.txt.sh');
+    writeFileSync(targetFile, 'original content', 'utf-8');
+
     const collector = createMockCollector([]);
 
     const hook = createToolExecuteBeforeHook(
@@ -173,11 +178,17 @@ describe('tool-execute read-before-write guards', () => {
       () => ({ contextConfirmed: true, sessionId: sessionID, startedAt: Date.now() })
     );
 
+    // Even though 'hello.txt.sh' exists, the request with null byte should be rejected
+    // This proves sanitizeArgs is removing the null byte AND the hook is blocking
     await expect(
       hook(
         { tool: 'edit', sessionID, callID: 'edit-nullbyte' },
         { args: { filePath: 'hello.txt\x00.sh', oldString: '', newString: 'pwned' } }
       )
     ).rejects.toThrow();
+
+    // Verify the target file was NOT modified (null byte bypass failed)
+    const content = readFileSync(targetFile, 'utf-8');
+    expect(content).toBe('original content');
   });
 });

@@ -413,7 +413,7 @@ Run this before starting complex tasks to ensure a clean environment.`,
       )
     },
     
-    async execute(args: { verbose?: boolean }): Promise<string> {
+    async execute(args: { verbose?: boolean }, _context?: unknown): Promise<string> {
       const projectDir = getProjectDir();
       const result = await runDoctorChecks(projectDir);
 
