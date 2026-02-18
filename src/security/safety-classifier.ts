@@ -25,7 +25,8 @@ export interface SafetyReason {
 
 export interface SafetyDecision {
   hardSafety: boolean;
-  action: HardSafetyAction;
+  /** Action is only meaningful when hardSafety is true. When hardSafety is false, this is undefined. */
+  action?: HardSafetyAction;
   reasons: string[];
 }
 
@@ -94,7 +95,9 @@ export function classifyHardSafety(tool: string, args: Record<string, unknown>):
   }
 
   if (matched.length === 0) {
-    return { hardSafety: false, action: 'ask', reasons: [] };
+    // No safety concerns - return hardSafety: false with no action
+    // action is intentionally undefined when hardSafety is false to prevent accidental misuse
+    return { hardSafety: false, reasons: [] };
   }
 
   // Derive action from structured category, not display text

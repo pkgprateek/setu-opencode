@@ -113,10 +113,12 @@ function formatSecurityEvent(event: SecurityEvent): string {
  * @returns Sanitized details safe for logging
  */
 function sanitizeLogDetails(details: string): string {
-  // SECURITY: First strip null bytes and control characters (C0: \x00-\x1F, C1: \x7F-\x9F)
-  // This prevents log injection via escape sequences and null byte attacks
+  // SECURITY: Strip control characters but preserve CR/LF for newline normalization
+  // C0 controls (0x00-0x1F): exclude CR (0x0D) and LF (0x0A) so they can be normalized
+  // C1 controls (0x7F-0x9F): strip all
+  // This prevents log injection while ensuring proper newline handling
   return details
-    .replace(/[\x00-\x1F\x7F-\x9F]/g, '')
+    .replace(/[\x00-\x09\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g, '')
     // Replace all CRLF, CR, and LF with a single space
     .replace(/\r\n|\r|\n/g, ' ')
     // Collapse multiple spaces into one
