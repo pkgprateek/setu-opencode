@@ -186,7 +186,14 @@ Create PLAN.md with implementation steps.
 setu_plan({
   objective: string,        // One sentence: what this plan accomplishes
   contextSummary?: string,  // 2-3 sentences from RESEARCH.md for subagent context
-  steps: string             // Full step definitions in markdown (Phase > Task > Step hierarchy)
+  nonGoals?: string,        // What this plan explicitly does NOT cover
+  assumptions?: string,     // Prerequisites and context the plan assumes
+  fileEdits: string,        // List of files to be modified (bullet list)
+  steps: string,            // Full step definitions in markdown (Phase > Task > Step hierarchy)
+  expectedOutput?: string,  // What successful completion looks like
+  rollbackNote?: string,    // How to undo changes if needed
+  acceptanceTests?: string, // Tests to verify implementation
+  verifyProtocol?: string   // Defaults to "build -> lint -> test"
 });
 ```
 
