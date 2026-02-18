@@ -1,3 +1,5 @@
+import { errorLog } from '../debug';
+
 /**
  * Discipline guards - safety mechanisms that can activate at any gear.
  * These are NOT workflow phases. Gears handle workflow order.
@@ -149,14 +151,17 @@ export function getPendingSafetyConfirmation(sessionID: string): PendingSafetyCo
   return pending;
 }
 
-export function approvePendingSafetyConfirmation(sessionID: string, actionFingerprint: string): void {
+export function approvePendingSafetyConfirmation(sessionID: string, actionFingerprint: string): boolean {
   const state = getDisciplineState(sessionID);
   const pending = state.pendingSafetyConfirmation;
   if (!pending || pending.actionFingerprint !== actionFingerprint) {
-    console.warn(
-      `[setu] safety_confirmation_fingerprint_mismatch (approve) session=${sessionID} expected=${pending?.actionFingerprint ?? 'none'} got=${actionFingerprint}`
+    // Log fingerprint mismatch as structured security event (redacted)
+    const expected = pending?.actionFingerprint ? `${pending.actionFingerprint.slice(0, 8)}...` : 'none';
+    const got = actionFingerprint ? `${actionFingerprint.slice(0, 8)}...` : 'empty';
+    errorLog(
+      `[setu] safety_confirmation_fingerprint_mismatch (approve) session=${sessionID} expected=${expected} got=${got}`
     );
-    return;
+    return false;
   }
 
   sessionStates.set(sessionID, {
@@ -168,16 +173,20 @@ export function approvePendingSafetyConfirmation(sessionID: string, actionFinger
     },
     updatedAt: Date.now(),
   });
+  return true;
 }
 
-export function denyPendingSafetyConfirmation(sessionID: string, actionFingerprint: string): void {
+export function denyPendingSafetyConfirmation(sessionID: string, actionFingerprint: string): boolean {
   const state = getDisciplineState(sessionID);
   const pending = state.pendingSafetyConfirmation;
   if (!pending || pending.actionFingerprint !== actionFingerprint) {
-    console.warn(
-      `[setu] safety_confirmation_fingerprint_mismatch (deny) session=${sessionID} expected=${pending?.actionFingerprint ?? 'none'} got=${actionFingerprint}`
+    // Log fingerprint mismatch as structured security event (redacted)
+    const expected = pending?.actionFingerprint ? `${pending.actionFingerprint.slice(0, 8)}...` : 'none';
+    const got = actionFingerprint ? `${actionFingerprint.slice(0, 8)}...` : 'empty';
+    errorLog(
+      `[setu] safety_confirmation_fingerprint_mismatch (deny) session=${sessionID} expected=${expected} got=${got}`
     );
-    return;
+    return false;
   }
 
   sessionStates.set(sessionID, {
@@ -189,6 +198,7 @@ export function denyPendingSafetyConfirmation(sessionID: string, actionFingerpri
     },
     updatedAt: Date.now(),
   });
+  return true;
 }
 
 export function clearPendingSafetyConfirmation(sessionID: string): void {
