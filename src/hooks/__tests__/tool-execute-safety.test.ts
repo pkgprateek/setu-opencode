@@ -1,4 +1,7 @@
-import { afterEach, describe, expect, test, mock } from 'bun:test';
+import { afterEach, describe, expect, test, mock, beforeEach } from 'bun:test';
+import { mkdtempSync, rmSync, mkdirSync, readFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { createToolExecuteBeforeHook, createToolExecuteAfterHook } from '../tool-execute';
 import { clearDisciplineState, getPendingSafetyConfirmation } from '../../context';
 
@@ -9,22 +12,28 @@ mock.module('../../debug', () => ({
 }));
 
 describe('tool-execute before hook safety flow', () => {
-  const sessionIDs: string[] = [];
+  let projectDir = '';
+
+  beforeEach(() => {
+    projectDir = mkdtempSync(join(tmpdir(), 'setu-safety-'));
+    const setuDir = join(projectDir, '.setu');
+    mkdirSync(setuDir, { recursive: true });
+    // Create required artifacts for builder gear
+    const fs = require('fs');
+    fs.writeFileSync(join(setuDir, 'RESEARCH.md'), '# Research', 'utf-8');
+    fs.writeFileSync(join(setuDir, 'PLAN.md'), '# Plan', 'utf-8');
+  });
 
   afterEach(() => {
-    for (const sessionID of sessionIDs) {
-      clearDisciplineState(sessionID);
-    }
-    sessionIDs.length = 0;
+    rmSync(projectDir, { recursive: true, force: true });
   });
 
   test('destructive command is hard blocked', async () => {
     const sessionID = 'safety-hard-block';
-    sessionIDs.push(sessionID);
     const hook = createToolExecuteBeforeHook(
       () => 'setu',
       () => null,
-      undefined,
+      () => projectDir,
       undefined,
       () => ({ contextConfirmed: true, sessionId: sessionID, startedAt: Date.now() })
     );
@@ -35,15 +44,21 @@ describe('tool-execute before hook safety flow', () => {
         { args: { command: 'rm -rf /tmp/demo' } }
       )
     ).rejects.toThrow('Wait:');
+
+    // Verify security audit log entry
+    const securityLog = readFileSync(join(projectDir, '.setu', 'security.log'), 'utf-8');
+    expect(securityLog).toContain('SAFETY_BLOCKED');
+    expect(securityLog).toContain('tool:bash');
+
+    clearDisciplineState(sessionID);
   });
 
   test('ask flow requires approval and re-approval every attempt', async () => {
     const sessionID = 'safety-ask-flow';
-    sessionIDs.push(sessionID);
     const beforeHook = createToolExecuteBeforeHook(
       () => 'setu',
       () => null,
-      undefined,
+      () => projectDir,
       undefined,
       () => ({ contextConfirmed: true, sessionId: sessionID, startedAt: Date.now() })
     );
@@ -60,6 +75,10 @@ describe('tool-execute before hook safety flow', () => {
         { args: { command: 'npm publish' } }
       )
     ).rejects.toThrow('Wait:');
+
+    // Verify SAFETY_BLOCKED was logged
+    let securityLog = readFileSync(join(projectDir, '.setu', 'security.log'), 'utf-8');
+    expect(securityLog).toContain('SAFETY_BLOCKED');
 
     // Question call is allowed.
     await expect(
@@ -107,16 +126,17 @@ describe('tool-execute before hook safety flow', () => {
         { args: { command: 'npm publish' } }
       )
     ).rejects.toThrow('Wait:');
+
+    clearDisciplineState(sessionID);
   });
 
   test('unrelated question response does not deny pending safety confirmation', async () => {
     const sessionID = 'safety-unrelated-question';
-    sessionIDs.push(sessionID);
 
     const beforeHook = createToolExecuteBeforeHook(
       () => 'setu',
       () => null,
-      undefined,
+      () => projectDir,
       undefined,
       () => ({ contextConfirmed: true, sessionId: sessionID, startedAt: Date.now() })
     );
@@ -152,5 +172,7 @@ describe('tool-execute before hook safety flow', () => {
     const pending = getPendingSafetyConfirmation(sessionID);
     expect(pending).not.toBeNull();
     expect(pending?.status).toBe('pending');
+
+    clearDisciplineState(sessionID);
   });
 });
