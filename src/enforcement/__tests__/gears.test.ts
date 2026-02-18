@@ -50,4 +50,18 @@ describe('gear policy read-only bash handling', () => {
     expect(result.reason).toBe('unknown_gear');
     expect(result.details?.toLowerCase()).toContain('not recognized');
   });
+
+  test('architect gear permits writes to .setu/ paths', () => {
+    // Architect gear should allow mutating actions targeting .setu/ paths
+    // This tests the explicit !isSetuPath(args) carve-out in gears.ts
+    const result = shouldBlock('architect', 'write', { filePath: '.setu/RESEARCH.md', content: 'test' });
+    expect(result.blocked).toBe(false);
+  });
+
+  test('architect gear blocks writes outside .setu/', () => {
+    // Architect gear should block writes to paths outside .setu/
+    const result = shouldBlock('architect', 'write', { filePath: 'src/main.ts', content: 'test' });
+    expect(result.blocked).toBe(true);
+    expect(result.reason).toBe('architect_blocked');
+  });
 });

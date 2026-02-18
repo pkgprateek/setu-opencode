@@ -3,13 +3,48 @@ import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { createToolExecuteBeforeHook } from '../tool-execute';
-import { clearDisciplineState, type ContextCollector } from '../../context';
+import { clearDisciplineState, type ContextCollector, type SetuContext } from '../../context';
 
 mock.module('../../debug', () => ({
   debugLog: () => {},
   alwaysLog: () => {},
   errorLog: () => {},
 }));
+
+// Helper to create a minimal valid SetuContext for testing
+function createMockContext(filesRead: Array<{ path: string }>): SetuContext {
+  const now = new Date().toISOString();
+  return {
+    version: '1.0',
+    createdAt: now,
+    updatedAt: now,
+    confirmed: false,
+    project: {},
+    filesRead: filesRead.map(f => ({
+      path: f.path,
+      readAt: now,
+    })),
+    searchesPerformed: [],
+    patterns: [],
+  };
+}
+
+// Helper to create a minimal ContextCollector mock
+function createMockCollector(filesRead: Array<{ path: string }>): ContextCollector {
+  const context = createMockContext(filesRead);
+  return {
+    getContext: () => context,
+    recordFileRead: () => {},
+    recordSearch: () => {},
+    addPattern: () => {},
+    updateProjectInfo: () => {},
+    confirm: () => {},
+    reset: () => {},
+    loadFromDisk: () => false,
+    saveToDisk: () => {},
+    debouncedSave: () => {},
+  };
+}
 
 describe('tool-execute read-before-write guards', () => {
   let projectDir = '';
@@ -33,9 +68,7 @@ describe('tool-execute read-before-write guards', () => {
   });
 
   test('blocks edit without prior read', async () => {
-    const collector = {
-      getContext: () => ({ filesRead: [] }),
-    } as unknown as ContextCollector;
+    const collector = createMockCollector([]);
 
     const hook = createToolExecuteBeforeHook(
       () => 'setu',
@@ -54,9 +87,7 @@ describe('tool-execute read-before-write guards', () => {
   });
 
   test('allows edit after file was read', async () => {
-    const collector = {
-      getContext: () => ({ filesRead: [{ path: 'hello.txt' }] }),
-    } as unknown as ContextCollector;
+    const collector = createMockCollector([{ path: 'hello.txt' }]);
 
     const hook = createToolExecuteBeforeHook(
       () => 'setu',
@@ -75,9 +106,7 @@ describe('tool-execute read-before-write guards', () => {
   });
 
   test('blocks edit when file does not exist', async () => {
-    const collector = {
-      getContext: () => ({ filesRead: [] }),
-    } as unknown as ContextCollector;
+    const collector = createMockCollector([]);
 
     const hook = createToolExecuteBeforeHook(
       () => 'setu',
@@ -96,9 +125,7 @@ describe('tool-execute read-before-write guards', () => {
   });
 
   test('blocks path traversal attempts', async () => {
-    const collector = {
-      getContext: () => ({ filesRead: [] }),
-    } as unknown as ContextCollector;
+    const collector = createMockCollector([]);
 
     const hook = createToolExecuteBeforeHook(
       () => 'setu',
@@ -117,9 +144,7 @@ describe('tool-execute read-before-write guards', () => {
   });
 
   test('blocks absolute path outside project', async () => {
-    const collector = {
-      getContext: () => ({ filesRead: [] }),
-    } as unknown as ContextCollector;
+    const collector = createMockCollector([]);
 
     const hook = createToolExecuteBeforeHook(
       () => 'setu',
@@ -138,9 +163,7 @@ describe('tool-execute read-before-write guards', () => {
   });
 
   test('blocks null byte injection in file path', async () => {
-    const collector = {
-      getContext: () => ({ filesRead: [] }),
-    } as unknown as ContextCollector;
+    const collector = createMockCollector([]);
 
     const hook = createToolExecuteBeforeHook(
       () => 'setu',
