@@ -95,7 +95,7 @@ Now (and only now) does it implement. Verification runs at the end, and you can 
 ### The "Eager Junior Dev" Problem
 
 **Without Setu:**
-```
+```text
 You: Add auth
 Agent: *immediately starts coding*
 Agent: Done!
@@ -105,7 +105,7 @@ Agent: *tries the same broken approach*
 ```
 
 **With Setu:**
-```
+```text
 You: Add auth
 Agent: I'm in Scout phase. Let me understand your auth patterns first...
 [Reads your existing auth code]

@@ -39,7 +39,7 @@ This prevents "AI slop" - code that looks right but is wrong.
 
 Gears shift **automatically** based on artifact existence:
 
-```
+```text
 Session Start
     │
     ▼
