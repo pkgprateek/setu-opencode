@@ -3,6 +3,13 @@ import { normalize } from 'path';
 
 export type ArtifactMode = 'append' | 'remake';
 
+/**
+ * Threshold for determining whether to append or remake artifacts.
+ * If the overlap score between active task and new content is >= this value,
+ * we append; otherwise, we remake.
+ */
+const OVERLAP_APPEND_THRESHOLD = 0.18;
+
 function tokenize(input: string): Set<string> {
   return new Set(
     input
@@ -31,7 +38,11 @@ function parseFilePaths(fileEdits: string): string[] {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => line.replace(/^[-*]\s*/, ''))
-    .filter((line) => /[./\\]/.test(line));
+    .filter((line) => {
+      // Tighten heuristic: require path separator OR file extension
+      // This excludes lines like "Fix the bug." while keeping "src/foo/bar.ts" and "README.md"
+      return /[/\\]/.test(line) || /\.[a-zA-Z0-9]{1,6}$/.test(line);
+    });
 }
 
 function normalizePathForComparison(filePath: string): string {
@@ -48,7 +59,7 @@ export function decideResearchArtifactMode(input: {
   if (input.activeTask.status !== 'in_progress') return 'remake';
 
   const score = overlapScore(input.activeTask.task, input.summary);
-  return score >= 0.18 ? 'append' : 'remake';
+  return score >= OVERLAP_APPEND_THRESHOLD ? 'append' : 'remake';
 }
 
 export function decidePlanArtifactMode(input: {
@@ -63,7 +74,7 @@ export function decidePlanArtifactMode(input: {
   if (input.activeTask.status !== 'in_progress') return 'remake';
 
   const objectiveScore = overlapScore(input.activeTask.task, input.objective);
-  if (objectiveScore < 0.18) return 'remake';
+  if (objectiveScore < OVERLAP_APPEND_THRESHOLD) return 'remake';
 
   const incomingFiles = parseFilePaths(input.fileEdits);
   if (incomingFiles.length === 0) return 'append';
