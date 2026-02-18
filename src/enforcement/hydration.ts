@@ -59,7 +59,8 @@ export function isReadOnlyBashCommand(command: string): boolean {
 
   // SECURITY: reject shell metacharacters and multiline/continued commands.
   // Fail-closed: hydration allows only single simple read-only commands.
-  const dangerousPattern = /(;|&&|\|\||\||`|\$\(|>|>>|2>|>&|>\||<|&|\(|\)|\n|\r|\\\n)/;
+  // Includes parameter expansion ${...} to prevent command injection via variable expansion
+  const dangerousPattern = /(;|&&|\|\||\||`|\$\(|\$\{|>|>>|2>|>&|>\||<|&|\(|\)|\n|\r|\\\n)/;
   if (dangerousPattern.test(trimmed)) {
     return false;
   }
@@ -133,7 +134,7 @@ export interface HydrationBlockResult {
 const KNOWN_SAFE_TOOLS = [
   // Setu tools (via isSetuTool check)
   // Read-only tools (via isReadOnlyTool check)
-  'task',        // Subagent spawning - will get its own hydration gating
+  // NOTE: 'task' is intentionally NOT here - subagent spawning needs its own hydration gating
   'question',    // Interactive prompts
   'skill',       // Skill loading
   'lsp',         // Language server
@@ -171,7 +172,17 @@ export function shouldBlockDuringHydration(
   if (isReadOnlyTool(toolName)) {
     return { blocked: false };
   }
-  
+
+  // SECURITY: Block 'task' tool during hydration - subagents need their own gating
+  // This prevents bypassing Phase 0 hydration via subagent spawning
+  if (toolName === 'task') {
+    return {
+      blocked: true,
+      reason: 'task_blocked',
+      details: 'Subagent spawning blocked until context is confirmed.',
+    };
+  }
+
   // Known safe tools - allowed
   if (isKnownSafeTool(toolName)) {
     return { blocked: false };
@@ -227,10 +238,6 @@ export function shouldBlockDuringHydration(
 export function createHydrationBlockMessage(
   reason?: string,
 ): string {
-  if (reason === 'unknown_tool') {
-    return 'Wait: Call setu_context({ summary: "...", task: "..." }) first to confirm understanding.';
-  }
-
   if (reason === 'bash_blocked') {
     return 'Wait: Call setu_context({ summary: "...", task: "..." }) first, then explore with read/search.';
   }
