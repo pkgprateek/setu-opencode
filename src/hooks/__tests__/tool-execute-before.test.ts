@@ -17,21 +17,23 @@ describe('tool-execute before hook protocol gating', () => {
       () => 'setu'
     );
 
-    await expect(
-      hook(
-        { tool: 'read', sessionID, callID: 'call-1' },
-        { args: { filePath: 'README.md' } }
-      )
-    ).resolves.toBeUndefined();
+    try {
+      await expect(
+        hook(
+          { tool: 'read', sessionID, callID: 'call-1' },
+          { args: { filePath: 'README.md' } }
+        )
+      ).resolves.toBeUndefined();
 
-    await expect(
-      hook(
-        { tool: 'write', sessionID, callID: 'call-1b' },
-        { args: { filePath: 'README.md', content: 'x' } }
-      )
-    ).rejects.toThrow('Wait:');
-
-    clearDisciplineState(sessionID);
+      await expect(
+        hook(
+          { tool: 'write', sessionID, callID: 'call-1b' },
+          { args: { filePath: 'README.md', content: 'x' } }
+        )
+      ).rejects.toThrow('Wait:');
+    } finally {
+      clearDisciplineState(sessionID);
+    }
   });
 
   test('allows read-only bash and blocks mutating bash while clarification is pending', async () => {
@@ -42,21 +44,23 @@ describe('tool-execute before hook protocol gating', () => {
       () => 'setu'
     );
 
-    await expect(
-      hook(
-        { tool: 'bash', sessionID, callID: 'call-1c' },
-        { args: { command: 'git status' } }
-      )
-    ).resolves.toBeUndefined();
+    try {
+      await expect(
+        hook(
+          { tool: 'bash', sessionID, callID: 'call-1c' },
+          { args: { command: 'git status' } }
+        )
+      ).resolves.toBeUndefined();
 
-    await expect(
-      hook(
-        { tool: 'bash', sessionID, callID: 'call-1d' },
-        { args: { command: 'git commit -m "x"' } }
-      )
-    ).rejects.toThrow('Wait:');
-
-    clearDisciplineState(sessionID);
+      await expect(
+        hook(
+          { tool: 'bash', sessionID, callID: 'call-1d' },
+          { args: { command: 'git commit -m "x"' } }
+        )
+      ).rejects.toThrow('Wait:');
+    } finally {
+      clearDisciplineState(sessionID);
+    }
   });
 
   test('allows setu_doctor while clarification is pending', async () => {
@@ -67,14 +71,16 @@ describe('tool-execute before hook protocol gating', () => {
       () => 'setu'
     );
 
-    await expect(
-      hook(
-        { tool: 'setu_doctor', sessionID, callID: 'call-1e' },
-        { args: { verbose: true } }
-      )
-    ).resolves.toBeUndefined();
-
-    clearDisciplineState(sessionID);
+    try {
+      await expect(
+        hook(
+          { tool: 'setu_doctor', sessionID, callID: 'call-1e' },
+          { args: { verbose: true } }
+        )
+      ).resolves.toBeUndefined();
+    } finally {
+      clearDisciplineState(sessionID);
+    }
   });
 
   test('question completion clears pending protocol state in after hook', async () => {
@@ -90,32 +96,37 @@ describe('tool-execute before hook protocol gating', () => {
       () => null
     );
 
-    await beforeHook(
-      { tool: 'question', sessionID, callID: 'call-2' },
-      {
-        args: {
-          questions: [
-            {
-              question: 'Choose path',
-              header: 'Protocol',
-              options: [
-                { label: 'Save Research + Plan', description: 'Recommended path' },
+    try {
+      await expect(
+        beforeHook(
+          { tool: 'question', sessionID, callID: 'call-2' },
+          {
+            args: {
+              questions: [
+                {
+                  question: 'Choose path',
+                  header: 'Protocol',
+                  options: [
+                    { label: 'Save Research + Plan', description: 'Recommended path' },
+                  ],
+                },
               ],
             },
-          ],
-        },
-      }
-    );
+          }
+        )
+      ).resolves.toBeUndefined();
 
-    // Before hook should allow question but not clear state yet.
-    expect(getDisciplineState(sessionID).questionBlocked).toBe(true);
+      // Before hook should allow question but not clear state yet.
+      expect(getDisciplineState(sessionID).questionBlocked).toBe(true);
 
-    await afterHook(
-      { tool: 'question', sessionID, callID: 'call-2', args: {} },
-      { title: 'Question', output: 'Answered', metadata: null }
-    );
+      await afterHook(
+        { tool: 'question', sessionID, callID: 'call-2', args: {} },
+        { title: 'Question', output: 'Answered', metadata: null }
+      );
 
-    expect(getDisciplineState(sessionID).questionBlocked).toBe(false);
-    clearDisciplineState(sessionID);
+      expect(getDisciplineState(sessionID).questionBlocked).toBe(false);
+    } finally {
+      clearDisciplineState(sessionID);
+    }
   });
 });
