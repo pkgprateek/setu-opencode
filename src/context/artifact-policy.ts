@@ -41,6 +41,10 @@ function parseFilePaths(fileEdits: string): string[] {
     .filter((line) => {
       // Tighten heuristic: require path separator OR file extension
       // This excludes lines like "Fix the bug." while keeping "src/foo/bar.ts" and "README.md"
+      // NOTE: This heuristic is intentionally conservative. It may accept some prose-derived
+      // filenames when existingPlanContent is parsed and compared against existingSet
+      // (e.g., "Edit(s): package.json" would match). This is by design to prefer safer
+      // "remake" behavior over risky "append" when there's any ambiguity.
       return /[/\\]/.test(line) || /\.[a-zA-Z0-9]{1,6}$/.test(line);
     });
 }

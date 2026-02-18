@@ -117,6 +117,11 @@ function stableStringify(value: unknown, depth = 0, seen = new WeakSet<object>()
     return JSON.stringify('[MaxDepth]');
   }
 
+  // Handle undefined explicitly - JSON.stringify(undefined) returns undefined (not a string)
+  if (value === undefined) {
+    return JSON.stringify('undefined');
+  }
+
   if (value === null || typeof value !== 'object') {
     return JSON.stringify(value);
   }
@@ -227,6 +232,7 @@ function isAllowedDuringQuestionBlock(tool: string, args: Record<string, unknown
  * @param getContextCollector - Optional accessor for a ContextCollector used to obtain and format confirmed context for injection
  * @param getProjectDir - Optional accessor for project directory (used for constraint loading and gear determination)
  * @param getVerificationState - Optional accessor for verification state (used for git discipline enforcement)
+ * @param getHydrationState - Optional accessor returning HydrationState; provides current hydration state used for security gating/decision-making during tool execution
  * @returns A hook function invoked before tool execution that enforces Gearbox rules and may throw an Error when a tool is blocked
  */
 export function createToolExecuteBeforeHook(
@@ -260,7 +266,7 @@ export function createToolExecuteBeforeHook(
     const collector = getContextCollector ? getContextCollector() : null;
     const disciplineState = getDisciplineState(input.sessionID);
     const isMutating = isMutatingToolName(input.tool);
-    const actionFingerprint = createActionFingerprint(input.tool, output.args);
+    // actionFingerprint is computed inside isMutating block to avoid serializing large payloads for read-only tools
 
     if (input.tool === 'question') {
       return;
@@ -323,6 +329,9 @@ export function createToolExecuteBeforeHook(
     }
 
     if (isMutating) {
+      // Compute actionFingerprint only when needed for mutating tools
+      // This avoids serializing large write payloads for read-only operations
+      const actionFingerprint = createActionFingerprint(input.tool, output.args);
       let consumedApproval = false;
       const pendingSafety = getPendingSafetyConfirmation(input.sessionID);
       if (pendingSafety) {
@@ -662,10 +671,12 @@ export function createToolExecuteAfterHook(
             approvePendingSafetyConfirmation(input.sessionID, pendingSafety.actionFingerprint);
             clearQuestionBlocked(input.sessionID);
             debugLog('Safety confirmation approved by user');
+            debugLog('Question answered; cleared question block');
           } else if (decision === 'denied') {
             denyPendingSafetyConfirmation(input.sessionID, pendingSafety.actionFingerprint);
             clearQuestionBlocked(input.sessionID);
             debugLog('Safety confirmation denied by user');
+            debugLog('Question answered; cleared question block');
           } else {
             debugLog('Safety confirmation unresolved; keeping pending state');
           }
@@ -675,9 +686,9 @@ export function createToolExecuteAfterHook(
       } else {
         // No pending safety - safe to clear question block for any question
         clearQuestionBlocked(input.sessionID);
+        debugLog('Question answered; cleared question block');
       }
 
-      debugLog('Question answered; cleared question block');
       return;
     }
     

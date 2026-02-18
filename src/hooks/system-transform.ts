@@ -196,8 +196,8 @@ export function createSystemTransformHook(
         }
         
         // AGENTS.md warning: only for Setu agent, only when both AGENTS.md and CLAUDE.md are missing
-        // Use existing currentAgent and filesExist variables (already defined earlier)
-        if (currentAgent.toLowerCase() === 'setu') {
+        // Use existing isSetuAgent boolean (defined earlier)
+        if (isSetuAgent) {
           if (!filesExist.agentsMd && !filesExist.claudeMd) {
             // Use push (not unshift) so it doesn't outrank core gear/safety guidance
             output.system.push(
@@ -217,10 +217,11 @@ export function createSystemTransformHook(
       const overwriteRequirement = getOverwriteRequirement(input.sessionID);
       if (overwriteRequirement?.pending) {
         // Sanitize filePath before interpolation: strip control chars and newlines
-        // Convert both CR and LF to spaces to preserve word boundaries
+        // Convert CR/LF to spaces first, then strip C0 (except CR/LF already handled) and C1 controls
+        // Uses same ranges as sanitizeLogDetails for consistency: [\x00-\x09\x0B-\x0C\x0E-\x1F\x7F-\x9F]
         const safePath = (overwriteRequirement.filePath ?? '')
           .replace(/\r\n|\r|\n/g, ' ')
-          .replace(/[\x00-\x09\x0b-\x1f\x7f]/g, '');
+          .replace(/[\x00-\x09\x0b-\x0c\x0e-\x1f\x7f-\x9f]/g, '');
         output.system.unshift(
           `[SETU: Overwrite Guard]\n` +
             `Pending requirement: read '${safePath}' before any mutation.\n\n` +

@@ -174,7 +174,7 @@ export function shouldBlockDuringHydration(
   }
 
   // SECURITY: Block 'task' tool during hydration - subagents need their own gating
-  // This prevents bypassing Phase 0 hydration via subagent spawning
+  // This prevents bypassing the Hydration Gate via subagent spawning
   if (toolName === 'task') {
     return {
       blocked: true,
