@@ -1,6 +1,6 @@
 import { tool } from '@opencode-ai/plugin';
 import { join } from 'path';
-import { mkdir, writeFile } from 'fs/promises';
+import { mkdir, writeFile, readdir, unlink } from 'fs/promises';
 import { existsSync, readFileSync } from 'fs';
 import { ensureSetuDir } from '../context/storage';
 import { loadActiveTask } from '../context/active';
@@ -61,6 +61,19 @@ async function persistResearchChunks(projectDir: string, content: string): Promi
   const chunksDir = join(projectDir, '.setu', 'research_chunks');
   await mkdir(chunksDir, { recursive: true });
 
+  // Clean up stale chunk files from previous runs
+  try {
+    const files = await readdir(chunksDir);
+    const staleFiles = files.filter(
+      (file) => file.startsWith('research.part-') && file.endsWith('.md')
+    );
+    for (const file of staleFiles) {
+      await unlink(join(chunksDir, file));
+    }
+  } catch {
+    // Directory might not exist yet or other error - safe to continue
+  }
+
   for (let i = 0; i < chunks.length; i++) {
     const partPath = join(chunksDir, `research.part-${String(i + 1).padStart(2, '0')}.md`);
     await writeFile(partPath, chunks[i]);
@@ -94,6 +107,7 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
     }
 
     const sanitizedArgs = {
+      task: args.task ? sanitizeResearchText(args.task) : undefined,
       summary: sanitizeResearchText(args.summary),
       constraints: args.constraints ? sanitizeResearchText(args.constraints) : undefined,
       patterns: args.patterns ? sanitizeResearchText(args.patterns) : undefined,
@@ -139,7 +153,7 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
       if (content.length > MAX_INLINE_RESEARCH_CHARS) {
         const originalLength = content.length;
         chunkCount = await persistResearchChunks(projectDir, content);
-        content = `# Research Summary\n\n> Full research payload (${originalLength} chars) persisted in ${chunkCount} chunk files under \.setu/research_chunks/\n\nSee chunk files for complete research content.`;
+        content = `# Research Summary\n\n> Full research payload (${originalLength} chars) persisted in ${chunkCount} chunk files under .setu/research_chunks/\n\nSee chunk files for complete research content.`;
       }
 
       await writeFile(researchPath, content);
@@ -156,6 +170,7 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
 });
 
 function formatResearch(args: {
+  task?: string;
   summary: string;
   constraints?: string;
   patterns?: string;
@@ -164,7 +179,8 @@ function formatResearch(args: {
   openQuestions?: string;
 }): string {
   const summaryLines = args.summary.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  const scopeLine = summaryLines[0] ?? args.summary.trim();
+  // Use task as scope line if provided, otherwise use first line of summary
+  const scopeLine = args.task?.trim() || summaryLines[0] || args.summary.trim();
   const findingsBody = summaryLines.slice(1).join('\n');
   const findings = findingsBody.trim().length > 0
     ? findingsBody
