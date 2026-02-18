@@ -1,7 +1,7 @@
 {
   "name": "setu-opencode",
   "version": "1.2.1",
-  "description": "Setu - A master craftsman persona for OpenCode that transforms AI into a thoughtful, expert colleague",
+  "description": "Setu - OpenCode upgrade: your agent stops vibing and starts shipping—reliable, boringly correct, senior-level.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
@@ -31,7 +31,7 @@
     "type": "git",
     "url": "https://github.com/pkgprateek/setu-opencode"
   },
-  "homepage": "https://github.com/pkgprateek/setu-opencode#readme",
+  "homepage": "https://getsetu.dev",
   "bugs": {
     "url": "https://github.com/pkgprateek/setu-opencode/issues"
   },
