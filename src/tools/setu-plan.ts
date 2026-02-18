@@ -100,8 +100,14 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
     try {
       await readFile(join(projectDir, '.setu', 'RESEARCH.md'), 'utf-8');
       hasResearch = true;
-    } catch {
-      hasResearch = false;
+    } catch (error) {
+      // Only ENOENT means "file not found" - other errors (EACCES, EMFILE, etc.) should be rethrown
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+        hasResearch = false;
+      } else {
+        // Rethrow non-ENOENT errors with original context
+        throw new Error(`Failed to check RESEARCH.md: ${getErrorMessage(error)}`);
+      }
     }
     if (!hasResearch) {
       throw new Error('RESEARCH.md required. Run setu_research first.');

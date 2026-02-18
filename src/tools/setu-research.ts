@@ -1,7 +1,6 @@
 import { tool } from '@opencode-ai/plugin';
 import { join } from 'path';
-import { mkdir, writeFile, readdir, unlink } from 'fs/promises';
-import { existsSync, readFileSync } from 'fs';
+import { mkdir, writeFile, readdir, unlink, readFile } from 'fs/promises';
 import { ensureSetuDir } from '../context/storage';
 import { loadActiveTask } from '../context/active';
 import { decideResearchArtifactMode } from '../context';
@@ -126,13 +125,16 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
 
     try {
       const activeTask = loadActiveTask(projectDir);
-      const researchExists = existsSync(researchPath);
-      if (researchExists) {
-        existingResearch = readFileSync(researchPath, 'utf-8');
+      // Async read for existing research
+      try {
+        existingResearch = await readFile(researchPath, 'utf-8');
+      } catch {
+        existingResearch = '';
       }
+      const hasExistingResearch = existingResearch.length > 0;
 
       researchMode = decideResearchArtifactMode({
-        hasExistingResearch: researchExists,
+        hasExistingResearch,
         activeTask,
         summary: sanitizedArgs.summary,
       });
