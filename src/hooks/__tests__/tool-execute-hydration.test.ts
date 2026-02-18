@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { createToolExecuteBeforeHook } from '../tool-execute';
+import { clearDisciplineState } from '../../context';
 
 mock.module('../../debug', () => ({
   debugLog: () => {},
@@ -12,12 +13,16 @@ mock.module('../../debug', () => ({
 
 describe('tool-execute before hook hydration enforcement', () => {
   let projectDir = '';
+  let sessionID = '';
 
   beforeEach(() => {
     projectDir = mkdtempSync(join(tmpdir(), 'setu-hydration-'));
+    // Generate unique session ID for each test
+    sessionID = `s-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
   });
 
   afterEach(() => {
+    clearDisciplineState(sessionID);
     rmSync(projectDir, { recursive: true, force: true });
   });
 
@@ -27,12 +32,12 @@ describe('tool-execute before hook hydration enforcement', () => {
       () => null,
       () => projectDir,
       undefined,
-      () => ({ contextConfirmed: false, sessionId: 's1', startedAt: Date.now() })
+      () => ({ contextConfirmed: false, sessionId: sessionID, startedAt: Date.now() })
     );
 
     await expect(
       hook(
-        { tool: 'write', sessionID: 's1', callID: 'c1' },
+        { tool: 'write', sessionID, callID: 'c1' },
         { args: { filePath: 'a.txt', content: 'x' } }
       )
     ).rejects.toThrow('Wait:');
@@ -48,40 +53,40 @@ describe('tool-execute before hook hydration enforcement', () => {
       () => null,
       () => projectDir,
       undefined,
-      () => ({ contextConfirmed: false, sessionId: 's5', startedAt: Date.now() })
+      () => ({ contextConfirmed: false, sessionId: sessionID, startedAt: Date.now() })
     );
 
     await expect(
       hook(
-        { tool: 'bash', sessionID: 's5', callID: 'c5-bash' },
+        { tool: 'bash', sessionID, callID: 'c5-bash' },
         { args: { command: 'rm -rf /tmp/demo' } }
       )
     ).rejects.toThrow('Wait:');
 
     await expect(
       hook(
-        { tool: 'delete', sessionID: 's5', callID: 'c5-delete' },
+        { tool: 'delete', sessionID, callID: 'c5-delete' },
         { args: { filePath: 'a.txt' } }
       )
     ).rejects.toThrow('Wait:');
 
     await expect(
       hook(
-        { tool: 'execute', sessionID: 's5', callID: 'c5-execute' },
+        { tool: 'execute', sessionID, callID: 'c5-execute' },
         { args: {} }
       )
     ).rejects.toThrow('Wait:');
 
     await expect(
       hook(
-        { tool: 'multi_edit', sessionID: 's5', callID: 'c5-multiedit' },
+        { tool: 'multi_edit', sessionID, callID: 'c5-multiedit' },
         { args: { edits: [] } }
       )
     ).rejects.toThrow('Wait:');
 
     await expect(
       hook(
-        { tool: 'unknown_dangerous_tool', sessionID: 's5', callID: 'c5-unknown' },
+        { tool: 'unknown_dangerous_tool', sessionID, callID: 'c5-unknown' },
         { args: {} }
       )
     ).rejects.toThrow('Wait:');
@@ -100,12 +105,12 @@ describe('tool-execute before hook hydration enforcement', () => {
       () => null,
       () => projectDir,
       undefined,
-      () => ({ contextConfirmed: false, sessionId: 's2', startedAt: Date.now() })
+      () => ({ contextConfirmed: false, sessionId: sessionID, startedAt: Date.now() })
     );
 
     await expect(
       hook(
-        { tool: 'read', sessionID: 's2', callID: 'c2' },
+        { tool: 'read', sessionID, callID: 'c2' },
         { args: { filePath: 'README.md' } }
       )
     ).resolves.toBeUndefined();
@@ -117,12 +122,12 @@ describe('tool-execute before hook hydration enforcement', () => {
       () => null,
       () => projectDir,
       undefined,
-      () => ({ contextConfirmed: false, sessionId: 's3', startedAt: Date.now() })
+      () => ({ contextConfirmed: false, sessionId: sessionID, startedAt: Date.now() })
     );
 
     await expect(
       hook(
-        { tool: 'setu_context', sessionID: 's3', callID: 'c3' },
+        { tool: 'setu_context', sessionID, callID: 'c3' },
         { args: { summary: 'x', task: 'y' } }
       )
     ).resolves.toBeUndefined();
@@ -139,12 +144,12 @@ describe('tool-execute before hook hydration enforcement', () => {
       () => null,
       () => projectDir,
       undefined,
-      () => ({ contextConfirmed: true, sessionId: 's4', startedAt: Date.now() })
+      () => ({ contextConfirmed: true, sessionId: sessionID, startedAt: Date.now() })
     );
 
     await expect(
       hook(
-        { tool: 'write', sessionID: 's4', callID: 'c4' },
+        { tool: 'write', sessionID, callID: 'c4' },
         { args: { filePath: 'new-file.txt', content: 'ok' } }
       )
     ).resolves.toBeUndefined();
