@@ -164,6 +164,23 @@ export interface GearBlockResult {
   gear: Gear;
 }
 
+/**
+ * Determine if a tool should be blocked based on the current gear.
+ *
+ * IMPORTANT: This is a post-hydration enforcement check that assumes hydration/context
+ * has already been confirmed. For pre-hydration checks (blocking unknown tools before
+ * context is confirmed), use shouldBlockDuringHydration() which implements fail-closed
+ * security for unknown tools.
+ *
+ * Calling shouldBlock() directly without passing the hydration gate may allow unknown
+ * tools to execute. For defense-in-depth, ensure shouldBlockDuringHydration() is called
+ * first for any tool execution before reaching this gear-based check.
+ *
+ * @param gear - Current gear (scout, architect, builder)
+ * @param tool - Tool name being invoked
+ * @param args - Tool arguments
+ * @returns GearBlockResult indicating if the tool is blocked and why
+ */
 export function shouldBlock(gear: Gear, tool: string, args: unknown): GearBlockResult {
   let isReadOnlyBash = false;
   if (tool === 'bash' && typeof (args as Record<string, unknown> | undefined)?.command === 'string') {
