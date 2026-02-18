@@ -31,8 +31,9 @@ export interface SafetyDecision {
 
 const DESTRUCTIVE_BASH_PATTERNS: RegExp[] = [
   // Covers: rm with dangerous flags anywhere on line, including escaped/prefixed invocations
+  // Also matches common invocation prefixes like sudo, env, su (with optional flags/whitespace)
   // Bounded to prevent ReDoS on adversarial input
-  /(?:\\?rm|command\s+rm)\b[^\n]{0,500}(?:-\w*[rf]|--recursive|--force|--no-preserve-root)/i,
+  /(?:\b(?:sudo|env|su)\b(?:\s+-\S+)*\s+)?(?:\\?rm|command\s+rm)\b[^\n]{0,500}(?:-\w*[rf]|--recursive|--force|--no-preserve-root)/i,
   /\bgit\s+reset\s+--hard\b/i,
   /\bgit\s+clean\b[^\n]*\s-(?:[^\n]*f|[^\n]*d|[^\n]*x)/i,
   /\bmkfs\b/i,
