@@ -3,17 +3,30 @@ import { createSetuDoctorTool } from '../setu-doctor';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import type { ToolContext } from '@opencode-ai/plugin';
+
+// Minimal mock ToolContext for unit tests
+function createMockToolContext(): ToolContext {
+  return {
+    sessionID: 'test-session',
+    messageID: 'test-msg-1',
+    agent: 'setu',
+    abort: new AbortController().signal,
+    metadata: () => {},
+    ask: async () => {},
+  };
+}
 
 describe('setu-doctor project rules check', () => {
   test('reports healthy when AGENTS.md exists', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'setu-doctor-test-'));
-    
+
     try {
       // Create AGENTS.md
       writeFileSync(join(tmpDir, 'AGENTS.md'), '# Project Rules\n\nTest rules');
-      
+
       const doctorTool = createSetuDoctorTool(() => tmpDir);
-      const result = await doctorTool.execute({ verbose: true }, {} as any);
+      const result = await doctorTool.execute({ verbose: true }, createMockToolContext());
 
       expect(result).toContain('project-rules');
       expect(result).toContain('AGENTS.md found');
@@ -31,7 +44,7 @@ describe('setu-doctor project rules check', () => {
       writeFileSync(join(tmpDir, 'CLAUDE.md'), '# Claude Rules\n\nTest rules');
 
       const doctorTool = createSetuDoctorTool(() => tmpDir);
-      const result = await doctorTool.execute({ verbose: true }, {} as any);
+      const result = await doctorTool.execute({ verbose: true }, createMockToolContext());
 
       expect(result).toContain('project-rules');
       expect(result).toContain('CLAUDE.md found (AGENTS.md compatible)');
@@ -47,7 +60,7 @@ describe('setu-doctor project rules check', () => {
     try {
       // Don't create any rules file
       const doctorTool = createSetuDoctorTool(() => tmpDir);
-      const result = await doctorTool.execute({ verbose: true }, {} as any);
+      const result = await doctorTool.execute({ verbose: true }, createMockToolContext());
 
       expect(result).toContain('project-rules');
       expect(result).toContain('No AGENTS.md or CLAUDE.md found');
@@ -66,8 +79,8 @@ describe('setu-doctor project rules check', () => {
       writeFileSync(join(tmpDir, 'CLAUDE.md'), '# Claude Rules');
 
       const doctorTool = createSetuDoctorTool(() => tmpDir);
-      const result = await doctorTool.execute({ verbose: true }, {} as any);
-      
+      const result = await doctorTool.execute({ verbose: true }, createMockToolContext());
+
       // Should report AGENTS.md (primary), not CLAUDE.md
       expect(result).toContain('AGENTS.md found');
       expect(result).not.toContain('CLAUDE.md found');
