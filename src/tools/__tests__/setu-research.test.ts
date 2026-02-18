@@ -12,8 +12,15 @@ describe('setu_research chunking', () => {
     expect(chunks[2].length).toBe(15);
   });
 
+  test('chunks reassemble to original content', () => {
+    const input = 'The quick brown fox jumps over the lazy dog. ';
+    const chunks = splitResearchContent(input, 10);
+    expect(chunks.join('')).toBe(input);
+  });
+
   test('throws for invalid chunk size', () => {
     expect(() => splitResearchContent('abc', 0)).toThrow('chunkSize must be positive');
+    expect(() => splitResearchContent('abc', -1)).toThrow('chunkSize must be positive');
   });
 });
 
