@@ -7,8 +7,9 @@ describe('setu_context decision checkpoint behavior', () => {
     const sessionID = 'setu-context-clears-question-block';
     setQuestionBlocked(sessionID, 'Need output format preference');
 
+    // Start with contextConfirmed: false so the callback actually gets exercised
     const hydrationState = {
-      contextConfirmed: true,
+      contextConfirmed: false,
       sessionId: sessionID,
       startedAt: Date.now(),
     };
@@ -20,21 +21,29 @@ describe('setu_context decision checkpoint behavior', () => {
       },
       () => null,
       () => process.cwd()
-    ) as unknown as {
-      execute: (args: { summary: string; task: string; plan?: string }, context: { sessionID: string }) => Promise<string>;
-    };
-
-    const result = await toolDef.execute(
-      {
-        summary: 'Task context understood',
-        task: 'Create a quote file',
-      },
-      { sessionID }
     );
 
-    expect(result).toContain('already confirmed');
-    expect(getDisciplineState(sessionID).questionBlocked).toBe(false);
+    try {
+      const result = await toolDef.execute(
+        {
+          summary: 'Task context understood',
+          task: 'Create a quote file',
+        },
+        {
+          sessionID,
+          messageID: 'test-msg-1',
+          agent: 'setu',
+          abort: new AbortController().signal,
+          metadata: {},
+          ask: async () => {},
+        } as any
+      );
 
-    clearDisciplineState(sessionID);
+      expect(result).toContain('confirmed');
+      expect(getDisciplineState(sessionID).questionBlocked).toBe(false);
+      expect(hydrationState.contextConfirmed).toBe(true);
+    } finally {
+      clearDisciplineState(sessionID);
+    }
   });
 });
