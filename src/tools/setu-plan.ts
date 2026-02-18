@@ -1,8 +1,7 @@
 import { tool } from '@opencode-ai/plugin';
 import { validateProjectDir } from '../utils/path-validation';
 import { join } from 'path';
-import { writeFile } from 'fs/promises';
-import { existsSync, readFileSync } from 'fs';
+import { writeFile, readFile } from 'fs/promises';
 import { decidePlanArtifactMode } from '../context';
 import { loadActiveTask, resetProgress } from '../context/active';
 import { ensureSetuDir } from '../context/storage';
@@ -96,7 +95,15 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
     if (!args.objective?.trim()) throw new Error('objective is required');
     if (!args.steps?.trim()) throw new Error('steps is required');
 
-    if (!existsSync(join(projectDir, '.setu', 'RESEARCH.md'))) {
+    // Async check for RESEARCH.md existence
+    let hasResearch = false;
+    try {
+      await readFile(join(projectDir, '.setu', 'RESEARCH.md'), 'utf-8');
+      hasResearch = true;
+    } catch {
+      hasResearch = false;
+    }
+    if (!hasResearch) {
       throw new Error('RESEARCH.md required. Run setu_research first.');
     }
 
@@ -115,9 +122,15 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
       acceptanceTests: sanitizeSection(args.acceptanceTests ?? ''),
       verifyProtocol: sanitizeSection(args.verifyProtocol ?? 'build -> lint -> test')
     };
-    
+
     const planPath = join(projectDir, '.setu', 'PLAN.md');
-    const existingPlan = existsSync(planPath) ? readFileSync(planPath, 'utf-8') : '';
+    // Async read for existing plan
+    let existingPlan = '';
+    try {
+      existingPlan = await readFile(planPath, 'utf-8');
+    } catch {
+      existingPlan = '';
+    }
     const planMode = decidePlanArtifactMode({
       hasExistingPlan: existingPlan.length > 0,
       existingPlanContent: existingPlan,
@@ -140,7 +153,11 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
     
     if (planMode === 'remake') {
       resetProgress(projectDir);
-      try { clearResults(projectDir); } catch {}
+      try {
+        clearResults(projectDir);
+      } catch (e) {
+        debugLog(`clearResults failed for projectDir=${projectDir}:`, e);
+      }
     }
 
     debugLog(`[AUDIT] Plan ${planMode === 'append' ? 'revised' : 'created'}. Steps: ${stepCount}. Project: ${projectDir}`);
