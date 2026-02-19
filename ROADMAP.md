@@ -52,7 +52,17 @@
 
 ---
 
-## Current State (v1.2.2-candidate — Track A+ hardening complete)
+## Current State (v1.2.2 — Contract-driven quality hardening complete)
+
+### Shipped (v1.2.2 - February 2026)
+
+**Contract-Driven Quality:**
+- [x] **Contract module** — Single source of truth for research/plan quality expectations
+- [x] **System prompt injection** — Contracts injected for Setu agent only (Scout/Architect/Builder)
+- [x] **Tool descriptions updated** — Compact contract expectations in tool descriptions
+- [x] **Raw content persistence** — Model output written verbatim (sanitized only)
+- [x] **Content-first APIs** — Single `content` arg replaces multi-field structure
+- [x] **Removed formatting** — Eliminated `formatResearch()`, `formatPlan()`, `countSteps()`
 
 ### Shipped (v1.2.1 - February 2026)
 
@@ -61,7 +71,7 @@
 - [x] **FR-04 / AT-04: Read-before-write for edit** — Extended overwrite guard to edit tool
 - [x] **FR-05 / AT-05: Safety confirmation flow** — Split block vs ask actions with proper question resolution
 - [x] **Decision-gate fallback** — Replaced hard dependency on native `question` tool with capability-aware decision resolution (`question` or `setu_context`)
-- [x] **Plan contract enforcement** — `setu_plan` now validates required schema/sections before writing PLAN.md
+- [x] **Plan contract guidance (v1.2.1)** — initial schema-oriented contract guidance added (superseded by v1.2.2 content-first contract prompting)
 - [x] **Research durability** — oversized research persists in `.setu/research_chunks/` with no silent truncation
 - [x] **Artifact lifecycle policy** — append vs remake behavior added for research/plan updates
 - [x] **Additional test coverage** — hydration, policy, plan contract, and research chunking coverage expanded

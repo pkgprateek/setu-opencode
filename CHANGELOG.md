@@ -1,5 +1,34 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed (API Migration)
+
+- **Contract-driven research/plan prompting** — Setu now provides explicit quality contracts to the model before artifact generation
+- **Content-first tool APIs** — `setu_research` and `setu_plan` now use single `content` arg (migration from multi-field structure)
+  - Old multi-field args (`summary`, `constraints`, `patterns`, etc.) removed in favor of unified `content`
+  - Model receives detailed contracts, then generates comprehensive output with its own structure
+- **Raw content preservation** — Model output written verbatim (sanitized only), no formatting coercion
+  - Removed `formatResearch()` and `formatPlan()` restructuring
+  - Removed `countSteps()` and step limit validation
+  - Removed step preview parsing
+  - Plan content sanitization now strips control characters only, preserving model-authored markdown structure
+- **PLAN_TEMPLATE renamed to PLAN_EXAMPLE_TEMPLATE** — Reference-only template, not enforced
+
+### Added
+
+- **Contract module** (`src/prompts/contracts.ts`) — Single source of truth for quality expectations
+  - `RESEARCH_SEMANTIC_REQUIREMENTS` with good/bad examples
+  - `PLAN_SEMANTIC_REQUIREMENTS` with good/bad examples  
+  - Compact versions for tool descriptions
+  - Gear-appropriate contract helpers
+- **System prompt injection** — Contracts injected for Setu agent only (not subagents)
+  - Scout gear: Research contract
+  - Architect gear: Research + Plan contracts
+  - Builder gear: Plan execution guidance
+
+---
+
 ## [1.2.1] - 2026-02-18
 
 ### Added

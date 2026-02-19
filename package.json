@@ -5,12 +5,17 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
+  "bin": {
+    "setu": "dist/cli.js",
+    "setu-opencode": "dist/cli.js"
+  },
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target node",
+    "build": "bun build src/index.ts src/cli.ts src/postinstall.ts --outdir dist --target node",
     "dev": "bun run --watch src/index.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/**/*.ts",
     "test": "bun test",
+    "postinstall": "node ./scripts/postinstall.mjs",
     "prepublishOnly": "bun run build"
   },
   "keywords": [
@@ -38,6 +43,7 @@
   "files": [
     "dist",
     "skills",
+    "scripts",
     "README.md"
   ],
   "peerDependencies": {

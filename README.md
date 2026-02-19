@@ -90,6 +90,24 @@ Now (and only now) does it implement. Verification runs at the end, and you can 
 
 ---
 
+## Contract-Driven Quality
+
+Setu doesn't just block bad actions—it **guides** the model to produce better artifacts.
+
+**Before Generation:** Setu injects detailed contracts into the system prompt, telling the model exactly what comprehensive research and atomic planning look like.
+
+**Research Contract:** Intent/PRD, technical analysis, alternatives/tradeoffs, risks, verification, open decisions
+
+**Plan Contract:** Atomic steps with why, files touched, change intent, verification method, edge cases
+
+**After Generation:** Setu writes the model's output **verbatim**—no reformatting, no structure coercion, zero knowledge loss. The model produces comprehensive content with its own structure; Setu preserves it exactly.
+
+This is **soft guidance, not hard enforcement**: the model knows what quality looks like, then creates accordingly.
+
+**The distinction:** Hooks enforce workflow phases (hard) while contracts guide output quality (soft). Hooks block invalid actions and control phase transitions; contracts prescribe what good research and plans look like, but do not enforce control flow.
+
+---
+
 ## What Makes This Different
 
 ### The "Eager Junior Dev" Problem
@@ -147,25 +165,42 @@ These aren't roadblocks—they're guardrails that keep your agent on the right p
 
 ## Installation (30 Seconds)
 
-Current stable path:
+### Global (recommended)
 
-```json
-// opencode.json
-{
-  "plugin": ["setu-opencode"]
-}
+```bash
+npm install -g setu-opencode
 ```
 
-Restart OpenCode. Press **Tab** until you see "Setu." Done.
+Global install auto-bootstraps Setu for OpenCode by updating:
 
-**Note:** First run requires one restart. Setu appears in Tab cycle on second launch.
+- `~/.config/opencode/opencode.json` (adds `setu-opencode` plugin)
+- `~/.config/opencode/agents/setu.md`
 
-Planned install UX (upcoming):
+If your environment blocks install scripts, run:
 
-- `npx setu-opencode@latest init`
-- `npm install -g setu-opencode && setu-opencode init`
+```bash
+setu init --global
+```
 
-These commands are planned to automate OpenCode config edits safely. Until then, use `opencode.json` setup above.
+### Project-only setup
+
+```bash
+npx setu-opencode@latest init
+```
+
+Or after local install:
+
+```bash
+npm install setu-opencode
+npx setu init
+```
+
+This updates project files only:
+
+- `opencode.json` (adds `setu-opencode` plugin)
+- `.opencode/agents/setu.md`
+
+`setu init` configures OpenCode wiring only. The `.setu/` runtime folder is created dynamically by Setu tools when needed.
 
 ### 30-Second Proof (Run This)
 
@@ -268,6 +303,8 @@ Completion is coupled to evidence, not confidence.
 | `setu_doctor` | Check environment before executing |
 | `setu_task` | Create tasks with constraints |
 | `setu_feedback` | Help improve Setu |
+
+**Important:** `setu_research` and `setu_plan` use `auto` mode by default, which appends to existing files. To start a completely new task, use `setu_task` first—it archives old artifacts to HISTORY.md and resets the workflow to Scout gear. This prevents unrelated tasks from merging into the same artifact.
 
 ---
 
