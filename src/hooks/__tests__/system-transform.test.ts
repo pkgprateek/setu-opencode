@@ -325,9 +325,196 @@ describe('system-transform AGENTS.md warning', () => {
       await hook({ sessionID: 'test' }, output);
       
       // Gear message should be at beginning (unshift)
-      // AGENTS warning should be at end (push)
       expect(output.system[0]?.includes('Scout Mode')).toBe(true);
-      expect(output.system[output.system.length - 1]?.includes('No AGENTS.md found')).toBe(true);
+      // AGENTS warning should appear somewhere in the output (contracts may come after)
+      expect(output.system.some((s: string) => s.includes('No AGENTS.md found'))).toBe(true);
+    } finally {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('system-transform contract injection', () => {
+  test('Setu Scout gear includes research contract', async () => {
+    const testDir = createTestDir('scout');
+    
+    try {
+      const mockGetSetuFilesExist = (): FileAvailability => ({ 
+        active: false, 
+        context: false, 
+        agentsMd: true,
+        claudeMd: false 
+      });
+      
+      const hook = createSystemTransformHook(
+        () => ({ complete: false, stepsRun: new Set() }),
+        mockGetSetuFilesExist,
+        () => 'setu',
+        undefined,
+        undefined,
+        () => testDir
+      );
+      
+      const output = { system: [] as string[] };
+      await hook({ sessionID: 'test' }, output);
+      
+      const hasResearchContract = output.system.some((s: string) => 
+        s.includes('INTENT') && s.includes('TECHNICAL')
+      );
+      expect(hasResearchContract).toBe(true);
+      
+      const hasPlanContract = output.system.some((s: string) => 
+        s.includes('WHY') && s.includes('FILES')
+      );
+      expect(hasPlanContract).toBe(false); // Scout doesn't get plan contract
+    } finally {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+
+  test('Setu Architect gear includes both research and plan contracts', async () => {
+    const testDir = createTestDir('architect');
+    
+    try {
+      const mockGetSetuFilesExist = (): FileAvailability => ({ 
+        active: false, 
+        context: false, 
+        agentsMd: true,
+        claudeMd: false 
+      });
+      
+      const hook = createSystemTransformHook(
+        () => ({ complete: false, stepsRun: new Set() }),
+        mockGetSetuFilesExist,
+        () => 'setu',
+        undefined,
+        undefined,
+        () => testDir
+      );
+      
+      const output = { system: [] as string[] };
+      await hook({ sessionID: 'test' }, output);
+      
+      const hasResearchContract = output.system.some((s: string) => 
+        s.includes('INTENT') && s.includes('TECHNICAL')
+      );
+      expect(hasResearchContract).toBe(true);
+      
+      const hasPlanContract = output.system.some((s: string) => 
+        s.includes('WHY') && s.includes('FILES')
+      );
+      expect(hasPlanContract).toBe(true);
+    } finally {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+
+  test('Setu Builder gear includes plan execution guidance', async () => {
+    const testDir = createTestDir('builder');
+    
+    try {
+      const mockGetSetuFilesExist = (): FileAvailability => ({ 
+        active: false, 
+        context: false, 
+        agentsMd: true,
+        claudeMd: false 
+      });
+      
+      const hook = createSystemTransformHook(
+        () => ({ complete: false, stepsRun: new Set() }),
+        mockGetSetuFilesExist,
+        () => 'setu',
+        undefined,
+        undefined,
+        () => testDir
+      );
+      
+      const output = { system: [] as string[] };
+      await hook({ sessionID: 'test' }, output);
+      
+      const hasPlanContract = output.system.some((s: string) => 
+        s.includes('Execute PLAN.md') || (s.includes('WHY') && s.includes('FILES'))
+      );
+      expect(hasPlanContract).toBe(true);
+      
+      const hasResearchContract = output.system.some((s: string) => 
+        s.includes('INTENT') && s.includes('TECHNICAL')
+      );
+      expect(hasResearchContract).toBe(false); // Builder doesn't get research contract
+    } finally {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+
+  test('Explore subagent does NOT get contract injection', async () => {
+    const testDir = createTestDir('scout');
+    
+    try {
+      const mockGetSetuFilesExist = (): FileAvailability => ({ 
+        active: false, 
+        context: false, 
+        agentsMd: true,
+        claudeMd: false 
+      });
+      
+      const hook = createSystemTransformHook(
+        () => ({ complete: false, stepsRun: new Set() }),
+        mockGetSetuFilesExist,
+        () => 'explore',  // Subagent, not Setu
+        undefined,
+        undefined,
+        () => testDir
+      );
+      
+      const output = { system: [] as string[] };
+      await hook({ sessionID: 'test' }, output);
+      
+      const hasResearchContract = output.system.some((s: string) => 
+        s.includes('INTENT') && s.includes('TECHNICAL')
+      );
+      expect(hasResearchContract).toBe(false);
+      
+      const hasPlanContract = output.system.some((s: string) => 
+        s.includes('WHY') && s.includes('FILES')
+      );
+      expect(hasPlanContract).toBe(false);
+    } finally {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+
+  test('General subagent does NOT get contract injection', async () => {
+    const testDir = createTestDir('architect');
+    
+    try {
+      const mockGetSetuFilesExist = (): FileAvailability => ({ 
+        active: false, 
+        context: false, 
+        agentsMd: true,
+        claudeMd: false 
+      });
+      
+      const hook = createSystemTransformHook(
+        () => ({ complete: false, stepsRun: new Set() }),
+        mockGetSetuFilesExist,
+        () => 'general',  // Subagent, not Setu
+        undefined,
+        undefined,
+        () => testDir
+      );
+      
+      const output = { system: [] as string[] };
+      await hook({ sessionID: 'test' }, output);
+      
+      const hasResearchContract = output.system.some((s: string) => 
+        s.includes('INTENT') && s.includes('TECHNICAL')
+      );
+      expect(hasResearchContract).toBe(false);
+      
+      const hasPlanContract = output.system.some((s: string) => 
+        s.includes('WHY') && s.includes('FILES')
+      );
+      expect(hasPlanContract).toBe(false);
     } finally {
       rmSync(testDir, { recursive: true, force: true });
     }
