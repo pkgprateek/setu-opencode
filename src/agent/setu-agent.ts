@@ -9,6 +9,7 @@
  */
 
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { homedir } from 'os';
 import { join } from 'path';
 import { debugLog } from '../debug';
 import { validateProjectDir } from '../utils/path-validation';
@@ -117,7 +118,26 @@ export async function createSetuAgent(
   projectDir: string,
   forceUpdate: boolean = false
 ): Promise<boolean> {
-  const agentDir = join(projectDir, '.opencode', 'agents');
+  const created = await createSetuAgentFile(join(projectDir, '.opencode'), forceUpdate);
+
+  // Git persistence: Ensure .setu/ is versioned (but not session files)
+  setupSetuGitignore(projectDir);
+
+  return created;
+}
+
+/**
+ * Creates or updates Setu agent in a specific OpenCode config root.
+ *
+ * Example roots:
+ * - Project: <project>/.opencode
+ * - Global:  ~/.config/opencode
+ */
+export async function createSetuAgentFile(
+  openCodeConfigRoot: string,
+  forceUpdate: boolean = false
+): Promise<boolean> {
+  const agentDir = join(openCodeConfigRoot, 'agents');
   const agentPath = join(agentDir, 'setu.md');
 
   if (existsSync(agentPath) && !forceUpdate) {
@@ -144,14 +164,24 @@ export async function createSetuAgent(
   writeFileSync(agentPath, content, 'utf-8');
   debugLog('Created .opencode/agents/setu.md (v1.2.1 - review fixes)');
 
-  // Git persistence: Ensure .setu/ is versioned (but not session files)
-  setupSetuGitignore(projectDir);
-
   return true;
 }
 
 export function getSetuAgentPath(projectDir: string): string {
   return join(projectDir, '.opencode', 'agents', 'setu.md');
+}
+
+export function getGlobalSetuAgentPath(): string {
+  const xdgConfigHome = process.env.XDG_CONFIG_HOME;
+  const configRoot = xdgConfigHome && xdgConfigHome.trim().length > 0
+    ? join(xdgConfigHome, 'opencode')
+    : join(homedir(), '.config', 'opencode');
+
+  return join(configRoot, 'agents', 'setu.md');
+}
+
+export function isGlobalSetuAgentConfigured(): boolean {
+  return existsSync(getGlobalSetuAgentPath());
 }
 
 export function isSetuAgentConfigured(projectDir: string): boolean {

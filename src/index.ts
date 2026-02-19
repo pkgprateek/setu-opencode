@@ -35,7 +35,7 @@ import { createSetuResearchTool } from './tools/setu-research';
 import { createSetuPlanTool } from './tools/setu-plan';
 import { createSetuResetTool } from './tools/setu-reset';
 import { createSetuDoctorTool } from './tools/setu-doctor';
-import { createSetuAgent } from './agent/setu-agent';
+import { createSetuAgent, isGlobalSetuAgentConfigured } from './agent/setu-agent';
 import { 
   initializeFeedbackFile, 
   createContextCollector,
@@ -90,9 +90,13 @@ export const SetuPlugin: Plugin = async (ctx) => {
   // This creates .opencode/agents/setu.md with the Setu persona and permissions
   const projectDir = ctx.directory || process.cwd();
   try {
-    const created = await createSetuAgent(projectDir);
-    if (created) {
-      alwaysLog('Agent configuration updated. Restart may be required if Setu is missing from Tab cycle.');
+    if (!isGlobalSetuAgentConfigured()) {
+      const created = await createSetuAgent(projectDir);
+      if (created) {
+        alwaysLog('Agent configuration updated. Restart may be required if Setu is missing from Tab cycle.');
+      }
+    } else {
+      debugLog('Global Setu agent detected; skipping project-level agent creation');
     }
   } catch (error) {
     errorLog('Failed to create agent config:', error);
