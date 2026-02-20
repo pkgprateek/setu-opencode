@@ -1,8 +1,10 @@
 import { existsSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const postinstallPath = resolve(process.cwd(), 'dist', 'postinstall.js')
+const scriptDir = dirname(fileURLToPath(import.meta.url))
+const postinstallPath = resolve(scriptDir, '..', 'dist', 'postinstall.js')
 
 if (!existsSync(postinstallPath)) {
   process.exit(0)
