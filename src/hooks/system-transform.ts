@@ -66,7 +66,7 @@ function formatFilesAlreadyRead(filesRead: Array<{ path: string }>): string {
  */
 /** Input shape for the system transform hook */
 interface SystemTransformInput {
-  sessionID: string;
+  sessionID?: string;
   message?: { content?: string };
 }
 
@@ -247,14 +247,15 @@ export function createSystemTransformHook(
         }
       }
 
-      const disciplineState = getDisciplineState(input.sessionID);
+      const sessionID = input.sessionID ?? 'unknown';
+      const disciplineState = getDisciplineState(sessionID);
       if (disciplineState.questionBlocked) {
         output.system.unshift(
           `[SETU: Clarification Required] Ask one direct question to the user, then wait. Do not run mutating tools until they answer.`,
         );
       }
 
-      const overwriteRequirement = getOverwriteRequirement(input.sessionID);
+      const overwriteRequirement = getOverwriteRequirement(sessionID);
       if (overwriteRequirement?.pending) {
         // Sanitize filePath before interpolation: strip control chars and newlines
         // Convert CR/LF to spaces first, then strip C0 (except CR/LF already handled) and C1 controls

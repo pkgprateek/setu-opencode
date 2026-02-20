@@ -29,7 +29,6 @@ import { createEnhancedAttemptTracker } from './enforcement';
 import { recordFailedApproach } from './context';
 import { createSetuVerifyTool } from './tools/setu-verify';
 import { createSetuContextTool } from './tools/setu-context';
-import { createSetuFeedbackTool } from './tools/setu-feedback';
 import { createSetuTaskTool } from './tools/setu-task';
 import { createSetuResearchTool } from './tools/setu-research';
 import { createSetuPlanTool } from './tools/setu-plan';
@@ -37,7 +36,7 @@ import { createSetuResetTool } from './tools/setu-reset';
 import { createSetuDoctorTool } from './tools/setu-doctor';
 import { createSetuAgent, isGlobalSetuAgentConfigured } from './agent/setu-agent';
 import { 
-  initializeFeedbackFile, 
+  ensureSetuDir,
   createContextCollector,
   type ContextCollector,
   type ProjectRules
@@ -71,6 +70,9 @@ interface SetuState {
 
   // Cache for file existence checks (avoids repeated fs.existsSync)
   fileCache: Map<string, { exists: boolean; checkedAt: number }>;
+
+  // Tracks whether first Setu message initialization was checked per session
+  setuInitCheckedSessions: Set<string>;
 }
 
 /**
@@ -83,7 +85,7 @@ interface SetuState {
  * - tool.execute.before: hydration enforcement (block side-effects until context confirmed)
  * - tool.execute.after: Track verification steps, file reads, searches
  * - event: Handle session lifecycle, load context on start
- * - tool: Custom tools (setu_verify, setu_context, setu_feedback, setu_task, setu_research, setu_plan, setu_reset, setu_doctor)
+ * - tool: Custom tools (setu_verify, setu_context, setu_task, setu_research, setu_plan, setu_reset, setu_doctor)
  */
 export const SetuPlugin: Plugin = async (ctx) => {
   // Create the Setu agent configuration file on plugin init
@@ -100,14 +102,6 @@ export const SetuPlugin: Plugin = async (ctx) => {
     }
   } catch (error) {
     errorLog('Failed to create agent config:', error);
-  }
-  
-  // Initialize feedback file for transparency
-  try {
-    initializeFeedbackFile(projectDir);
-  } catch (error) {
-    // Non-critical - only log in debug mode
-    debugLog('Could not initialize feedback file:', error);
   }
   
   // Create context collector for .setu/ persistence
@@ -147,7 +141,10 @@ export const SetuPlugin: Plugin = async (ctx) => {
     },
 
     // File cache (avoids repeated fs calls)
-    fileCache: new Map()
+    fileCache: new Map(),
+
+    // Session-scoped first Setu message initialization
+    setuInitCheckedSessions: new Set()
   };
   
   // Create attempt tracker for "3 tries then suggest gear shift" pattern
@@ -207,6 +204,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
     debugLog('Hydration: Context confirmed - side-effect tools now allowed');
   };
   const resetHydration = (sessionId: string): void => {
+    state.setuInitCheckedSessions.delete(sessionId);
     state.hydration = {
       contextConfirmed: false,
       sessionId,
@@ -250,13 +248,33 @@ export const SetuPlugin: Plugin = async (ctx) => {
   const setFirstSessionDone = () => {
     state.isFirstSession = false;
   };
+
+  const onFirstSetuMessageInSession = (sessionID: string): void => {
+    if (!sessionID || state.setuInitCheckedSessions.has(sessionID)) {
+      return;
+    }
+
+    state.setuInitCheckedSessions.add(sessionID);
+
+    const setuDirPath = join(projectDir, '.setu');
+    if (existsSync(setuDirPath)) {
+      return;
+    }
+
+    try {
+      ensureSetuDir(projectDir);
+      debugLog(`Lazy init: created .setu/ on first Setu message for session ${sessionID}`);
+    } catch (error) {
+      debugLog('Lazy init: failed to create .setu/ directory:', error);
+    }
+  };
   
   // Log plugin initialization (only in debug mode)
   debugLog('Plugin initialized');
   debugLog('Default mode: Setu (discipline layer)');
   debugLog('Hydration enforcement: ACTIVE');
   debugLog('Context persistence: .setu/ directory');
-  debugLog('Tools: setu_verify, setu_context, setu_feedback, setu_task');
+  debugLog('Tools: setu_verify, setu_context, setu_task');
   debugLog('Skills bundled: setu-bootstrap, setu-verification, setu-rules-creation');
 
   // Create tool.before hook once so session-scoped policy state persists correctly.
@@ -302,7 +320,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
     // Wrapped for graceful degradation (2.10)
     'chat.message': wrapHook(
       'chat.message',
-      createChatMessageHook(setCurrentAgent)
+      createChatMessageHook(setCurrentAgent, onFirstSetuMessageInSession)
     ),
     
     // Hydration gate: block side-effect tools until context is confirmed
@@ -325,7 +343,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
           debugLog('Failed to record tool execution:', err);
         }
       }
-      
+
       // Delegate to the main before hook for hydration enforcement
       return beforeHook(input, output);
     },
@@ -375,7 +393,6 @@ export const SetuPlugin: Plugin = async (ctx) => {
     tool: {
       setu_verify: createSetuVerifyTool(markVerificationComplete, getProjectDir),
       setu_context: createSetuContextTool(getHydrationState, confirmContext, getContextCollector, getProjectDir),
-      setu_feedback: createSetuFeedbackTool(getProjectDir),
       setu_task: createSetuTaskTool(getProjectDir, resetVerificationState),
       setu_research: createSetuResearchTool(getProjectDir),
       setu_plan: createSetuPlanTool(getProjectDir),

@@ -12,8 +12,6 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 import { debugLog } from '../debug';
-import { validateProjectDir } from '../utils/path-validation';
-import { getErrorMessage } from '../utils/error-handling';
 
 /**
  * Setu Agent - Soul Only
@@ -118,12 +116,7 @@ export async function createSetuAgent(
   projectDir: string,
   forceUpdate: boolean = false
 ): Promise<boolean> {
-  const created = await createSetuAgentFile(join(projectDir, '.opencode'), forceUpdate);
-
-  // Git persistence: Ensure .setu/ is versioned (but not session files)
-  setupSetuGitignore(projectDir);
-
-  return created;
+  return createSetuAgentFile(join(projectDir, '.opencode'), forceUpdate);
 }
 
 /**
@@ -186,67 +179,4 @@ export function isGlobalSetuAgentConfigured(): boolean {
 
 export function isSetuAgentConfigured(projectDir: string): boolean {
   return existsSync(getSetuAgentPath(projectDir));
-}
-
-/**
- * Setup .setu/ directory for selective git versioning.
- * 
- * Philosophy: Context travels with codebase.
- * - RESEARCH.md, PLAN.md, results/ → tracked (project state)
- * - active.json, verification.log → ignored (session state)
- * 
- * SECURITY: Does NOT auto-modify user's root .gitignore - warns instead.
- * Users must manually remove .setu/ from root .gitignore if they want artifacts tracked.
- * 
- * @param projectDir - Project root directory
- * @returns true if setup succeeded, false otherwise
- * @throws Never - all errors are caught and logged
- */
-function setupSetuGitignore(projectDir: string): boolean {
-  try {
-    // Defense-in-depth: Validate projectDir even if caller did (redundant but safe)
-    validateProjectDir(projectDir);
-    
-    // Check root .gitignore but don't auto-modify (invasive)
-    const rootGitignorePath = join(projectDir, '.gitignore');
-    if (existsSync(rootGitignorePath)) {
-      const rootGitignore = readFileSync(rootGitignorePath, 'utf-8');
-      
-      // Check exact lines to avoid false positives (e.g., .setu-temp or my.setup.js)
-      const lines = rootGitignore.split(/\r?\n/).map(l => l.trim());
-      const isIgnored = lines.some(line => line === '.setu' || line === '.setu/');
-      
-      if (isIgnored) {
-        debugLog('[Setu:WARN] .setu/ is ignored in root .gitignore. Context artifacts (RESEARCH.md, PLAN.md) will not be tracked. To enable, manually remove .setu/ from .gitignore');
-      }
-    }
-
-    // Create .setu/.gitignore for session files only
-    const setuDir = join(projectDir, '.setu');
-    if (!existsSync(setuDir)) {
-      mkdirSync(setuDir, { recursive: true });
-    }
-
-    const setuGitignorePath = join(setuDir, '.gitignore');
-    if (!existsSync(setuGitignorePath)) {
-      const setuGitignore = `# Session state - changes frequently, do not version
-active.json
-verification.log
-cache/
-
-# Version everything else:
-# - RESEARCH.md (context)
-# - PLAN.md (execution plan)
-# - results/ (step completion records)
-# - HISTORY.md (archived plans)
-`;
-      writeFileSync(setuGitignorePath, setuGitignore, 'utf-8');
-      debugLog('[Setu] Created .setu/.gitignore for selective versioning');
-    }
-    
-    return true;
-  } catch (error) {
-    debugLog('[Setu] Error setting up .setu/ gitignore:', getErrorMessage(error));
-    return false;
-  }
 }
