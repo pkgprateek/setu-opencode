@@ -9,7 +9,7 @@
  * Performs Silent Exploration: loads project rules automatically.
  */
 
-import { type ContextCollector, detectProjectInfo, type ProjectRules, loadProjectRules, clearSessionFeedback } from '../context';
+import { type ContextCollector, detectProjectInfo, type ProjectRules, loadProjectRules } from '../context';
 import { debugLog } from '../debug';
 import { type ActiveBatchesMap, disposeSessionBatch } from './tool-execute';
 
@@ -131,9 +131,6 @@ export function createEventHook(
         if (activeBatches) {
           disposeSessionBatch(activeBatches, sessionId);
         }
-        
-        // Clean up feedback rate limit tracking to prevent memory leaks
-        clearSessionFeedback(sessionId);
         
         break;
       }

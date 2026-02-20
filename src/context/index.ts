@@ -62,21 +62,6 @@ export {
   TOKEN_THRESHOLDS
 } from './token';
 
-// Feedback
-export type { FeedbackEntry } from './feedback';
-
-export {
-  initializeFeedbackFile,
-  appendFeedback,
-  getFeedbackPath,
-  hasFeedbackFile,
-  // Session rate limiting
-  incrementFeedbackCount,
-  clearSessionFeedback
-} from './feedback';
-
-export type { RateLimitResult } from './feedback';
-
 // Results Pattern (Phase 3.0)
 export type { StepResult } from './results';
 

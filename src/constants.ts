@@ -18,7 +18,6 @@
 export const SETU_TOOLS = [
   'setu_verify',
   'setu_context',
-  'setu_feedback',
   'setu_research',
   'setu_plan',
   'setu_reset',
@@ -152,10 +151,3 @@ export const PARALLEL_BATCH_WINDOW_MS = 100;
 
 /** Cache TTL (ms) for file existence checks */
 export const FILE_CACHE_TTL_MS = 5000;
-
-// ============================================================================
-// Rate Limits
-// ============================================================================
-
-/** Maximum feedback entries per session to prevent abuse */
-export const MAX_FEEDBACK_PER_SESSION = 10;

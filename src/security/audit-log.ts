@@ -7,7 +7,7 @@
 
 import { appendFileSync } from 'fs';
 import { join } from 'path';
-import { ensureSetuDir } from '../context/feedback';
+import { ensureSetuDir } from '../context/storage';
 import { debugLog } from '../debug';
 
 const SECURITY_LOG = 'security.log';
