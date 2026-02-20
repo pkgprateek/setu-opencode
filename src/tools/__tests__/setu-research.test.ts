@@ -13,7 +13,9 @@ function createMockToolContext(): ToolContext {
     abort: new AbortController().signal,
     metadata: () => {},
     ask: async () => {},
-  };
+    directory: process.cwd(),
+    worktree: process.cwd(),
+  } as unknown as ToolContext;
 }
 
 describe('setu_research chunking', () => {
