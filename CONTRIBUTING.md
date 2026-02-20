@@ -1,10 +1,12 @@
 # Contributing to setu-opencode
 
-## Requirements
+Thanks for contributing.
 
-- **Bun** (latest) — Runtime and package manager
-- **TypeScript 5.x** — Strict mode required
-- **OpenCode** — For end-to-end testing
+## Prerequisites
+
+- Bun (current)
+- Node.js 24+
+- OpenCode (for manual smoke tests)
 
 ## Setup
 
@@ -15,58 +17,73 @@ bun install
 bun run build
 ```
 
-## Development
+## Core Commands
 
-### Local Testing
+```bash
+bun test
+bun run typecheck
+bun run lint
+bun run build
+```
 
-1. Build: `bun run build`
-2. Configure OpenCode (`~/.config/opencode/opencode.json`):
-   ```json
-   {
-     "plugin": ["file:///path/to/setu-opencode/dist/index.js"]
-   }
-   ```
-3. Restart OpenCode
+## Local Plugin Testing
 
-### Code Standards
+Configure OpenCode to load local dist output:
 
-See [AGENTS.md](AGENTS.md) for:
-- TypeScript strict requirements
-- Naming conventions
-- Import organization
-- Security guidelines
+```json
+{
+  "plugin": ["file:///absolute/path/to/setu-opencode/dist/index.js"]
+}
+```
 
-Key points:
-- Explicit return types on all exports
-- No `any` without justification
-- Fail-closed security (block by default)
-- Pure functions when possible
+Then restart OpenCode.
 
-## Pull Requests
+## Engineering Standards
 
-1. Create feature branch: `git checkout -b feature/description`
-2. Make changes following AGENTS.md standards
-3. Test with OpenCode locally
-4. Commit using conventional format: `type(scope): description`
-5. Push and open PR
+- Keep changes atomic and reviewable.
+- Avoid `any` unless justified in code comments.
+- Fail closed for security-sensitive behavior.
+- Preserve backward compatibility only when it has clear user value.
+- Prefer explicit error handling over silent failure.
 
-### PR Requirements
+## Docs Parity Rule
 
-- [ ] Builds without errors (`bun run build`)
-- [ ] Type-checks clean (`bun run typecheck`)
-- [ ] Tested in OpenCode
-- [ ] No modifications to `package.json`, `tsconfig.json`, `.gitignore` (unless discussed)
-- [ ] Follows security patterns (path validation, input sanitization, audit logging)
+If you change any of these, update docs in the same PR:
 
-## Architecture
+- tool signatures in `src/tools/*.ts`
+- install/bootstrap behavior (`src/install/*`, `src/cli.ts`, `src/postinstall.ts`)
+- workflow semantics (gears, hydration, verification)
 
-Key directories:
-- `src/hooks/` — OpenCode lifecycle interception
-- `src/enforcement/` — Gear state machine, Hydration Gate, discipline guards
-- `src/security/` — Path validation, secrets detection, audit logging
-- `src/tools/` — Agent-facing tools
-- `skills/` — On-demand skill definitions
+Minimum docs touched when relevant:
 
-## Questions
+- `README.md`
+- `AGENTS.md`
+- `CHANGELOG.md`
 
-Open an issue on GitHub.
+## Pull Request Checklist
+
+- [ ] `bun test` passes
+- [ ] `bun run typecheck` passes
+- [ ] `bun run lint` passes
+- [ ] docs updated for behavior/API changes
+- [ ] no dead code or stale references introduced
+
+## Commit Style
+
+Use conventional commits:
+
+```text
+type(scope): short summary
+```
+
+Examples:
+
+- `feat(bootstrap): add explicit global uninstall flow`
+- `refactor(hooks): move lazy .setu init to first Setu message`
+- `docs(readme): simplify install and first-run guidance`
+
+## Need Help
+
+Open an issue at:
+
+- https://github.com/pkgprateek/setu-opencode/issues
