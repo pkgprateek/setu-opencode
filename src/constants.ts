@@ -51,7 +51,7 @@ export const READ_ONLY_TOOLS = ['read', 'glob', 'grep', 'list', 'webfetch', 'tod
  * - patch: Apply patches to files
  * - multiedit: Batch edits across files
  */
-export const SIDE_EFFECT_TOOLS = ['write', 'edit', 'patch', 'multiedit'] as const;
+export const SIDE_EFFECT_TOOLS = ['write', 'edit', 'patch', 'multiedit', 'apply_patch'] as const;
 
 /**
  * All tools that should be blocked during hydration (for prompt guidance).

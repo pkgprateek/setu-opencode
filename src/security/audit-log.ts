@@ -26,6 +26,7 @@ export enum SecurityEventType {
   DEPENDENCY_EDIT_BLOCKED = 'DEPENDENCY_EDIT_BLOCKED',
   GEAR_BLOCKED = 'GEAR_BLOCKED',
   SAFETY_BLOCKED = 'SAFETY_BLOCKED',
+  HYDRATION_FALLBACK_ALLOWED = 'HYDRATION_FALLBACK_ALLOWED',
 
   // Warning events
   BYPASS_ATTEMPT_DETECTED = 'BYPASS_ATTEMPT_DETECTED',
@@ -61,6 +62,7 @@ const EVENT_SEVERITY: Record<SecurityEventType, SecurityEvent['severity']> = {
   [SecurityEventType.DEPENDENCY_EDIT_BLOCKED]: 'medium',
   [SecurityEventType.GEAR_BLOCKED]: 'medium',
   [SecurityEventType.SAFETY_BLOCKED]: 'high',
+  [SecurityEventType.HYDRATION_FALLBACK_ALLOWED]: 'info',
   [SecurityEventType.BYPASS_ATTEMPT_DETECTED]: 'high',
   [SecurityEventType.SECRETS_DETECTED]: 'critical',
   [SecurityEventType.PROMPT_INJECTION_SANITIZED]: 'medium',

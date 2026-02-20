@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { createToolExecuteBeforeHook } from '../tool-execute';
-import { clearDisciplineState } from '../../context';
+import { clearDisciplineState, type ContextCollector } from '../../context';
 
 mock.module('../../debug', () => ({
   debugLog: () => {},
@@ -153,5 +153,105 @@ describe('tool-execute before hook hydration enforcement', () => {
         { args: { filePath: 'new-file.txt', content: 'ok' } }
       )
     ).resolves.toBeUndefined();
+  });
+
+  test('unlocks write when hydration state is stale but persisted context is confirmed', async () => {
+    const setuDir = join(projectDir, '.setu');
+    mkdirSync(setuDir, { recursive: true });
+    writeFileSync(join(setuDir, 'RESEARCH.md'), '# research', 'utf-8');
+    writeFileSync(join(setuDir, 'PLAN.md'), '# plan', 'utf-8');
+
+    let loadFromDiskCalls = 0;
+    let confirmed = false;
+
+    const collector: ContextCollector = {
+      getContext: () => ({
+        version: '1.0',
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString(),
+        confirmed,
+        project: {},
+        filesRead: [],
+        searchesPerformed: [],
+        patterns: [],
+      }),
+      recordFileRead: () => {},
+      recordSearch: () => {},
+      addPattern: () => {},
+      updateProjectInfo: () => {},
+      confirm: () => {},
+      reset: () => {},
+      loadFromDisk: () => {
+        loadFromDiskCalls += 1;
+        confirmed = true;
+        return true;
+      },
+      saveToDisk: () => {},
+      debouncedSave: Object.assign(() => {}, { cancel: () => {} }),
+    };
+
+    const hook = createToolExecuteBeforeHook(
+      () => 'setu',
+      () => collector,
+      () => projectDir,
+      undefined,
+      () => ({ contextConfirmed: false, sessionId: sessionID, startedAt: Date.now() })
+    );
+
+    await expect(
+      hook(
+        { tool: 'write', sessionID, callID: 'c6' },
+        { args: { filePath: 'new-file.txt', content: 'ok' } }
+      )
+    ).resolves.toBeUndefined();
+
+    expect(loadFromDiskCalls).toBe(1);
+
+    const securityLog = readFileSync(join(projectDir, '.setu', 'security.log'), 'utf-8');
+    expect(securityLog).toContain('HYDRATION_FALLBACK_ALLOWED');
+    expect(securityLog).toContain('tool:write');
+  });
+
+  test('still blocks write when hydration is stale and persisted context is not confirmed', async () => {
+    const collector: ContextCollector = {
+      getContext: () => ({
+        version: '1.0',
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString(),
+        confirmed: false,
+        project: {},
+        filesRead: [],
+        searchesPerformed: [],
+        patterns: [],
+      }),
+      recordFileRead: () => {},
+      recordSearch: () => {},
+      addPattern: () => {},
+      updateProjectInfo: () => {},
+      confirm: () => {},
+      reset: () => {},
+      loadFromDisk: () => false,
+      saveToDisk: () => {},
+      debouncedSave: Object.assign(() => {}, { cancel: () => {} }),
+    };
+
+    const hook = createToolExecuteBeforeHook(
+      () => 'setu',
+      () => collector,
+      () => projectDir,
+      undefined,
+      () => ({ contextConfirmed: false, sessionId: sessionID, startedAt: Date.now() })
+    );
+
+    await expect(
+      hook(
+        { tool: 'write', sessionID, callID: 'c7' },
+        { args: { filePath: 'a.txt', content: 'x' } }
+      )
+    ).rejects.toThrow('Wait:');
+
+    const securityLog = readFileSync(join(projectDir, '.setu', 'security.log'), 'utf-8');
+    expect(securityLog).toContain('HYDRATION_BLOCKED');
+    expect(securityLog).toContain('tool:write');
   });
 });

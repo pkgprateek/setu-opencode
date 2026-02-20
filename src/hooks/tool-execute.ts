@@ -216,6 +216,45 @@ function isAllowedDuringQuestionBlock(tool: string, args: Record<string, unknown
   return false;
 }
 
+function isContextConfirmedWithFallback(collector: ContextCollector | null): boolean {
+  if (!collector) {
+    return false;
+  }
+
+  try {
+    if (collector.getContext().confirmed) {
+      return true;
+    }
+  } catch (error) {
+    debugLog(`Hydration fallback: collector context read failed: ${getErrorMessage(error)}`);
+    return false;
+  }
+
+  try {
+    // loadFromDisk uses atomic JSON writes from saveContext (temp + fsync + rename),
+    // so reads are expected to observe either old or new full state, not partial files.
+    const loaded = collector.loadFromDisk();
+    if (!loaded) {
+      return false;
+    }
+
+    const syncedContext = collector.getContext();
+    if (typeof syncedContext.confirmed !== 'boolean') {
+      debugLog('Hydration fallback: invalid persisted context shape (confirmed not boolean)');
+      return false;
+    }
+
+    const confirmedFromDisk = syncedContext.confirmed;
+    if (confirmedFromDisk) {
+      debugLog('Hydration fallback: synchronized confirmation from persisted context');
+    }
+    return confirmedFromDisk;
+  } catch (error) {
+    debugLog(`Hydration fallback: disk sync failed: ${getErrorMessage(error)}`);
+    return false;
+  }
+}
+
 /**
  * Create a before-execution hook that enforces Gearbox rules for tool execution.
  *
@@ -295,21 +334,35 @@ export function createToolExecuteBeforeHook(
 
         const hydrationResult = shouldBlockDuringHydration(input.tool, output.args);
         if (hydrationResult.blocked) {
-          hydrationBlocked = true;
-          // SECURITY: Log failure should not mask the hydration block message
-          // Swallow logging errors to ensure agent receives the correct block reason
-          try {
-            logSecurityEvent(
-              projectDir,
-              SecurityEventType.HYDRATION_BLOCKED,
-              `Blocked ${input.tool} during hydration gate (${hydrationResult.reason ?? 'unknown'})`,
-              { sessionId: input.sessionID, tool: input.tool }
-            );
-          } catch (logError) {
-            // Log failure is secondary to blocking - use debug logger for audit trail
-            debugLog(`logSecurityEvent failed during hydration block: ${getErrorMessage(logError)}`);
+          if (isContextConfirmedWithFallback(collector)) {
+            debugLog('Hydration fallback: allowing tool after persisted confirmation sync');
+            try {
+              logSecurityEvent(
+                projectDir,
+                SecurityEventType.HYDRATION_FALLBACK_ALLOWED,
+                `Allowed ${input.tool} after persisted hydration confirmation sync (${hydrationResult.reason ?? 'unknown'})`,
+                { sessionId: input.sessionID, tool: input.tool }
+              );
+            } catch (logError) {
+              debugLog(`logSecurityEvent failed during hydration fallback allow: ${getErrorMessage(logError)}`);
+            }
+          } else {
+            hydrationBlocked = true;
+            // SECURITY: Log failure should not mask the hydration block message
+            // Swallow logging errors to ensure agent receives the correct block reason
+            try {
+              logSecurityEvent(
+                projectDir,
+                SecurityEventType.HYDRATION_BLOCKED,
+                `Blocked ${input.tool} during hydration gate (${hydrationResult.reason ?? 'unknown'})`,
+                { sessionId: input.sessionID, tool: input.tool }
+              );
+            } catch (logError) {
+              // Log failure is secondary to blocking - use debug logger for audit trail
+              debugLog(`logSecurityEvent failed during hydration block: ${getErrorMessage(logError)}`);
+            }
+            throw new Error(createHydrationBlockMessage(hydrationResult.reason));
           }
-          throw new Error(createHydrationBlockMessage(hydrationResult.reason));
         }
       }
     } catch (error) {
