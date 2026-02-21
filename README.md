@@ -179,28 +179,8 @@ Global install auto-bootstraps Setu for OpenCode by updating:
 If your environment blocks install scripts, run:
 
 ```bash
-setu init --global
+npx setu init 
 ```
-
-### Project-only setup
-
-```bash
-npx setu-opencode@latest init
-```
-
-Or after local install:
-
-```bash
-npm install setu-opencode
-npx setu init
-```
-
-This updates project files only:
-
-- `opencode.json` (adds `setu-opencode` plugin)
-- `.opencode/agents/setu.md`
-
-`setu init` configures OpenCode wiring only. The `.setu/` runtime folder is created dynamically by Setu tools when needed.
 
 ### 30-Second Proof (Run This)
 
