@@ -1,6 +1,6 @@
 # setu-opencode Roadmap
 
-Updated: 2026-02-20
+Updated: 2026-02-22
 
 ## Vision
 
@@ -11,9 +11,9 @@ Setu should be the most reliable way to ship AI-assisted code in OpenCode:
 - verify before completion
 - preserve context across long sessions
 
-## Current State (v1.3.0 target)
+## Current State (v1.3.0)
 
-Shipped or in release-candidate scope:
+Shipped:
 
 - hook-enforced Scout -> Architect -> Builder workflow
 - content-first `setu_research` and `setu_plan`
@@ -33,15 +33,15 @@ Execution quality and throughput:
 
 ## Later (v2.x)
 
-Outcome-oriented orchestration:
+Outcome-oriented orchestration (exploratory):
 
 - DAG-style dependency-aware execution
 - goal-backward verification (prove behavior, not only commands)
 - richer evidence model for completion criteria
 
-## Future (v3.x)
+## Future Considerations
 
-Platform expansion:
+Platform expansion (not committed):
 
 - portable "Setu Lite" behavior for platforms without hook enforcement
 - optional integrations for external tools and workflows

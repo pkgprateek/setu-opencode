@@ -9,8 +9,6 @@ All notable changes to this project are documented here.
 - Rewrite root and internal docs for clarity, persona fit, and API correctness.
 - Remove stale references to removed tools and deprecated signatures.
 
-## [1.3.0] - 2026-02-20
-
 ### Added
 
 - Global CLI lifecycle:
