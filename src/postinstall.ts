@@ -1,12 +1,13 @@
 import { bootstrapSetuGlobal, isExplicitGlobalInstallEnv } from './install/bootstrap';
 
-const README_URL = 'https://github.com/pkgprateek/setu-opencode#installation';
+const README_URL = 'https://github.com/pkgprateek/setu-opencode#installation-30-seconds';
 
 async function runPostinstall(): Promise<void> {
   if (!isExplicitGlobalInstallEnv()) {
     process.stdout.write('[setu] Non-global install detected. Skipping global OpenCode bootstrap.\n');
-    process.stdout.write('[setu] A simpler project-level installation flow is coming soon.\n');
-    process.stdout.write(`[setu] For project-only setup options today, see: ${README_URL}\n`);
+    process.stdout.write('[setu] Global install is the supported setup for auto-bootstrap.\n');
+    process.stdout.write('[setu] Install globally, then run `setu init` if bootstrap was skipped.\n');
+    process.stdout.write(`[setu] Setup guide: ${README_URL}\n`);
     return;
   }
 

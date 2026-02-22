@@ -31,7 +31,7 @@ Use this exact prompt in both panes:
 Expected Setu sequence:
 
 1. Initial mutation attempt is blocked by phase/read discipline.
-2. Agent aligns with `setu_context` and documents findings via `setu_research`.
+2. Agent reads relevant files and documents findings via `setu_research` (optional: `setu_context` as explicit alignment checkpoint).
 3. Agent creates implementation steps with `setu_plan`.
 4. Implementation proceeds in Builder phase, followed by verification evidence.
 
@@ -217,7 +217,7 @@ bun add -g setu-opencode
 Global install auto-bootstraps Setu in normal environments by updating:
 
 - `~/.config/opencode/opencode.json` (adds `setu-opencode` plugin)
-- `~/.config/opencode/agents/setu.md`
+- Setu agent profile under OpenCode global config
 
 If install scripts were blocked or bootstrap did not complete, run:
 
@@ -227,8 +227,8 @@ setu init
 npx setu init
 ```
 
-### Manual Install
-Add Setu manually to `~/.config/opencode/opencode.json`:
+### Manual Bootstrap (Fallback)
+If postinstall bootstrap is skipped, add Setu manually to `~/.config/opencode/opencode.json`:
 
 ```json
 {
@@ -311,7 +311,7 @@ Setu complements other agent productivity tools:
 | [GSD](https://github.com/gsd-build/get-shit-done) | Spec-driven meta-prompting and planning workflows | GSD structures thinking; Setu enforces safety at the tool boundary |
 | [oh-my-opencode](https://github.com/code-yeongyu/oh-my-opencode) | Full orchestration harnesses and workflow automation | Setu stays narrow and auditable as the guardrail/evidence layer |
 | [Beads](https://github.com/steveyegge/beads) | Persistent memory graph for long-horizon agent work | Beads remembers state; Setu prevents unsafe execution |
-| [btca.dev](https://btca.dev) and [better-context](https://pypi.org/project/better-context/) | Codebase grounding and context retrieval | Better context improves retrieval; Setu enforces safe actions and verification |
+| [btca.dev / better-context](https://github.com/davis7dotsh/better-context) | Codebase grounding and context retrieval | Better context improves retrieval; Setu enforces safe actions and verification |
 
 Setu's role: **Guardrails + continuity + verification** inside OpenCode.
 
