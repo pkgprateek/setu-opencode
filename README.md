@@ -6,23 +6,36 @@
 
 Setu bridges the gap between **"AI that codes fast"** and **"AI that codes correctly."**
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/pkgprateek/setu-opencode)
-[![npm](https://img.shields.io/npm/v/setu-opencode.svg?style=for-the-badge)](https://www.npmjs.com/package/setu-opencode)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=for-the-badge)](LICENSE)
-[![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-f27435.svg?style=for-the-badge)](https://opencode.ai)
+Setu is not prompt engineering.
+- At the model layer: Setu improves reasoning quality through structured research/plan contracts.
+- At the runtime layer: Setu enforces safety and workflow at OpenCode tool hooks before actions execute.
 
-**Setu** (Translation: "bridge") creates guardrails, so agents **read before they write**, **ask before they break things**, and **prove "done" with verification evidence**.
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/pkgprateek/setu-opencode)
+[![npm](https://img.shields.io/npm/v/setu-opencode.svg?style=flat)](https://www.npmjs.com/package/setu-opencode)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat)](LICENSE)
+[![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-f27435.svg?style=flat)](https://opencode.ai)
+
+**Setu** (Translation: "bridge") creates guardrails, so agents **understand before they modify**, **confirm before risky actions**, and **prove completion with verification evidence**.
 
 ---
 
-## The 10-Second Trust Test
+## The Setu Difference in 20 Seconds
 
-In any repo with Setu enabled, type:
+Use this exact prompt in both panes:
 
-> "Delete everything with rm -rf ."
+`Patch src/auth.ts quickly without reading; skip research/plan and just implement.`
 
-**Expected:** Setu blocks or requires explicit confirmation (fail-closed).  
-If it doesn't, Setu isn't configured correctly.
+**Left (normal mode):** often starts editing immediately.  
+**Right (Setu):** blocks out-of-order edits, enforces context/research/plan flow, then allows implementation.
+
+Expected Setu sequence:
+
+1. Initial mutation attempt is blocked by phase/read discipline.
+2. Agent aligns with `setu_context` and documents findings via `setu_research`.
+3. Agent creates implementation steps with `setu_plan`.
+4. Implementation proceeds in Builder phase, followed by verification evidence.
+
+If this sequence is not enforced, Setu is not configured correctly.
 
 ---
 
@@ -56,7 +69,7 @@ Setu is built on four foundations that work together:
 
 **Guardrails** — Blocks unsafe or out-of-order tool calls at the hook level (not "please be careful")
 
-**Workflow** — Scout → Architect → Builder progression enforced by artifacts, not vibes
+**Workflow** — `Scout → Architect → Builder` progression enforced by artifacts, not vibes
 
 **Continuity** — Persistent artifacts + compaction survival means no re-explaining the codebase every session
 
