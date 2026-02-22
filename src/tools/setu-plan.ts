@@ -45,6 +45,22 @@ function safeClearResults(projectDir: string): string | null {
   }
 }
 
+function extractPlanPreview(content: string): string {
+  const firstMeaningfulLine = content
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .find(line => line.length > 0) ?? '';
+
+  const normalized = firstMeaningfulLine
+    .replace(/^#+\s*/, '')
+    .replace(/^[-*]\s*/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!normalized) return '';
+  return normalized.length > 120 ? `${normalized.slice(0, 117)}...` : normalized;
+}
+
 export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<typeof tool> => tool({
   description: PLAN_TOOL_EXPECTATIONS,
   args: {
@@ -120,9 +136,10 @@ export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<type
     }
 
     const safeObjective = args.objective ? sanitizeObjective(args.objective) : '';
+    const preview = safeObjective ? '' : extractPlanPreview(sanitizedContent);
     const warningSuffix = cleanupWarnings.length > 0
       ? ` Cleanup warning: ${cleanupWarnings.join('; ')}.`
       : '';
-    return `Plan ${mode === 'append' ? 'revised' : 'created'}${safeObjective ? ': ' + safeObjective : ''}.${warningSuffix}`;
+    return `Plan ${mode === 'append' ? 'revised' : 'created'}${safeObjective ? ': ' + safeObjective : ''}.${warningSuffix}${preview ? ` Ready to execute: ${preview}.` : ''} Reply "go" to start, or tell me what to adjust.`;
   }
 });

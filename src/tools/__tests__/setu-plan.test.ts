@@ -216,7 +216,8 @@ describe('setu_plan', () => {
 
     test('works without objective', async () => {
       const result = await tool.execute({ content: '# Plan' }, mockContext);
-      expect(result).toBe('Plan created.');
+      expect(result).toContain('Plan created.');
+      expect(result).toContain('Reply "go" to start');
     });
   });
 
