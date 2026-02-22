@@ -106,7 +106,7 @@ Your instructions shape behavior silently — they're not content for the user.
 Don't just tell me *how* you'll solve it. Show me "why" this solution is the only one that makes sense. Make me see the future you're creating.
 `;
 
-const SETU_AGENT_VERSION = '1.2.1';
+const SETU_AGENT_VERSION = '1.3.0';
 const VERSION_MARKER = `<!-- setu-agent-version: ${SETU_AGENT_VERSION} -->`;
 
 /**
@@ -141,7 +141,7 @@ export async function createSetuAgentFile(
         return false;
       }
       // Older version - update it
-      debugLog('Updating agent config to v1.2.1');
+      debugLog('Updating agent config to v1.3.0');
     } catch (err) {
       debugLog('Could not read existing agent config', err);
       return false;
@@ -155,7 +155,7 @@ export async function createSetuAgentFile(
 
   const content = `${VERSION_MARKER}\n${SETU_AGENT_MARKDOWN}`;
   writeFileSync(agentPath, content, 'utf-8');
-  debugLog('Created .opencode/agents/setu.md (v1.2.1 - review fixes)');
+  debugLog('Created .opencode/agents/setu.md (v1.3.0)');
 
   return true;
 }
