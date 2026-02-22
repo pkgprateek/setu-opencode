@@ -21,13 +21,17 @@ Research must be comprehensive - minimize additional discovery for normal tasks:
 5. RISKS & FAILURE MODES - Known limitations, mitigation strategies
 6. VERIFICATION STRATEGY - How to confirm this works
 7. OPEN DECISIONS - Unresolved questions requiring user input (when applicable)
+8. ASSUMPTIONS TO CONFIRM - Explicit assumptions that must be confirmed before execution
+9. DX/UX & OPERABILITY IMPACT (when applicable) - How the solution affects user/developer flow, error clarity, and day-2 maintainability
 
 Example GOOD:
 "Building T4 Canvas image studio for AI generation...
 Intent: Power-user interface for multiple AI models (Nano Banana Pro, Flux 2, GPT-image-1.5, Seedream)...
 Technical: Vite + React + TypeScript + Tailwind chosen...
 Tradeoffs: Rejected Next.js - no SSR needed, static export sufficient...
-Risks: Tailwind v4 config differences, model API rate limits..."
+Risks: Tailwind v4 config differences, model API rate limits...
+Assumptions to confirm: target scaffold path and package manager before initialization...
+DX/UX impact: all visible controls are wired or explicitly marked non-interactive..."
 
 Example BAD:
 "Building a React app with auth. Will use JWT. Need login page."
@@ -41,12 +45,24 @@ Example BAD:
 export const PLAN_SEMANTIC_REQUIREMENTS = `
 Plan must be atomically detailed - executable without interpretation:
 
-Each unit of work needs:
+Plan should include:
+- OBJECTIVE - What outcome this plan delivers
+- CONTEXT SUMMARY - Brief grounding from research
+- GOALS / NON-GOALS - Scope boundaries
+- ASSUMPTIONS / CONSTRAINTS - Environment, path, runtime, and policy constraints
+- FILE-LEVEL EDIT LIST - Specific files or modules expected to change
+- EXECUTION STEPS - Ordered phases/tasks that can be executed directly
+
+Each unit of work in Execution Steps needs:
 - WHY - Business or technical justification
 - FILES - Specific paths being created/modified
 - CHANGE INTENT - What the change accomplishes
 - VERIFICATION - How to confirm it works
+- DONE WHEN - Observable completion condition
+- INTEGRATION IMPACT - How this connects with surrounding system (API/data/UI/CLI as applicable)
 - EDGE CASES - What could go wrong (when applicable)
+
+Completeness check (depends on project): include required wiring across interfaces, handlers, state/data flow, tests/docs, and operational readiness so the outcome feels complete.
 
 Structure naturally (Phase > Task > Step or equivalent), focus on semantic completeness.
 
@@ -56,7 +72,9 @@ Task 1.1: Project Scaffold
 - Initialize Vite React TS project
   - Why: Dev server, HMR, production build out of box
   - Files: package.json, vite.config.ts, tsconfig.json
-  - Verification: npm run dev starts on port 4000"
+  - Verification: npm run dev starts on port 4000
+  - Done When: app shell renders on expected port and route path
+  - Integration Impact: routing, styling pipeline, and app entry are connected"
 
 Example BAD:
 "1) Setup project 2) Add auth 3) Build UI"
@@ -73,7 +91,7 @@ export const RESEARCH_TOOL_EXPECTATIONS = `Create comprehensive RESEARCH.md cove
  * Compact plan expectations for tool description
  * Reinforces quality at call-time without bloat
  */
-export const PLAN_TOOL_EXPECTATIONS = `Create detailed PLAN.md with atomic steps including why, files touched, verification method. Structure naturally (Phase > Task > Step). Include rollback notes and success criteria.`;
+export const PLAN_TOOL_EXPECTATIONS = `Create detailed PLAN.md with atomic steps including why, files touched, verification method. Structure naturally (Phase > Task > Step). Include rollback notes and success criteria. After .setu/PLAN.md is complete, provide user with plan preview and ask: Reply "go" to start, or tell me what to adjust.`;
 
 /**
  * Reference example template - NOT enforced

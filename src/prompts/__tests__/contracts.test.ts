@@ -73,7 +73,7 @@ describe('contracts', () => {
   describe('research tool expectations', () => {
     test('should be compact without examples', () => {
       const content = RESEARCH_TOOL_EXPECTATIONS;
-      expect(content.length).toBeLessThan(300);
+      expect(content.length).toBeLessThan(500);
       expect(content).toContain('intent');
       expect(content).toContain('technical');
       expect(content).toContain('tradeoffs');
@@ -84,7 +84,7 @@ describe('contracts', () => {
   describe('plan tool expectations', () => {
     test('should be compact without examples', () => {
       const content = PLAN_TOOL_EXPECTATIONS;
-      expect(content.length).toBeLessThan(300);
+      expect(content.length).toBeLessThan(500);
       expect(content).toContain('atomic');
       expect(content).toContain('why');
       expect(content).toContain('files');
