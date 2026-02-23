@@ -91,7 +91,8 @@ export function createSetuTaskTool(
 
 **Actions:**
 - \`create\`: Start a new task with optional constraints
-- \`update\`: Change task status (in_progress, completed, blocked)
+- \`reframe\`: Update task intent/constraints without resetting workflow artifacts
+- \`update_status\`: Change task status (in_progress, completed, blocked)
 - \`clear\`: Remove the active task (on completion or cancellation)
 - \`get\`: View current active task
 
@@ -108,7 +109,7 @@ Active tasks persist to \`.setu/active.json\` and survive:
     
     args: {
       action: tool.schema.string().describe(
-        'Action to perform: create, update, clear, get'
+        'Action to perform: create, reframe, update_status, clear, get'
       ),
       task: tool.schema.string().optional().describe(
         'Task description (required for create)'
@@ -117,7 +118,7 @@ Active tasks persist to \`.setu/active.json\` and survive:
         'Constraints to apply: READ_ONLY, NO_PUSH, NO_DELETE, SANDBOX'
       ),
       status: tool.schema.string().optional().describe(
-        'New status for update action: in_progress, completed, blocked'
+        'New status for update_status action: in_progress, completed, blocked'
       ),
       references: tool.schema.array(tool.schema.string()).optional().describe(
         'Reference URLs or file paths related to the task'
@@ -188,7 +189,12 @@ setu_task({
             newTask.references = args.references;
           }
           
-          saveActiveTask(projectDir, newTask);
+          try {
+            saveActiveTask(projectDir, newTask);
+          } catch (saveError) {
+            debugLog(`Failed to save new task in ${projectDir}: ${getErrorMessage(saveError)}`);
+            return `**Error:** Failed to save new task. Please retry.`;
+          }
           
           // Reset verification state for new task
           if (resetVerificationState) {
@@ -208,8 +214,67 @@ ${formatTask(newTask)}${constraintNote}
 
 Task saved to \`.setu/active.json\`. Constraints will be enforced until task is cleared.`;
         }
+
+        case 'reframe': {
+          const currentTask = loadActiveTask(projectDir);
+
+          if (!currentTask) {
+            return `**Error:** No active task found to reframe.
+
+Create a task first:
+\`\`\`
+setu_task({ action: "create", task: "Your task description" })
+\`\`\``;
+          }
+
+          if (!args.task?.trim()) {
+            return `**Error:** Task description is required for reframe action.
+
+Example:
+\`\`\`
+setu_task({
+  action: "reframe",
+  task: "Refine auth rotation fix for backward compatibility",
+  constraints: ["NO_PUSH"]
+})
+\`\`\``;
+          }
+
+          const validatedConstraintUpdate = args.constraints ? validateConstraints(args.constraints) : null;
+          const attemptedConstraintClear = args.constraints !== undefined && (validatedConstraintUpdate?.length ?? 0) === 0;
+
+          if (attemptedConstraintClear) {
+            debugLog(`[AUDIT] Constraint clear attempt during reframe blocked. Project: ${projectDir}`);
+          }
+
+          const reframedTask: ActiveTask = {
+            ...currentTask,
+            task: args.task,
+            constraints: validatedConstraintUpdate && validatedConstraintUpdate.length > 0
+              ? validatedConstraintUpdate
+              : currentTask.constraints,
+          };
+
+          if (args.references && args.references.length > 0) {
+            reframedTask.references = args.references;
+          }
+
+          try {
+            saveActiveTask(projectDir, reframedTask);
+          } catch (saveError) {
+            debugLog(`Failed to save reframed task in ${projectDir}: ${getErrorMessage(saveError)}`);
+            return `**Error:** Failed to save reframed task. Please retry.`;
+          }
+          debugLog(`Reframed active task: "${args.task.slice(0, 50)}..."`);
+
+          return `## Task Reframed
+
+${formatTask(reframedTask)}
+
+Workflow artifacts were preserved. Continue with \`setu_research\`/\`setu_plan\` in append or auto mode.`;
+        }
         
-        case 'update': {
+        case 'update_status': {
           const currentTask = loadActiveTask(projectDir);
           
           if (!currentTask) {
@@ -224,7 +289,7 @@ setu_task({ action: "create", task: "Your task description" })
           const newStatus = validateStatus(args.status);
           
           if (!newStatus) {
-            return `**Error:** Valid status required for update action.
+            return `**Error:** Valid status required for update_status action.
 
 Valid statuses: \`in_progress\`, \`completed\`, \`blocked\`
 
@@ -291,7 +356,8 @@ ${formatTask(currentTask)}`;
 
 Valid actions:
 - \`create\`: Start a new task
-- \`update\`: Change task status
+- \`reframe\`: Update task intent/constraints while preserving artifacts
+- \`update_status\`: Change task status
 - \`clear\`: Remove active task
 - \`get\`: View current task
 

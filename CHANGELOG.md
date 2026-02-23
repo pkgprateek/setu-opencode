@@ -27,6 +27,9 @@ All notable changes to this project are documented here.
   - created on first Setu message in a session when missing
   - no eager creation at plugin startup
 - Typecheck setup aligned for Bun test typings (`bun-types` in TypeScript config).
+- BREAKING: `setu_task` action parameters updated:
+  - `update` replaced by `update_status`
+  - `reframe` added to update task intent/constraints without resetting artifacts
 
 ### Removed
 
