@@ -193,6 +193,7 @@ export function createSystemTransformHook(
                 "Use any available discovery/read tools and any non-destructive discovery tools to gather evidence.\n" +
                 "You are not required to plan yet; continue research until confidence is high.\n" +
                 "Do not make assumptions when path/runtime/scope is ambiguous; ask the user before scaffolding or branching work.\n" +
+                "Task lifecycle: use setu_task(create) only for a new objective; use setu_task(reframe) when scope changes but artifacts should be preserved.\n" +
                 "You may update research artifacts via setu_research; generic file edits are restricted in this phase.",
             );
             break;
@@ -202,6 +203,7 @@ export function createSystemTransformHook(
                 "Research findings saved. You may continue discovery or plan when ready.\n" +
                 "Call setu_plan() only when you have sufficient information to execute confidently.\n" +
                 "Do not make assumptions when target directory/package manager/port is ambiguous; ask the user before scaffolding.\n" +
+                "Task lifecycle: new objective -> setu_task(create), same objective refinement -> setu_task(reframe), status updates -> setu_task(update_status).\n" +
                 "No forced transition—quality over speed.\n" +
                 "After setu_plan: show user \"Ready to execute: [objective]. Reply 'go' or tell me adjustments\"",
             );
@@ -210,6 +212,7 @@ export function createSystemTransformHook(
             output.system.unshift(
               "[Setu] Builder Mode: Execution Phase\n" +
                 "Prioritize implementation; do targeted discovery only when blocked or validating assumptions.\n" +
+                "If user requests a new objective, create a new task boundary via setu_task(create) before implementation.\n" +
                 "Execute PLAN.md steps. Run setu_verify() before declaring done.",
             );
             break;

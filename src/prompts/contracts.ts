@@ -23,6 +23,7 @@ Research must be comprehensive - minimize additional discovery for normal tasks:
 7. OPEN DECISIONS - Unresolved questions requiring user input (when applicable)
 8. ASSUMPTIONS TO CONFIRM - Explicit assumptions that must be confirmed before execution
 9. DX/UX & OPERABILITY IMPACT (when applicable) - How the solution affects user/developer flow, error clarity, and day-2 maintainability
+10. TASK LIFECYCLE FIT - Use setu_task(create) only for new objectives; use setu_task(reframe) when refining same objective; use setu_task(update_status) for progress tracking
 
 Example GOOD:
 "Building T4 Canvas image studio for AI generation...
@@ -63,6 +64,7 @@ Each unit of work in Execution Steps needs:
 - EDGE CASES - What could go wrong (when applicable)
 
 Completeness check (depends on project): include required wiring across interfaces, handlers, state/data flow, tests/docs, and operational readiness so the outcome feels complete.
+Task lifecycle fit: new objective => setu_task(create); same objective refinement => setu_task(reframe); progress state => setu_task(update_status).
 
 Structure naturally (Phase > Task > Step or equivalent), focus on semantic completeness.
 
