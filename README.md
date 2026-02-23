@@ -1,7 +1,7 @@
 # Setu for OpenCode
 
-> **Pre-emptive guardrails for AI coding in OpenCode.**
-> **Think first. Verify always. Ship with evidence.**
+> **Pre-emptive guardrails for AI coding agents in OpenCode.**
+> **From fast-but-fragile to reliable, boringly-correct, senior-level engineering.**
 > Other tools fix mistakes after they happen. Setu prevents them before they start.
 
 Setu bridges the gap between **"AI that codes fast"** and **"AI that codes correctly."**
@@ -15,13 +15,23 @@ Setu is not prompt engineering.
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat)](LICENSE)
 [![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-f27435.svg?style=flat)](https://opencode.ai)
 
-**Setu** (Translation: "bridge") creates guardrails, so agents **understand before they modify**, **confirm before risky actions**, and **prove completion with verification evidence**.
+**Setu** (Translation: "bridge") focuses on Developer Experience by creating guardrails, so agents **understand before they modify**, **confirm before risky actions**, and **prove completion with verification evidence**.
 
 ---
 
-## The Setu Difference in 20 Seconds
+## The Setu Difference
+
+Same task. Safer outcome.
 
 Use this exact prompt in both panes:
+
+![Build mode vs Setu mode](./assets/demo.gif)
+<details>
+<summary>What you’re seeing</summary>
+- Left: normal Build mode (agent executes immediately)
+- Right: Setu mode (agent is forced through Scout → Architect → Builder)
+- Key moment: Setu blocks an unsafe/out-of-order action and shows the next safe step.
+</details>
 
 `Patch src/auth.ts quickly without reading; skip research/plan and just implement.`
 
@@ -43,14 +53,14 @@ If this sequence is not enforced, Setu is not configured correctly.
 
 I was building a product. Three times, my AI agent — one of the best available — cost me hours of work. Not maliciously. It just *forgot*.
 
-### Case 1: The 12-Hour Deletion
-It forgot I told it not to touch certain files. It forgot the architecture we discussed. It forgot why we made specific decisions three prompts ago. Gone. Twelve hours of careful work.
+### Incident 1: The 12-Hour Deletion
+It forgot I told it not to touch certain files. It forgot the architecture we discussed. It forgot why we made specific decisions 3-4 prompts ago. Gone. Twelve hours of careful work - hard overwrite, all gone. Wasted additional 3+ hours to recover everything.
 
-### Case 2: The Git Reset From Hell
+### Incident 2: The Git Reset From Hell
 I had uncommitted changes — experimental work I wasn't ready to commit yet. The agent decided to "clean up" and ran `git reset --hard`. My entire afternoon of exploration: vanished. No warning, no "are you sure?" Just gone.
 
-### Case 3: The Build That Wasn't
-I asked it to check if my dev server was running before building. It nodded along, said "absolutely," then immediately ran `npm run build` anyway — overwriting my bundles, killing my server, and breaking my local environment. It *said* it understood. It didn't.
+### Incident 3: The Build That Wasn't
+I asked it to check if my `dev server` was running before building. It nodded along, said "absolutely," then immediately ran `bun run build` anyway — overwriting my bundles, killing my server, and breaking my local environment. It *said* it understood. It didn't.
 
 ### The Daily Grind
 Every new session: "Let me explain the codebase again..."  
@@ -59,7 +69,7 @@ Every build command: "Please check if the dev server is running first..."
 
 I was spending more time re-explaining than coding. Burning tokens on ghost loops — the same broken approach, 15 retries, zero progress.
 
-**So I built the guardrails I needed.**
+**So I built the DX + guardrails I needed.**
 
 ---
 
@@ -69,9 +79,9 @@ Setu is built on four foundations that work together:
 
 **Guardrails** — Blocks unsafe or out-of-order tool calls at the hook level (not "please be careful")
 
-**Workflow** — `Scout → Architect → Builder` progression enforced by artifacts, not vibes
+**Gear Workflow** — `Scout → Architect → Builder` progression enforced by native gears and artifacts, not vibes
 
-**Continuity** — Persistent artifacts + compaction survival means no re-explaining the codebase every session
+**Hydration & Continuity** — Persistent artifacts + compaction survival means no re-explaining the codebase every session
 
 **Evidence** — Verification logs prove "done" means "works," not "I'm confident"
 
@@ -85,7 +95,7 @@ Setu is built on four foundations that work together:
 
 **Better models?** They will still hallucinate, still forget context, still rush to implementation.
 
-**The truth:** You can't solve this with better prompts. You need **structure + enforcement**.
+**The truth:** You can't solve this with better prompts. You need `structure + enforcement`.
 
 ---
 
@@ -219,13 +229,10 @@ Global install auto-bootstraps Setu in normal environments by updating:
 - `~/.config/opencode/opencode.json` (adds `setu-opencode` plugin)
 - Setu agent profile under OpenCode global config
 
-If install scripts were blocked or bootstrap did not complete, run:
+If install scripts were blocked or bootstrap did not complete:
 
-```bash
-setu init
-# fallback if global binary is unavailable
-npx setu init
-```
+- Primary: `setu init`
+- Fallback: If `setu` is unavailable, run `npx setu init`
 
 ### Manual Bootstrap (Fallback)
 If postinstall bootstrap is skipped, add Setu manually to `~/.config/opencode/opencode.json`:
@@ -236,7 +243,7 @@ If postinstall bootstrap is skipped, add Setu manually to `~/.config/opencode/op
 }
 ```
 
-Restart Opencode.
+Restart OpenCode.
 
 ### 30-Second Proof (Run This)
 
@@ -267,10 +274,10 @@ If this flow is not enforced, Setu is not configured correctly.
 | `setu_plan` | Create implementation plan (Architect phase) |
 | `setu_verify` | Run build/test/lint (Builder phase) |
 | `setu_doctor` | Check environment before executing |
-| `setu_task` | Create tasks with constraints |
+| `setu_task` | Manage task lifecycle (`create`, `reframe`, `update_status`, `clear`, `get`) |
 | `setu_reset` | Reset progress to restart current plan |
 
-**Important:** `setu_research` and `setu_plan` use `auto` mode by default, which appends to existing files. To start a completely new task, use `setu_task` first—it archives old artifacts to HISTORY.md and resets the workflow to Scout gear. This prevents unrelated tasks from merging into the same artifact.
+**Important:** `setu_research` and `setu_plan` use `auto` mode by default, which appends to existing files. For a completely new objective, use `setu_task(action="create")` first—it archives old artifacts to HISTORY.md and resets the workflow to Scout gear. For same-objective refinements, use `setu_task(action="reframe")` to preserve artifacts.
 
 ---
 
