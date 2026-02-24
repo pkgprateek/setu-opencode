@@ -12,7 +12,7 @@
  */
 
 import { tool } from '@opencode-ai/plugin';
-import { appendFileSync, existsSync, readFileSync, unlinkSync } from 'fs';
+import { appendFile, readFile, unlink } from 'fs/promises';
 import { join } from 'path';
 import {
   createActiveTask,
@@ -57,6 +57,31 @@ function validateStatus(input: string | undefined): TaskStatus | null {
     return input as TaskStatus;
   }
   return null;
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error;
+}
+
+function sanitizeReferences(references: string[] | undefined): string[] {
+  if (!references || !Array.isArray(references)) return [];
+
+  return references
+    .map((reference) => removeControlChars(reference).trim())
+    .filter((reference) => reference.length > 0)
+    .filter((reference) => {
+      if (/^https?:\/\//i.test(reference)) {
+        try {
+          const parsed = new URL(reference);
+          return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        } catch {
+          return false;
+        }
+      }
+
+      // Allow plain file path references while rejecting URI-like schemes.
+      return !reference.includes('://');
+    });
 }
 
 /**
@@ -128,7 +153,7 @@ Active tasks persist to \`.setu/active.json\` and survive:
     
     async execute(args, _context): Promise<string> {
       const projectDir = getProjectDir();
-      const action = args.action?.toLowerCase();
+      const action = removeControlChars(String(args.action ?? '').toLowerCase()).trim() || 'unknown';
       
       switch (action) {
         case 'create': {
@@ -155,31 +180,35 @@ setu_task({
           const historyPath = join(setuDir, 'HISTORY.md');
 
           try {
-            if (existsSync(researchPath)) {
-              const timestamp = new Date().toISOString();
-              const oldResearch = readFileSync(researchPath, 'utf-8');
-              const archiveEntry = `\n---\n## Archived Research (${timestamp})\n\n${oldResearch}\n`;
-              appendFileSync(historyPath, archiveEntry, 'utf-8');
-              unlinkSync(researchPath);
-              debugLog('Archived old RESEARCH.md to HISTORY.md');
-            }
+            const timestamp = new Date().toISOString();
+            const oldResearch = await readFile(researchPath, 'utf-8');
+            const archiveEntry = `\n---\n## Archived Research (${timestamp})\n\n${oldResearch}\n`;
+            await appendFile(historyPath, archiveEntry, 'utf-8');
+            await unlink(researchPath);
+            debugLog('Archived old RESEARCH.md to HISTORY.md');
           } catch (archiveError) {
+            if (isNodeError(archiveError) && archiveError.code === 'ENOENT') {
+              // Nothing to archive.
+            } else {
             debugLog(`Failed to archive RESEARCH.md: ${getErrorMessage(archiveError)}`);
             // Continue — partial archive failure should not block task creation
+            }
           }
 
           try {
-            if (existsSync(planPath)) {
-              const timestamp = new Date().toISOString();
-              const oldPlan = readFileSync(planPath, 'utf-8');
-              const archiveEntry = `\n---\n## Archived Plan (${timestamp})\n\n${oldPlan}\n`;
-              appendFileSync(historyPath, archiveEntry, 'utf-8');
-              unlinkSync(planPath);
-              debugLog('Archived old PLAN.md to HISTORY.md');
-            }
+            const timestamp = new Date().toISOString();
+            const oldPlan = await readFile(planPath, 'utf-8');
+            const archiveEntry = `\n---\n## Archived Plan (${timestamp})\n\n${oldPlan}\n`;
+            await appendFile(historyPath, archiveEntry, 'utf-8');
+            await unlink(planPath);
+            debugLog('Archived old PLAN.md to HISTORY.md');
           } catch (archiveError) {
+            if (isNodeError(archiveError) && archiveError.code === 'ENOENT') {
+              // Nothing to archive.
+            } else {
             debugLog(`Failed to archive PLAN.md: ${getErrorMessage(archiveError)}`);
             // Continue — partial archive failure should not block task creation
+            }
           }
           
           const constraints = validateConstraints(args.constraints);
@@ -188,8 +217,9 @@ setu_task({
           const newTask = createActiveTask(sanitizedTask, constraints);
           
           // Add references if provided
-          if (args.references && args.references.length > 0) {
-            newTask.references = args.references;
+          const sanitizedReferences = sanitizeReferences(args.references);
+          if (sanitizedReferences.length > 0) {
+            newTask.references = sanitizedReferences;
           }
           
           try {
@@ -252,14 +282,16 @@ setu_task({
             validatedConstraintUpdate.length > 0 &&
             currentTask.constraints.some((existing) => !validatedConstraintUpdate.includes(existing));
 
-          if (attemptedConstraintClear) {
-            errorLog(`[AUDIT] Constraint clear attempt during reframe blocked. Project: ${projectDir}`);
+          if (attemptedConstraintClear || attemptedConstraintDowngrade) {
+            const blockedActions: string[] = [];
+            if (attemptedConstraintClear) blockedActions.push('clear');
+            if (attemptedConstraintDowngrade) blockedActions.push('downgrade');
+            errorLog(`[AUDIT] Constraint ${blockedActions.join('+')} attempt during reframe blocked. Project: ${projectDir}`);
           }
 
-          if (attemptedConstraintDowngrade) {
-            errorLog(`[AUDIT] Constraint downgrade attempt during reframe blocked. Project: ${projectDir}`);
-          }
-
+          // nextConstraints preserves currentTask.constraints when attemptedConstraintDowngrade is true;
+          // otherwise it applies validatedConstraintUpdate only when non-empty. attemptedConstraintClear
+          // forces validatedConstraintUpdate empty, so this falls back to currentTask.constraints.
           const nextConstraints = attemptedConstraintDowngrade
             ? currentTask.constraints
             : (validatedConstraintUpdate && validatedConstraintUpdate.length > 0
@@ -272,8 +304,9 @@ setu_task({
             constraints: nextConstraints,
           };
 
-          if (args.references && args.references.length > 0) {
-            reframedTask.references = args.references;
+          const sanitizedReferences = sanitizeReferences(args.references);
+          if (sanitizedReferences.length > 0) {
+            reframedTask.references = sanitizedReferences;
           }
 
           try {
@@ -369,7 +402,8 @@ ${formatTask(currentTask)}`;
         }
         
         default: {
-          return `**Error:** Unknown action \`${action}\`.
+          const sanitizedAction = action.replace(/[\[`\]]/g, '');
+          return `**Error:** Unknown action \`${sanitizedAction || 'unknown'}\`.
 
 Valid actions:
 - \`create\`: Start a new task
