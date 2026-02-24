@@ -4,7 +4,6 @@
 
 export { createSetuVerifyTool } from './setu-verify';
 export { createSetuContextTool } from './setu-context';
-export { createSetuFeedbackTool } from './setu-feedback';
 export { createSetuTaskTool } from './setu-task';
 export { createSetuResearchTool } from './setu-research';
 export { createSetuPlanTool } from './setu-plan';

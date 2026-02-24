@@ -1,6 +1,6 @@
 # Setu Diagrams
 
-This file contains the public diagram set defined in `docs/internal/DIAGRAMS.md`.
+Public diagram set for Setu.
 
 ## Diagram 1: Session Flow
 

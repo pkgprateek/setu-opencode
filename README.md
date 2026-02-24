@@ -1,33 +1,59 @@
-# Setu OpenCode
+# Setu for OpenCode
 
-> **Pre-emptive discipline for AI coding in OpenCode.**
-> **Think first. Verify always. Ship with evidence.**
+> **Pre-emptive guardrails for AI coding agents in OpenCode.** <br>
+> **From fast-but-fragile to reliable, boringly-correct, senior-level engineering.** <br>
 > Other tools fix mistakes after they happen. Setu prevents them before they start.
 
-Setu bridges the gap between "AI that codes fast" and "AI that codes correctly."
+Setu bridges the gap between **"AI that codes fast"** and **"AI that codes correctly."**
+
+Setu is not prompt engineering.
+- At the model layer: Setu improves reasoning quality through structured research/plan contracts.
+- At the runtime layer: Setu enforces safety and workflow at OpenCode tool hooks before actions execute.
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/pkgprateek/setu-opencode)
-[![npm](https://img.shields.io/npm/v/setu-opencode.svg?style=for-the-badge)](https://www.npmjs.com/package/setu-opencode)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=for-the-badge)](LICENSE)
-[![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-f27435.svg?style=for-the-badge)](https://opencode.ai)
+[![npm](https://img.shields.io/npm/v/setu-opencode.svg?style=flat)](https://www.npmjs.com/package/setu-opencode)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat)](LICENSE)
+[![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-f27435.svg?style=flat)](https://opencode.ai)
 
-**Setu** (Sanskrit: सेतु, "bridge") is a discipline layer that helps agents read before they write.
+**Setu** (Translation: "bridge") focuses on Developer Experience by creating guardrails, so agents **understand before they modify**, **confirm before risky actions**, and **prove completion with verification evidence**.
 
 ---
 
 ## Why I Built This
 
-I was building a product. Twice, my AI agent — one of the best available — deleted 12+ hours of my work. Not maliciously. It just *forgot*. It forgot I told it not to touch certain files. It forgot the architecture we discussed. It forgot why we made specific decisions three prompts ago.
+I was building a product. Three times, my AI agent — one of the best available — cost me hours of work. Not maliciously. It just *forgot*.
 
-And when I ran my dev server, it ran `npm run build` anyway — overwriting my bundles, breaking my local environment.
+### Incident 1: The 12-Hour Deletion
+It forgot I told it not to touch certain files. It forgot the architecture we discussed. It forgot why we made specific decisions 3-4 prompts ago. Gone. Twelve hours of careful work - hard overwrite, all gone. Wasted additional 3+ hours to recover everything.
 
+### Incident 2: The Git Reset From Hell
+I had uncommitted changes — experimental work I wasn't ready to commit yet. The agent decided to "clean up" and ran `git reset --hard`. My entire afternoon of exploration: vanished. No warning, no "are you sure?" Just gone.
+
+### Incident 3: The Build That Wasn't
+I asked it to check if my `dev server` was running before building. It nodded along, said "absolutely," then immediately ran `bun run build` anyway — overwriting my bundles, killing my server, and breaking my local environment. It *said* it understood. It didn't.
+
+### The Daily Grind
 Every new session: "Let me explain the codebase again..."  
 Every compaction: "No, we already tried that approach..."  
 Every build command: "Please check if the dev server is running first..."
 
 I was spending more time re-explaining than coding. Burning tokens on ghost loops — the same broken approach, 15 retries, zero progress.
 
-**So I built the discipline layer I needed.** Setu bridges the gap between "AI that codes fast" and "AI that codes correctly."
+**So I built the DX + guardrails I needed.**
+
+---
+
+## Four Pillars
+
+Setu is built on four foundations that work together:
+
+**Guardrails** — Blocks unsafe or out-of-order tool calls at the hook level (not "please be careful")
+
+**Gear Workflow** — `Scout → Architect → Builder` progression enforced by native gears and artifacts, not vibes
+
+**Hydration & Continuity** — Persistent artifacts + compaction survival means no re-explaining the codebase every session
+
+**Evidence** — Verification logs prove "done" means "works," not "I'm confident"
 
 ---
 
@@ -39,24 +65,15 @@ I was spending more time re-explaining than coding. Burning tokens on ghost loop
 
 **Better models?** They will still hallucinate, still forget context, still rush to implementation.
 
-**The truth:** You can't solve this with better prompts. You need **structure**.
+**The truth:** You can't solve this with better prompts. You need `structure + enforcement`.
 
 ---
-
-## Setu: Structure That Actually Works
-
-Setu doesn't ask your agent to "be more careful." It creates a workflow where carefulness is the default.
-
-<img src="assets/architecture.svg" alt="Component Architecture" width="1000" />
-
----
-Need the full architecture set? See [docs/DIAGRAMS.md](./docs/DIAGRAMS.md).
 
 ## How It Works (No Willpower Required)
 
-Setu hydrates each session — gathering context and understanding your codebase before any gears engage. Your agent then automatically progresses through three phases. Can't skip. Can't rush.
+Setu hydrates each session — gathering context and understanding your codebase before any gears engage. Your agent then progresses through three phases with artifact-driven, hook-enforced transitions.
 
-**🔍 Scout: Understand First, Build Never**
+### Scout: Understand First, Build Never
 
 Agent can read. Can explore. Can analyze. **Cannot write a single line of code.**
 
@@ -66,7 +83,7 @@ Agent can read. Can explore. Can analyze. **Cannot write a single line of code.*
 
 *Result: Solid foundation before any code is written.*
 
-**📐 Architect: Design the Approach**
+### Architect: Design the Approach
 
 Agent creates PLAN.md with implementation steps. **Still cannot touch your source code.**
 
@@ -74,9 +91,9 @@ Agent creates PLAN.md with implementation steps. **Still cannot touch your sourc
 - Designs the approach
 - Documents in `.setu/PLAN.md`
 
-*You review. You approve. Only then does it proceed.*
+*You review and approve before execution; runtime safety gates still enforce risky actions independently.*
 
-**🔨 Builder: Execute With Confidence**
+### Builder: Execute With Confidence
 
 Now (and only now) does it implement. Verification runs at the end, and you can run `setu_verify` after major steps.
 
@@ -87,6 +104,24 @@ Now (and only now) does it implement. Verification runs at the end, and you can 
 *Build fails? Won't claim "done." Tests fail? Won't claim "done."*
 
 **The gears shift automatically.** Your agent can't accidentally skip ahead. The workflow ensures every phase gets the attention it deserves.
+
+---
+
+## Contract-Driven Quality
+
+Setu doesn't just block bad actions—it **guides** the model to produce better artifacts.
+
+**Before Generation:** Setu injects detailed contracts into the system prompt, telling the model exactly what comprehensive research and atomic planning look like.
+
+**Research Contract:** Intent/PRD, technical analysis, alternatives/tradeoffs, risks, verification, open decisions
+
+**Plan Contract:** Atomic steps with why, files touched, change intent, verification method, edge cases
+
+**After Generation:** Setu writes the model's output **verbatim**—no reformatting, no structure coercion, zero knowledge loss. The model produces comprehensive content with its own structure; Setu preserves it exactly.
+
+This is **soft guidance, not hard enforcement**: the model knows what quality looks like, then creates accordingly.
+
+**The distinction:** Hooks enforce workflow phases (hard) while contracts guide output quality (soft). Hooks block invalid actions and control phase transitions; contracts prescribe what good research and plans look like, but do not enforce control flow.
 
 ---
 
@@ -138,7 +173,7 @@ Three independent layers protect your codebase:
 | Layer | Purpose | How It Helps |
 |-------|---------|--------------|
 | **Hydration Gate** | Prevents action before understanding | Agent explores safely first; write paths unlock only after understanding is established |
-| **Confirmation Flow** | Double-checks risky operations | Production deployments, destructive commands prompt for explicit approval |
+| **Confirmation Flow** | Double-checks risky operations | Production-impacting commands require explicit approval; destructive commands are hard-blocked |
 | **Read-Before-Write** | Prevents accidental overwrites | Agent must read existing files before editing them |
 
 These aren't roadblocks—they're guardrails that keep your agent on the right path.
@@ -147,25 +182,38 @@ These aren't roadblocks—they're guardrails that keep your agent on the right p
 
 ## Installation (30 Seconds)
 
-Current stable path:
+`setu-opencode` is published on npm, so npm/pnpm/bun can install the same package.
+
+### Option A: Global install (recommended)
+
+```bash
+npm install -g setu-opencode
+# or
+pnpm add -g setu-opencode
+# or
+bun add -g setu-opencode
+```
+
+Global install auto-bootstraps Setu in normal environments by updating:
+
+- `~/.config/opencode/opencode.json` (adds `setu-opencode` plugin)
+- Setu agent profile under OpenCode global config
+
+If install scripts were blocked or bootstrap did not complete:
+
+- Primary: `setu init`
+- Fallback: If `setu` is unavailable, run `npx setu-opencode init`
+
+### Manual Bootstrap (Fallback)
+If postinstall bootstrap is skipped, add Setu manually to `~/.config/opencode/opencode.json`:
 
 ```json
-// opencode.json
 {
   "plugin": ["setu-opencode"]
 }
 ```
 
-Restart OpenCode. Press **Tab** until you see "Setu." Done.
-
-**Note:** First run requires one restart. Setu appears in Tab cycle on second launch.
-
-Planned install UX (upcoming):
-
-- `npx setu-opencode@latest init`
-- `npm install -g setu-opencode && setu-opencode init`
-
-These commands are planned to automate OpenCode config edits safely. Until then, use `opencode.json` setup above.
+Restart OpenCode.
 
 ### 30-Second Proof (Run This)
 
@@ -187,76 +235,6 @@ If this flow is not enforced, Setu is not configured correctly.
 
 ---
 
-## Four Breakthroughs
-
-### 1) Gearbox Workflow (Automatic Discipline)
-
-Setu shifts through Scout -> Architect -> Builder based on artifacts, not vibes.
-
-- Scout: research only, no source writes
-- Architect: plan only, no source writes
-- Builder: implement with verification before completion
-
-### 2) Hook Enforcement (Physics, Not Suggestions)
-
-Setu enforces behavior at the tool layer. It does not rely on prompt obedience.
-
-- `tool.execute.before` blocks unsafe or out-of-phase actions
-- `tool.execute.after` records verification and progress evidence
-- `system.transform` injects gear-aware guidance each turn
-
-### 3) Persistent Artifacts (No Re-Explaining)
-
-Setu persists task context into project artifacts so sessions can resume with continuity.
-
-- `.setu/RESEARCH.md` captures discovered truth
-- `.setu/PLAN.md` captures approved intent
-- `.setu/HISTORY.md` archives prior task artifacts
-
-### 4) Verification Gate (No Blind "Done")
-
-Completion is coupled to evidence, not confidence.
-
-- `setu_verify` validates build/test/lint before claiming completion
-- risky operations require explicit confirmation
-- read-before-write protection reduces accidental file damage
-
----
-
-## Why This Isn't Just Another Workflow Tool
-
-**Other approaches:** "Please follow this workflow" (ignored)
-
-**Setu:** Uses OpenCode hooks to enforce the workflow at the system level:
-- `tool.execute.before` — Guides what can be done when
-- `tool.execute.after` — Tracks progress and verification  
-- `experimental.session.compacting` — Preserves context across memory limits
-
-**Translation:** Your agent literally cannot skip steps. Not because it's being "good," but because the system won't let it.
-
-### Comparison
-
-| Feature | Setu | Other Approaches |
-|---------|------|------------------|
-| **Enforcement** | ✅ Hook-level (structural) | ❌ Prompt-based (optional) |
-| **Setup** | One line | Complex configuration |
-| **Workflow** | Automatic gears | Manual mode switching |
-| **Complexity** | 🟢 Low friction | 🔴 High overhead |
-
----
-
-## Real Results
-
-| Before Setu | After Setu |
-|-------------|------------|
-| "Done!" → broken build | "Done!" → actually works |
-| Re-explaining codebase every session | Context persists across restarts |
-| Same wrong approach, 15 retries | Attempt tracking with intelligent pivots |
-| "Oops I ran npm publish" | Production commands require explicit approval |
-| Agent forgets after compaction | Context survives memory limits |
-
----
-
 ## Tools Included
 
 | Tool | What It Does |
@@ -266,8 +244,10 @@ Completion is coupled to evidence, not confidence.
 | `setu_plan` | Create implementation plan (Architect phase) |
 | `setu_verify` | Run build/test/lint (Builder phase) |
 | `setu_doctor` | Check environment before executing |
-| `setu_task` | Create tasks with constraints |
-| `setu_feedback` | Help improve Setu |
+| `setu_task` | Manage task lifecycle (`create`, `reframe`, `update_status`, `clear`, `get`) |
+| `setu_reset` | Reset progress to restart current plan |
+
+**Important:** In `auto` mode, `setu_research` and `setu_plan` append to existing artifacts. A new objective starts with `setu_task(action="create")`, which archives prior artifacts to `HISTORY.md` and resets the workflow to Scout. Refinements to the same objective go through `setu_task(action="reframe")`, which keeps existing artifacts intact.
 
 ---
 
@@ -285,11 +265,7 @@ Skills load on-demand, not at startup.
 
 ## What's Next
 
-**v1.3** — Parallel orchestration engine with flexible task model  
-**v2.0** — DAG Swarm: Parallel execution with goal verification  
-**v3.0** — Setu Claude Code + MCP integration for multi-platform support  
-
-See [ROADMAP.md](./ROADMAP.md) for full details.
+See [ROADMAP.md](./ROADMAP.md) for upcoming features and development plans.
 
 ---
 
@@ -303,13 +279,30 @@ See [ROADMAP.md](./ROADMAP.md) for full details.
 
 ---
 
+## Works Well With
+
+Setu complements other agent productivity tools:
+
+| Related Tool | Best At | How Setu Complements |
+|---|---|---|
+| [GSD](https://github.com/gsd-build/get-shit-done) | Spec-driven meta-prompting and planning workflows | GSD structures thinking; Setu enforces safety at the tool boundary |
+| [oh-my-opencode](https://github.com/code-yeongyu/oh-my-opencode) | Full orchestration harnesses and workflow automation | Setu stays narrow and auditable as the guardrail/evidence layer |
+| [Beads](https://github.com/steveyegge/beads) | Persistent memory graph for long-horizon agent work | Beads remembers state; Setu prevents unsafe execution |
+| [btca.dev / better-context](https://github.com/davis7dotsh/better-context) | Codebase grounding and context retrieval | Better context improves retrieval; Setu enforces safe actions and verification |
+
+Setu's role: **Guardrails + continuity + verification** inside OpenCode.
+
+---
+
 ## Technical Details
 
-- Skills load on-demand rather than front-loading context.
-- Version is tracked by the npm badge at the top of this README.
+- Skills load on-demand rather than front-loading context
+- Hook-level enforcement at `tool.execute.before`
+- Compaction survival via `experimental.session.compacting`
+- Version tracked by the npm badge at the top of this README
 
-**See:** [ROADMAP.md](./ROADMAP.md) for upcoming features
-**See:** [docs/DIAGRAMS.md](./docs/DIAGRAMS.md) for all architecture diagrams
+**See:** [ROADMAP.md](./ROADMAP.md) for upcoming features  
+**See:** [docs/DIAGRAMS.md](./docs/DIAGRAMS.md) for architecture diagrams
 
 ---
 

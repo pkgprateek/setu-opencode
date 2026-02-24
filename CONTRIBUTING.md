@@ -1,12 +1,21 @@
 # Contributing to setu-opencode
 
-## Requirements
+Thanks for helping improve Setu.
 
-- **Bun** (latest) — Runtime and package manager
-- **TypeScript 5.x** — Strict mode required
-- **OpenCode** — For end-to-end testing
+## Runtime Requirements
 
-## Setup
+- Bun >= 1.0.0 (1.3.x recommended)
+- Node.js >= 18.0.0 (24+ recommended)
+- OpenCode for local smoke testing
+
+Quick check:
+
+```bash
+bun --version
+node --version
+```
+
+## Local Setup
 
 ```bash
 git clone https://github.com/pkgprateek/setu-opencode.git
@@ -15,58 +24,87 @@ bun install
 bun run build
 ```
 
-## Development
+## Core Commands
 
-### Local Testing
+```bash
+bun test
+bun run typecheck
+bun run lint
+bun run build
+```
 
-1. Build: `bun run build`
-2. Configure OpenCode (`~/.config/opencode/opencode.json`):
-   ```json
-   {
-     "plugin": ["file:///path/to/setu-opencode/dist/index.js"]
-   }
-   ```
-3. Restart OpenCode
+## Local Plugin Testing (Use Local Build, Not npm)
 
-### Code Standards
+To test your branch, point OpenCode to local dist output:
 
-See [AGENTS.md](AGENTS.md) for:
-- TypeScript strict requirements
-- Naming conventions
-- Import organization
-- Security guidelines
+```json
+{
+  "plugin": ["file:///absolute/path/to/setu-opencode/dist/index.js"]
+}
+```
 
-Key points:
-- Explicit return types on all exports
-- No `any` without justification
-- Fail-closed security (block by default)
-- Pure functions when possible
+Important:
 
-## Pull Requests
+- avoid package-name plugin entries like `"setu-opencode"` while local testing
+- avoid loading Setu from both global and project config at the same time
+- restart OpenCode after changing plugin config
 
-1. Create feature branch: `git checkout -b feature/description`
-2. Make changes following AGENTS.md standards
-3. Test with OpenCode locally
-4. Commit using conventional format: `type(scope): description`
-5. Push and open PR
+## Contribution Workflow
 
-### PR Requirements
+1. Create a branch from `main`.
+2. Keep changes small and atomic.
+3. Add or update tests for behavior changes.
+4. Run lint, typecheck, tests, and build locally.
+5. Open a PR with a clear problem statement and verification notes.
 
-- [ ] Builds without errors (`bun run build`)
-- [ ] Type-checks clean (`bun run typecheck`)
-- [ ] Tested in OpenCode
-- [ ] No modifications to `package.json`, `tsconfig.json`, `.gitignore` (unless discussed)
-- [ ] Follows security patterns (path validation, input sanitization, audit logging)
+## Pull Request Checklist
 
-## Architecture
+- [ ] `bun run lint` passes
+- [ ] `bun run typecheck` passes
+- [ ] `bun test` passes
+- [ ] `bun run build` passes
+- [ ] behavior changes include tests
+- [ ] docs updated for API/workflow/install changes
+- [ ] no dead code or stale references introduced
 
-Key directories:
-- `src/hooks/` — OpenCode lifecycle interception
-- `src/enforcement/` — Gear state machine, Hydration Gate, discipline guards
-- `src/security/` — Path validation, secrets detection, audit logging
-- `src/tools/` — Agent-facing tools
-- `skills/` — On-demand skill definitions
+## Engineering Standards
 
-## Questions
+- Architecture first, then implementation.
+- Fail closed for security-sensitive behavior.
+- Prefer explicit error handling to silent failure.
+- Avoid `any` unless justified.
+- Keep naming clear and intent-driven.
 
-Open an issue on GitHub.
+## Docs Parity Rule
+
+Update docs in the same PR when you change:
+
+- tool signatures in `src/tools/*.ts`
+- install/bootstrap behavior (`src/install/*`, `src/cli.ts`, `src/postinstall.ts`)
+- workflow semantics (gears, hydration, verification)
+
+Common docs to update:
+
+- `README.md`
+- `AGENTS.md`
+- `CHANGELOG.md`
+- `ROADMAP.md`
+
+## Commit Style
+
+Use conventional commits:
+
+```text
+type(scope): short summary
+```
+
+Examples:
+
+- `feat(bootstrap): add explicit global uninstall flow`
+- `fix(hydration): sync persisted confirmation fallback`
+- `docs(readme): simplify install and first-run guidance`
+
+## Need Help
+
+- Open an issue: `https://github.com/pkgprateek/setu-opencode/issues`
+- For sensitive security reports, use private advisory flow in `SECURITY.md`

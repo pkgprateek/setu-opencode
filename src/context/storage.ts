@@ -6,11 +6,9 @@
  * - .setu/verification.log (audit trail)
  * 
  * Note: We no longer generate .setu/context.md - AGENTS.md serves as the human-readable version.
- * 
- * Re-exports ensureSetuDir from feedback.ts for consistency.
  */
 
-import { existsSync, readFileSync, writeFileSync, appendFileSync, statSync, renameSync, unlinkSync, openSync, fsyncSync, closeSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, appendFileSync, statSync, renameSync, unlinkSync, openSync, fsyncSync, closeSync, mkdirSync } from 'fs';
 import { join, relative } from 'path';
 import {
   type SetuContext,
@@ -19,7 +17,6 @@ import {
   type ObservedPattern,
   createEmptyContext
 } from './types';
-import { ensureSetuDir } from './feedback';
 import { debugLog, errorLog } from '../debug';
 import { debounce, CONTEXT_SAVE_DEBOUNCE_MS, sanitizeInput } from '../utils';
 import { 
@@ -28,13 +25,19 @@ import {
   MAX_SEARCHES 
 } from './limits';
 
-// Re-export for convenience
-export { ensureSetuDir };
 // Re-export limits for backward compatibility
 export { MAX_INJECTION_SIZE } from './limits';
 
 const CONTEXT_JSON = 'context.json';
 const VERIFICATION_LOG = 'verification.log';
+
+export function ensureSetuDir(projectDir: string): string {
+  const setuDir = join(projectDir, '.setu');
+  if (!existsSync(setuDir)) {
+    mkdirSync(setuDir, { recursive: true });
+  }
+  return setuDir;
+}
 
 
 // Log rotation settings — prevent unbounded log growth

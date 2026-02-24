@@ -1,16 +1,16 @@
 /**
  * System transform hook - Injects dynamic state into system prompt
- * 
+ *
  * Uses: experimental.chat.system.transform
- * 
+ *
  * IMPORTANT: This hook injects dynamic state AND loaded context.
  * The full persona is already in the agent file (.opencode/agents/setu.md).
- * 
+ *
  * When in Setu mode: Check file availability + project rules + context content + read history
  * When in Build/Plan: Does nothing (Setu is off)
  */
 
-import { getStateInjection, type FileAvailability } from '../prompts/persona';
+import { getStateInjection, type FileAvailability } from "../prompts/persona";
 import {
   type ContextCollector,
   contextToSummary,
@@ -22,47 +22,51 @@ import {
   loadActiveTask,
   getDisciplineState,
   getOverwriteRequirement,
-} from '../context';
-import { determineGear } from '../enforcement';
-import { debugLog } from '../debug';
-import { getErrorMessage } from '../utils/error-handling';
+} from "../context";
+import { determineGear } from "../enforcement";
+import { debugLog, errorLog } from "../debug";
+import { getErrorMessage } from "../utils/error-handling";
+import {
+  getResearchContractForSystem,
+  getPlanContractForSystem,
+} from "../prompts/contracts";
 
 /**
  * Format files already read for injection into system prompt
- * 
+ *
  * This prevents the "Loop of Stupid" - re-reading files the agent already read.
  * Token-efficient: just paths, not content.
- * 
+ *
  * @param filesRead - Array of file paths that have been read
  * @returns Formatted injection string or empty string if no files
  */
 function formatFilesAlreadyRead(filesRead: Array<{ path: string }>): string {
-  if (filesRead.length === 0) return '';
-  
+  if (filesRead.length === 0) return "";
+
   // Limit to last 50 files to avoid bloating system prompt
   const recentFiles = filesRead.slice(-50);
-  const paths = recentFiles.map(f => f.path).join(', ');
-  
+  const paths = recentFiles.map((f) => f.path).join(", ");
+
   return `[FILES ALREADY READ]: ${paths}`;
 }
 
 /**
  * Creates the system transform hook
- * 
+ *
  * Injects:
  * - [Setu]
  * - [Context: AGENTS.md, .setu/context.json]
  * - Silent Exploration: Project rules (AGENTS.md, CLAUDE.md, active task)
  * - Loaded context content (summary, constraints, patterns)
  * - [FILES ALREADY READ]: List of files already read (prevents re-reading)
- * 
+ *
  * Does NOT inject:
  * - Full persona (already in agent file)
  * - Behavioral instructions (enforced by hooks)
  */
 /** Input shape for the system transform hook */
 interface SystemTransformInput {
-  sessionID: string;
+  sessionID?: string;
   message?: { content?: string };
 }
 
@@ -74,7 +78,7 @@ interface SystemTransformOutput {
 /** Hook signature returned by createSystemTransformHook */
 type SystemTransformHook = (
   input: SystemTransformInput,
-  output: SystemTransformOutput
+  output: SystemTransformOutput,
 ) => Promise<void>;
 
 export function createSystemTransformHook(
@@ -83,38 +87,38 @@ export function createSystemTransformHook(
   getCurrentAgent?: () => string,
   getContextCollector?: () => ContextCollector | null,
   getProjectRules?: () => ProjectRules | null,
-  getProjectDir?: () => string
+  getProjectDir?: () => string,
 ): SystemTransformHook {
   return async (
     input: SystemTransformInput,
-    output: SystemTransformOutput
+    output: SystemTransformOutput,
   ): Promise<void> => {
-    const currentAgent = getCurrentAgent ? getCurrentAgent() : 'setu';
+    const currentAgent = getCurrentAgent ? getCurrentAgent() : "setu";
     const agentLower = currentAgent.toLowerCase();
 
     // Define which agents should receive Setu injections
     // Setu: Full persona + all injections
     // Subagents (explore, general): JIT context only (for task awareness)
     // Build/Plan: No Setu injections
-    const isSetuAgent = agentLower === 'setu';
-    const isSubagent = ['explore', 'general'].includes(agentLower);
+    const isSetuAgent = agentLower === "setu";
+    const isSubagent = ["explore", "general"].includes(agentLower);
 
     // Only inject for Setu or known subagents
     if (!isSetuAgent && !isSubagent) {
       return;
     }
-    
+
     const isDefault = true;
-    
+
     // Get file availability for context injection
-    const filesExist: FileAvailability = getSetuFilesExist 
-      ? getSetuFilesExist() 
+    const filesExist: FileAvailability = getSetuFilesExist
+      ? getSetuFilesExist()
       : { active: false, context: false, agentsMd: false, claudeMd: false };
-    
+
     // Inject minimal state - and file availability
     const stateInjection = getStateInjection(filesExist, isDefault);
     output.system.push(stateInjection);
-    
+
     // SILENT EXPLORATION: Inject project rules (AGENTS.md, CLAUDE.md, active task)
     // This happens BEFORE context injection because rules are foundational
     if (getProjectRules) {
@@ -124,45 +128,53 @@ export function createSystemTransformHook(
         output.system.push(rulesInjection);
       }
     }
-    
+
     // CRITICAL: Inject loaded context content (summary, constraints, patterns)
     // This ensures constraints like "sandbox only" survive restarts
     if (getContextCollector) {
       const collector = getContextCollector();
       if (collector) {
         const context = collector.getContext();
-        
+
         // Inject FILES ALREADY READ to prevent re-reading
         // This is always useful, even if context isn't confirmed yet
         if (context.filesRead.length > 0) {
           output.system.push(formatFilesAlreadyRead(context.filesRead));
         }
-        
+
         // Only inject full context if confirmed and meaningful
-        if (context.confirmed && (context.summary || context.patterns.length > 0 || context.currentTask)) {
+        if (
+          context.confirmed &&
+          (context.summary ||
+            context.patterns.length > 0 ||
+            context.currentTask)
+        ) {
           const summary = contextToSummary(context);
           const contextBlock = formatContextForInjection(summary);
           output.system.push(contextBlock);
         }
       }
     }
-    
+
     // Add verification reminder when needed
     // Wrapped in try/catch to prevent verification check errors from crashing OpenCode
     try {
       const verificationState = getVerificationState();
       if (!verificationState.complete) {
-        const stepsNeeded = ['build', 'test', 'lint'].filter(
-          s => !verificationState.stepsRun.has(s)
+        const stepsNeeded = ["build", "test", "lint"].filter(
+          (s) => !verificationState.stepsRun.has(s),
         );
 
         if (stepsNeeded.length > 0) {
-          output.system.push(`[Verify before done: ${stepsNeeded.join(', ')}]`);
+          output.system.push(`[Verify before done: ${stepsNeeded.join(", ")}]`);
         }
       }
     } catch (error) {
       // Log error but don't crash - verification reminder is enhancement, not critical
-      debugLog('system-transform: verification check failed:', getErrorMessage(error));
+      debugLog(
+        "system-transform: verification check failed:",
+        getErrorMessage(error),
+      );
     }
 
     // Gear, discipline, and overwrite injection — wrapped for graceful degradation
@@ -175,69 +187,102 @@ export function createSystemTransformHook(
         output.system.unshift(`[SETU: Gear] ${gearState.current}`);
 
         switch (gearState.current) {
-          case 'scout':
+          case "scout":
             output.system.unshift(
-              '[Setu] Scout Mode: Discovery Phase\n' +
-              'Use any available discovery/read tools and any non-destructive discovery tools to gather evidence.\n' +
-              'You are not required to plan yet; continue research until confidence is high.\n' +
-              'You may update research artifacts via setu_research; generic file edits are restricted in this phase.'
+              "[Setu] Scout Mode: Discovery Phase\n" +
+                "Use any available discovery/read tools and any non-destructive discovery tools to gather evidence.\n" +
+                "You are not required to plan yet; continue research until confidence is high.\n" +
+                "Do not make assumptions when path/runtime/scope is ambiguous; ask the user before scaffolding or branching work.\n" +
+                "Task lifecycle: use setu_task(create) only for a new objective; use setu_task(reframe) when scope changes but artifacts should be preserved.\n" +
+                "You may update research artifacts via setu_research; generic file edits are restricted in this phase.",
             );
             break;
-          case 'architect':
+          case "architect":
             output.system.unshift(
-              '[Setu] Architect Mode: Synthesis Phase\n' +
-              'Research findings saved. You may continue discovery or plan when ready.\n' +
-              'Call setu_plan() only when you have sufficient information to execute confidently.\n' +
-              'No forced transition—quality over speed.\n' +
-              'After setu_plan: show user "Ready to execute: [objective]. Reply \'go\' or tell me adjustments"'
+              "[Setu] Architect Mode: Synthesis Phase\n" +
+                "Research findings saved. You may continue discovery or plan when ready.\n" +
+                "Call setu_plan() only when you have sufficient information to execute confidently.\n" +
+                "Do not make assumptions when target directory/package manager/port is ambiguous; ask the user before scaffolding.\n" +
+                "Task lifecycle: new objective -> setu_task(create), same objective refinement -> setu_task(reframe), status updates -> setu_task(update_status).\n" +
+                "No forced transition—quality over speed.\n" +
+                "After setu_plan: show user \"Ready to execute: [objective]. Reply 'go' or tell me adjustments\"",
             );
             break;
-          case 'builder':
+          case "builder":
             output.system.unshift(
-              '[Setu] Builder Mode: Execution Phase\n' +
-              'Prioritize implementation; do targeted discovery only when blocked or validating assumptions.\n' +
-              'Execute PLAN.md steps. Run setu_verify() before declaring done.'
+              "[Setu] Builder Mode: Execution Phase\n" +
+                "Prioritize implementation; do targeted discovery only when blocked or validating assumptions.\n" +
+                "If user requests a new objective, create a new task boundary via setu_task(create) before implementation.\n" +
+                "Execute PLAN.md steps. Run setu_verify() before declaring done.",
             );
             break;
         }
-        
+
         // AGENTS.md warning: only for Setu agent, only when both AGENTS.md and CLAUDE.md are missing
         // Only run when getSetuFilesExist is available (filesExist was actually populated)
         if (isSetuAgent && getSetuFilesExist) {
           if (!filesExist.agentsMd && !filesExist.claudeMd) {
             // Use push (not unshift) so it doesn't outrank core gear/safety guidance
             output.system.push(
-              '[Setu] No AGENTS.md found; run /init for project rules if desired.'
+              "[Setu] No AGENTS.md found; run /init for project rules if desired.",
             );
           }
         }
+
+        // CONTRACT INJECTION: Quality guidance for research/plan creation
+        // Only for Setu agent - subagents get JIT context only
+        if (isSetuAgent) {
+          const researchContract = getResearchContractForSystem(
+            gearState.current,
+          );
+          const planContract = getPlanContractForSystem(gearState.current);
+
+          if (researchContract) {
+            output.system.push(researchContract);
+          }
+          if (planContract) {
+            output.system.push(planContract);
+          }
+
+          debugLog(
+            `Contracts injected: research=${!!researchContract}, plan=${!!planContract}`,
+          );
+        }
       }
 
-      const disciplineState = getDisciplineState(input.sessionID);
+      const sessionID = input.sessionID?.trim();
+      if (!sessionID) {
+        errorLog('[setu] system.transform missing sessionID; using isolated non-persistent discipline defaults');
+      }
+
+      const disciplineState = sessionID
+        ? getDisciplineState(sessionID)
+        : { questionBlocked: false, safetyBlocked: false, updatedAt: Date.now() };
       if (disciplineState.questionBlocked) {
         output.system.unshift(
-          `[SETU: Clarification Required] Ask one direct question to the user, then wait. Do not run mutating tools until they answer.`
+          `[SETU: Clarification Required] Ask one direct question to the user, then wait. Do not run mutating tools until they answer.`,
         );
       }
 
-      const overwriteRequirement = getOverwriteRequirement(input.sessionID);
+      const overwriteRequirement = sessionID ? getOverwriteRequirement(sessionID) : null;
       if (overwriteRequirement?.pending) {
         // Sanitize filePath before interpolation: strip control chars and newlines
         // Convert CR/LF to spaces first, then strip C0 (except CR/LF already handled) and C1 controls
         // Uses same ranges as sanitizeLogDetails for consistency: [\x00-\x09\x0B-\x0C\x0E-\x1F\x7F-\x9F]
-        const safePath = (overwriteRequirement.filePath ?? '')
-          .replace(/\r\n|\r|\n/g, ' ')
-          .replace(/[\x00-\x09\x0b-\x0c\x0e-\x1f\x7f-\x9f]/g, '');
+        const safePath = (overwriteRequirement.filePath ?? "")
+          .replace(/\r\n|\r|\n/g, " ")
+          // biome-ignore lint/suspicious/noControlCharactersInRegex: security-critical stripping of control chars from user-provided file paths
+          .replace(/[\x00-\x09\x0b-\x0c\x0e-\x1f\x7f-\x9f]/g, "");
         output.system.unshift(
           `[SETU: Overwrite Guard]\n` +
             `Pending requirement: read '${safePath}' before any mutation.\n\n` +
             `Next action must be read on that file.\n` +
-            `Do not use bash/write/edit as a workaround.`
+            `Do not use bash/write/edit as a workaround.`,
         );
       }
     } catch (error) {
       // Graceful degradation: gear/discipline injection is enhancement, not critical
-      debugLog('Gear/discipline injection failed:', getErrorMessage(error));
+      debugLog("Gear/discipline injection failed:", getErrorMessage(error));
     }
 
     // JIT Context Injection: Inject active task context for subagent awareness
@@ -248,7 +293,11 @@ export function createSystemTransformHook(
         const projectDir = getProjectDir();
         const active = loadActiveTask(projectDir);
 
-        if (active && active.progress && active.progress.lastCompletedStep >= 0) {
+        if (
+          active &&
+          active.progress &&
+          active.progress.lastCompletedStep >= 0
+        ) {
           const jitSummary = getJITContextSummary(projectDir);
 
           // Build JIT injection
@@ -259,15 +308,19 @@ export function createSystemTransformHook(
           }
 
           if (jitSummary.failedApproaches.length > 0) {
-            jitParts.push(`## Failed Approaches (DO NOT REPEAT)\n${jitSummary.failedApproaches.map(a => `- ${a}`).join('\n')}`);
+            jitParts.push(
+              `## Failed Approaches (DO NOT REPEAT)\n${jitSummary.failedApproaches.map((a) => `- ${a}`).join("\n")}`,
+            );
           }
 
           if (jitSummary.constraints.length > 0) {
-            jitParts.push(`## Active Constraints\n${jitSummary.constraints.map(c => `- ${c}`).join('\n')}`);
+            jitParts.push(
+              `## Active Constraints\n${jitSummary.constraints.map((c) => `- ${c}`).join("\n")}`,
+            );
           }
 
           if (jitParts.length > 0) {
-            const jitInjection = `[SETU: JIT Context]\n\n${jitParts.join('\n\n')}\n\n---\n`;
+            const jitInjection = `[SETU: JIT Context]\n\n${jitParts.join("\n\n")}\n\n---\n`;
             // Prepend to system array so it appears first
             output.system.unshift(jitInjection);
           }
@@ -275,9 +328,8 @@ export function createSystemTransformHook(
       } catch (error) {
         // Graceful degradation: JIT context is enhancement, not critical
         // Log for debugging but don't crash OpenCode
-        debugLog('JIT context injection failed:', getErrorMessage(error));
+        debugLog("JIT context injection failed:", getErrorMessage(error));
       }
     }
-
   };
 }

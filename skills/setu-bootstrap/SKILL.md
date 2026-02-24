@@ -45,7 +45,6 @@ If `.setu/` directory doesn't exist, create it:
 .setu/
 ├── context.json    # Machine-parseable (for injection)
 ├── active.json     # Current task, mode, constraints
-├── feedback.md     # User feedback on behavior
 └── verification.log  # Audit trail
 ```
 

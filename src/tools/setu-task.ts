@@ -12,8 +12,8 @@
  */
 
 import { tool } from '@opencode-ai/plugin';
-import { appendFileSync, existsSync, readFileSync, unlinkSync } from 'fs';
-import { join } from 'path';
+import { appendFile, readFile, unlink } from 'fs/promises';
+import { isAbsolute, join, normalize } from 'path';
 import {
   createActiveTask,
   saveActiveTask,
@@ -25,8 +25,10 @@ import {
   type TaskStatus,
   CONSTRAINT_TYPES
 } from '../context/active';
-import { debugLog } from '../debug';
+import { debugLog, errorLog } from '../debug';
 import { getErrorMessage } from '../utils/error-handling';
+import { removeControlChars } from '../utils/sanitization';
+import { validateProjectDir } from '../utils/path-validation';
 
 /**
  * Valid constraint names for input validation
@@ -56,6 +58,45 @@ function validateStatus(input: string | undefined): TaskStatus | null {
     return input as TaskStatus;
   }
   return null;
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error;
+}
+
+function sanitizeReferences(references: string[] | undefined): string[] {
+  if (!references || !Array.isArray(references)) return [];
+
+  return references
+    .map((reference) => removeControlChars(reference).trim())
+    .filter((reference) => reference.length > 0)
+    .filter((reference) => {
+      if (/^https?:\/\//i.test(reference)) {
+        try {
+          const parsed = new URL(reference);
+          return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        } catch {
+          return false;
+        }
+      }
+
+      // Allow plain file path references while rejecting URI-like schemes.
+      if (reference.includes('://')) {
+        return false;
+      }
+
+      if (isAbsolute(reference)) {
+        return false;
+      }
+
+      const normalized = normalize(reference).replace(/\\/g, '/');
+      const segments = normalized.split('/').filter(Boolean);
+      if (segments.some((segment) => segment === '..')) {
+        return false;
+      }
+
+      return true;
+    });
 }
 
 /**
@@ -91,7 +132,8 @@ export function createSetuTaskTool(
 
 **Actions:**
 - \`create\`: Start a new task with optional constraints
-- \`update\`: Change task status (in_progress, completed, blocked)
+- \`reframe\`: Update task intent/constraints without resetting workflow artifacts
+- \`update_status\`: Change task status (in_progress, completed, blocked)
 - \`clear\`: Remove the active task (on completion or cancellation)
 - \`get\`: View current active task
 
@@ -108,7 +150,7 @@ Active tasks persist to \`.setu/active.json\` and survive:
     
     args: {
       action: tool.schema.string().describe(
-        'Action to perform: create, update, clear, get'
+        'Action to perform: create, reframe, update_status, clear, get'
       ),
       task: tool.schema.string().optional().describe(
         'Task description (required for create)'
@@ -117,7 +159,7 @@ Active tasks persist to \`.setu/active.json\` and survive:
         'Constraints to apply: READ_ONLY, NO_PUSH, NO_DELETE, SANDBOX'
       ),
       status: tool.schema.string().optional().describe(
-        'New status for update action: in_progress, completed, blocked'
+        'New status for update_status action: in_progress, completed, blocked'
       ),
       references: tool.schema.array(tool.schema.string()).optional().describe(
         'Reference URLs or file paths related to the task'
@@ -126,11 +168,14 @@ Active tasks persist to \`.setu/active.json\` and survive:
     
     async execute(args, _context): Promise<string> {
       const projectDir = getProjectDir();
-      const action = args.action?.toLowerCase();
+      validateProjectDir(projectDir);
+      const action = removeControlChars(String(args.action ?? '').toLowerCase()).trim() || 'unknown';
       
       switch (action) {
         case 'create': {
-          if (!args.task) {
+          const sanitizedTask = removeControlChars(args.task ?? '').trim();
+
+          if (!sanitizedTask) {
             return `**Error:** Task description is required for create action.
 
 Example:
@@ -151,44 +196,54 @@ setu_task({
           const historyPath = join(setuDir, 'HISTORY.md');
 
           try {
-            if (existsSync(researchPath)) {
-              const timestamp = new Date().toISOString();
-              const oldResearch = readFileSync(researchPath, 'utf-8');
-              const archiveEntry = `\n---\n## Archived Research (${timestamp})\n\n${oldResearch}\n`;
-              appendFileSync(historyPath, archiveEntry, 'utf-8');
-              unlinkSync(researchPath);
-              debugLog('Archived old RESEARCH.md to HISTORY.md');
-            }
+            const timestamp = new Date().toISOString();
+            const oldResearch = await readFile(researchPath, 'utf-8');
+            const archiveEntry = `\n---\n## Archived Research (${timestamp})\n\n${oldResearch}\n`;
+            await appendFile(historyPath, archiveEntry, 'utf-8');
+            await unlink(researchPath);
+            debugLog('Archived old RESEARCH.md to HISTORY.md');
           } catch (archiveError) {
+            if (isNodeError(archiveError) && archiveError.code === 'ENOENT') {
+              // Nothing to archive.
+            } else {
             debugLog(`Failed to archive RESEARCH.md: ${getErrorMessage(archiveError)}`);
             // Continue — partial archive failure should not block task creation
+            }
           }
 
           try {
-            if (existsSync(planPath)) {
-              const timestamp = new Date().toISOString();
-              const oldPlan = readFileSync(planPath, 'utf-8');
-              const archiveEntry = `\n---\n## Archived Plan (${timestamp})\n\n${oldPlan}\n`;
-              appendFileSync(historyPath, archiveEntry, 'utf-8');
-              unlinkSync(planPath);
-              debugLog('Archived old PLAN.md to HISTORY.md');
-            }
+            const timestamp = new Date().toISOString();
+            const oldPlan = await readFile(planPath, 'utf-8');
+            const archiveEntry = `\n---\n## Archived Plan (${timestamp})\n\n${oldPlan}\n`;
+            await appendFile(historyPath, archiveEntry, 'utf-8');
+            await unlink(planPath);
+            debugLog('Archived old PLAN.md to HISTORY.md');
           } catch (archiveError) {
+            if (isNodeError(archiveError) && archiveError.code === 'ENOENT') {
+              // Nothing to archive.
+            } else {
             debugLog(`Failed to archive PLAN.md: ${getErrorMessage(archiveError)}`);
             // Continue — partial archive failure should not block task creation
+            }
           }
           
           const constraints = validateConstraints(args.constraints);
           
           // Create and save the task
-          const newTask = createActiveTask(args.task, constraints);
+          const newTask = createActiveTask(sanitizedTask, constraints);
           
           // Add references if provided
-          if (args.references && args.references.length > 0) {
-            newTask.references = args.references;
+          const sanitizedReferences = sanitizeReferences(args.references);
+          if (sanitizedReferences.length > 0) {
+            newTask.references = sanitizedReferences;
           }
           
-          saveActiveTask(projectDir, newTask);
+          try {
+            saveActiveTask(projectDir, newTask);
+          } catch (saveError) {
+            debugLog(`Failed to save new task in ${projectDir}: ${getErrorMessage(saveError)}`);
+            return `**Error:** Failed to save new task. Please retry.`;
+          }
           
           // Reset verification state for new task
           if (resetVerificationState) {
@@ -196,7 +251,7 @@ setu_task({
             debugLog('Verification state reset for new task');
           }
           
-          debugLog(`Created active task: "${args.task.slice(0, 50)}..."`);
+          debugLog(`Created active task: "${sanitizedTask.slice(0, 50)}..."`);
           
           const constraintNote = constraints.length > 0
             ? `\n\n**Enforcement:** The following constraints are now active and will block violating tool calls:\n${constraints.map(c => `- \`${c}\``).join('\n')}`
@@ -208,8 +263,84 @@ ${formatTask(newTask)}${constraintNote}
 
 Task saved to \`.setu/active.json\`. Constraints will be enforced until task is cleared.`;
         }
+
+        case 'reframe': {
+          const currentTask = loadActiveTask(projectDir);
+
+          if (!currentTask) {
+            return `**Error:** No active task found to reframe.
+
+Create a task first:
+\`\`\`
+setu_task({ action: "create", task: "Your task description" })
+\`\`\``;
+          }
+
+          const sanitizedTask = removeControlChars(args.task ?? '').trim();
+
+          if (!sanitizedTask) {
+            return `**Error:** Task description is required for reframe action.
+
+Example:
+\`\`\`
+setu_task({
+  action: "reframe",
+  task: "Refine auth rotation fix for backward compatibility",
+  constraints: ["NO_PUSH"]
+})
+\`\`\``;
+          }
+
+          const validatedConstraintUpdate = args.constraints ? validateConstraints(args.constraints) : null;
+          const attemptedConstraintClear = args.constraints !== undefined && (validatedConstraintUpdate?.length ?? 0) === 0;
+          const attemptedConstraintDowngrade =
+            validatedConstraintUpdate !== null &&
+            validatedConstraintUpdate.length > 0 &&
+            currentTask.constraints.some((existing) => !validatedConstraintUpdate.includes(existing));
+
+          if (attemptedConstraintClear || attemptedConstraintDowngrade) {
+            const blockedActions: string[] = [];
+            if (attemptedConstraintClear) blockedActions.push('clear');
+            if (attemptedConstraintDowngrade) blockedActions.push('downgrade');
+            errorLog(`[AUDIT] Constraint ${blockedActions.join('+')} attempt during reframe blocked. Project: ${projectDir}`);
+          }
+
+          // nextConstraints preserves currentTask.constraints when attemptedConstraintDowngrade is true;
+          // otherwise it applies validatedConstraintUpdate only when non-empty. attemptedConstraintClear
+          // forces validatedConstraintUpdate empty, so this falls back to currentTask.constraints.
+          const nextConstraints = attemptedConstraintDowngrade
+            ? currentTask.constraints
+            : (validatedConstraintUpdate && validatedConstraintUpdate.length > 0
+              ? validatedConstraintUpdate
+              : currentTask.constraints);
+
+          const reframedTask: ActiveTask = {
+            ...currentTask,
+            task: sanitizedTask,
+            constraints: nextConstraints,
+          };
+
+          const sanitizedReferences = sanitizeReferences(args.references);
+          if (sanitizedReferences.length > 0) {
+            reframedTask.references = sanitizedReferences;
+          }
+
+          try {
+            saveActiveTask(projectDir, reframedTask);
+          } catch (saveError) {
+            debugLog(`Failed to save reframed task in ${projectDir}: ${getErrorMessage(saveError)}`);
+            return `**Error:** Failed to save reframed task. Please retry.`;
+          }
+          debugLog(`Reframed active task: "${sanitizedTask.slice(0, 50)}..."`);
+
+          return `## Task Reframed
+
+${formatTask(reframedTask)}
+
+Workflow artifacts were preserved. Continue with \`setu_research\`/\`setu_plan\` in append or auto mode.`;
+        }
         
-        case 'update': {
+        case 'update_status': {
           const currentTask = loadActiveTask(projectDir);
           
           if (!currentTask) {
@@ -224,7 +355,7 @@ setu_task({ action: "create", task: "Your task description" })
           const newStatus = validateStatus(args.status);
           
           if (!newStatus) {
-            return `**Error:** Valid status required for update action.
+            return `**Error:** Valid status required for update_status action.
 
 Valid statuses: \`in_progress\`, \`completed\`, \`blocked\`
 
@@ -287,11 +418,13 @@ ${formatTask(currentTask)}`;
         }
         
         default: {
-          return `**Error:** Unknown action \`${action}\`.
+          const sanitizedAction = action.replace(/[\[`\]]/g, '');
+          return `**Error:** Unknown action \`${sanitizedAction || 'unknown'}\`.
 
 Valid actions:
 - \`create\`: Start a new task
-- \`update\`: Change task status
+- \`reframe\`: Update task intent/constraints while preserving artifacts
+- \`update_status\`: Change task status
 - \`clear\`: Remove active task
 - \`get\`: View current task
 

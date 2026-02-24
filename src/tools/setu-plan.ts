@@ -2,273 +2,146 @@ import { tool } from '@opencode-ai/plugin';
 import { validateProjectDir } from '../utils/path-validation';
 import { join } from 'path';
 import { writeFile, readFile } from 'fs/promises';
-import { decidePlanArtifactMode } from '../context';
-import { loadActiveTask, resetProgress } from '../context/active';
+import { resetProgress } from '../context/active';
 import { ensureSetuDir } from '../context/storage';
 import { clearResults } from '../context/results';
-import { getErrorMessage } from '../utils/error-handling';
-import { createPromptMultilineSanitizer, createPromptSanitizer } from '../utils/sanitization';
+import { createPromptMultilineSanitizer } from '../utils/sanitization';
 import { debugLog } from '../debug';
+import { PLAN_TOOL_EXPECTATIONS } from '../prompts/contracts';
+import { getErrorMessage } from '../utils/error-handling';
 
-// PLAN_TEMPLATE is embedded to ensure it's available at runtime
-export const PLAN_TEMPLATE = `# Plan Template
+export const OBJECTIVE_MAX_LENGTH = 200;
 
-## Objective
-[One sentence: what this plan accomplishes]
+const sanitizeObjective = createPromptMultilineSanitizer(OBJECTIVE_MAX_LENGTH);
 
-## Context Summary
-[2-3 sentences from RESEARCH.md for subagent context]
+function sanitizePlanContent(input: string): string {
+  if (!input || typeof input !== 'string') return '';
+  // Intentional policy: preserve model-authored markdown structure/content as-is,
+  // stripping only control chars for filesystem safety.
+  return input
+    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
+    .trim();
+}
 
-## Non-goals
-[What is intentionally out of scope]
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error;
+}
 
-## Assumptions / Constraints
-[Assumptions and constraints: stack, runtime, env]
+function safeResetProgress(projectDir: string): string | null {
+  try {
+    resetProgress(projectDir);
+    return null;
+  } catch (error) {
+    debugLog('setu_plan: resetProgress failed:', error);
+    return `progress reset failed (${getErrorMessage(error)})`;
+  }
+}
 
-## File-level Edit List
-- [file path 1]
-- [file path 2]
+function safeClearResults(projectDir: string): string | null {
+  try {
+    clearResults(projectDir);
+    return null;
+  } catch (error) {
+    debugLog('setu_plan: clearResults failed:', error);
+    return `results cleanup failed (${getErrorMessage(error)})`;
+  }
+}
 
-## Steps
-# Phase 1: [Phase Name]
-## Task 1.1: [Task Name]
-- Step 1: [Atomic action]
-  - Why: [Justification]
-  - Edit(s): [Files]
-  - Commands: [Commands]
+function extractPlanPreview(content: string): string {
+  const firstMeaningfulLine = content
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .find(line => line.length > 0) ?? '';
 
-## Task 1.2: [Next Task]
-- Step 1: [Action]
-  - Why: [Reason]
-  - Edit(s): [Files]
-  - Commands: [Commands]
+  const normalized = firstMeaningfulLine
+    .replace(/^#+\s*/, '')
+    .replace(/^[-*]\s*/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 
-## Expected Output
-[What success looks like]
-
-## Rollback Note
-[How to revert]
-
-## Acceptance Tests
-- [Test 1]
-- [Test 2]
-
-## Verify Protocol
-build -> lint -> test
-
-## Success Criteria
-Plan is complete only if expected output, acceptance tests, and verify protocol pass.
-`;
-
-const sanitizeObjective = createPromptSanitizer(500);
-const sanitizeContextSummary = createPromptMultilineSanitizer(1000);
-const sanitizeSteps = createPromptMultilineSanitizer(10000);
-const sanitizeSection = createPromptMultilineSanitizer(2000);
-
-function countSteps(steps: string): number {
-  return steps.match(/^-\s+Step\s+\d+:/gim)?.length ?? 0;
+  if (!normalized) return '';
+  return normalized.length > 120 ? `${normalized.slice(0, 117)}...` : normalized;
 }
 
 export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<typeof tool> => tool({
-  description: 'Create execution plan in .setu/PLAN.md. Requires RESEARCH.md.',
+  description: PLAN_TOOL_EXPECTATIONS,
   args: {
-    objective: tool.schema.string().describe('One sentence: what this plan accomplishes'),
-    contextSummary: tool.schema.string().optional().describe('2-3 sentences from RESEARCH.md'),
-    nonGoals: tool.schema.string().optional().describe('What is out of scope'),
-    assumptions: tool.schema.string().optional().describe('Stack, runtime, constraints'),
-    fileEdits: tool.schema.string().describe('Files to modify'),
-    steps: tool.schema.string().describe('Phase > Task > Step with Why/Edit(s)/Commands. See PLAN_TEMPLATE.md'),
-    expectedOutput: tool.schema.string().optional().describe('What success looks like'),
-    rollbackNote: tool.schema.string().optional().describe('How to revert'),
-    acceptanceTests: tool.schema.string().optional().describe('Bullet list of tests'),
-    verifyProtocol: tool.schema.string().optional().describe('Defaults to build -> lint -> test')
+    content: tool.schema.string().describe('Full plan content in markdown format'),
+    objective: tool.schema.string().optional().describe('Objective for return message only'),
+    mode: tool.schema.enum(['append', 'remake', 'auto']).optional().describe('Explicit mode or auto-detect')
   },
   async execute(args): Promise<string> {
+    if (!args.content?.trim()) {
+      throw new Error('content is required');
+    }
+
     const projectDir = getProjectDir();
+    validateProjectDir(projectDir);
 
+    // RESEARCH.md precondition
     try {
-      validateProjectDir(projectDir);
-    } catch (error) {
-      throw new Error(`Invalid project directory: ${getErrorMessage(error)}`);
-    }
-
-    if (!args.objective?.trim()) throw new Error('objective is required');
-    if (!args.steps?.trim()) throw new Error('steps is required');
-
-    // Async check for RESEARCH.md existence
-    let hasResearch = false;
-    try {
-      await readFile(join(projectDir, '.setu', 'RESEARCH.md'), 'utf-8');
-      hasResearch = true;
-    } catch (error) {
-      // Only ENOENT means "file not found" - other errors (EACCES, EMFILE, etc.) should be rethrown
-      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-        hasResearch = false;
-      } else {
-        // Rethrow non-ENOENT errors with original context
-        throw new Error(`Failed to check RESEARCH.md: ${getErrorMessage(error)}`);
+      await readFile(join(projectDir, '.setu', 'RESEARCH.md'));
+    } catch (e) {
+      if (isNodeError(e) && e.code === 'ENOENT') {
+        throw new Error('RESEARCH.md required. Run setu_research first.');
       }
-    }
-    if (!hasResearch) {
-      throw new Error('RESEARCH.md required. Run setu_research first.');
+      throw e;
     }
 
-    const stepCount = countSteps(args.steps);
-    if (stepCount > 100) throw new Error(`Too many steps (${stepCount}). Max is 100.`);
-
-    const sanitized = {
-      objective: sanitizeObjective(args.objective),
-      contextSummary: sanitizeContextSummary(args.contextSummary ?? ''),
-      nonGoals: sanitizeSection(args.nonGoals ?? ''),
-      assumptions: sanitizeSection(args.assumptions ?? ''),
-      fileEdits: sanitizeSection(args.fileEdits ?? ''),
-      steps: sanitizeSteps(args.steps),
-      expectedOutput: sanitizeSection(args.expectedOutput ?? ''),
-      rollbackNote: sanitizeSection(args.rollbackNote ?? ''),
-      acceptanceTests: sanitizeSection(args.acceptanceTests ?? ''),
-      verifyProtocol: sanitizeSection(args.verifyProtocol ?? 'build -> lint -> test')
-    };
+    const sanitizedContent = sanitizePlanContent(args.content);
+    if (!sanitizedContent) {
+      throw new Error('content is empty after sanitization');
+    }
 
     const planPath = join(projectDir, '.setu', 'PLAN.md');
-    // Async read for existing plan
-    let existingPlan = '';
+    let mode = args.mode ?? 'auto';
+    let existingContent: string | null = null;
+
+    // Single read to check existence and cache content, avoiding TOCTOU
     try {
-      existingPlan = await readFile(planPath, 'utf-8');
-    } catch (error) {
-      // Only ENOENT means "file not found" - other errors should be rethrown
-      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-        existingPlan = '';
+      existingContent = await readFile(planPath, 'utf-8');
+    } catch (e) {
+      if (isNodeError(e) && e.code === 'ENOENT') {
+        existingContent = null;
       } else {
-        throw new Error(`Failed to read existing PLAN.md: ${getErrorMessage(error)}`);
+        throw e;
       }
     }
-    const planMode = decidePlanArtifactMode({
-      hasExistingPlan: existingPlan.length > 0,
-      existingPlanContent: existingPlan,
-      activeTask: loadActiveTask(projectDir),
-      objective: sanitized.objective,
-      fileEdits: sanitized.fileEdits,
-    });
 
-    const content = planMode === 'append' && existingPlan
-      ? `${existingPlan.trimEnd()}\n\n## Revisions (${new Date().toISOString()})\n\n${formatPlan(sanitized, true)}`
-      : formatPlan(sanitized);
-    
+    if (mode === 'auto') {
+      mode = existingContent !== null ? 'append' : 'remake';
+    } else if (mode === 'append') {
+      if (existingContent === null) {
+        throw new Error('Cannot append: PLAN.md does not exist');
+      }
+    }
+
     ensureSetuDir(projectDir);
-    
-    try {
-      await writeFile(planPath, content);
-    } catch (error) {
-      throw new Error(`Failed to save plan: ${getErrorMessage(error)}`);
-    }
-    
-    if (planMode === 'remake') {
-      resetProgress(projectDir);
-      try {
-        clearResults(projectDir);
-      } catch (e) {
-        debugLog(`clearResults failed for projectDir=${projectDir}:`, e);
-      }
+
+    let content: string;
+    if (mode === 'append') {
+      const sanitizedExisting = sanitizePlanContent(existingContent!);
+      content = `${sanitizedExisting.trimEnd()}\n\n---\n\n## Revision (${new Date().toISOString()})\n\n${sanitizedContent}`;
+    } else {
+      content = sanitizedContent;
     }
 
-    debugLog(`[AUDIT] Plan ${planMode === 'append' ? 'revised' : 'created'}. Steps: ${stepCount}. Project: ${projectDir}`);
-    
-    const fileCount = sanitized.fileEdits.split('\n').filter(l => l.trim().startsWith('-')).length;
-    const filePreview = sanitized.fileEdits.split('\n').slice(0, 3).map(l => l.replace(/^-\s*/, '').trim()).join(', ');
-    const filesText = fileCount > 3 ? `${filePreview}... (+${fileCount - 3} more)` : filePreview;
-    const stepPreview = sanitized.steps.split('\n').filter(l => l.trim().startsWith('- Step')).slice(0, 3).map(l => l.replace(/^-\s+Step\s+\d+:\s*/, '')).join('; ');
-    
-    return `Plan ${planMode === 'append' ? 'revised' : 'created'} (${stepCount} steps).
+    await writeFile(planPath, content);
 
-**Ready to execute**: ${sanitized.objective}
-**Files**: ${filesText || 'No files listed'}
+    const cleanupWarnings: string[] = [];
+    if (mode === 'remake') {
+      const progressWarning = safeResetProgress(projectDir);
+      if (progressWarning) cleanupWarnings.push(progressWarning);
 
-**Plan preview**: ${stepPreview || 'See PLAN.md for full details'}
+      const resultsWarning = safeClearResults(projectDir);
+      if (resultsWarning) cleanupWarnings.push(resultsWarning);
+    }
 
-Reply "go" to start, or tell me what to adjust.`;
+    const safeObjective = args.objective ? sanitizeObjective(args.objective) : '';
+    const preview = safeObjective ? '' : extractPlanPreview(sanitizedContent);
+    const warningSuffix = cleanupWarnings.length > 0
+      ? ` Cleanup warning: ${cleanupWarnings.join('; ')}.`
+      : '';
+    return `Plan ${mode === 'append' ? 'revised' : 'created'}${safeObjective ? ': ' + safeObjective : ''}.${warningSuffix}${preview ? ` Ready to execute: ${preview}.` : ''} Reply "go" to start, or tell me what to adjust.`;
   }
 });
-
-function formatPlan(args: {
-  objective: string;
-  contextSummary: string;
-  nonGoals: string;
-  assumptions: string;
-  fileEdits: string;
-  steps: string;
-  expectedOutput: string;
-  rollbackNote: string;
-  acceptanceTests: string;
-  verifyProtocol: string;
-}, isRevision = false): string {
-  const h = isRevision ? '###' : '##';
-  
-  if (isRevision) {
-    return `${h} Objective Update
-${args.objective}
-
-${h} Context Update
-${args.contextSummary}
-
-${h} Non-goals
-${args.nonGoals}
-
-${h} Assumptions / Constraints
-${args.assumptions}
-
-${h} File-level Edit List
-${args.fileEdits}
-
-${h} Steps
-${args.steps}
-
-${h} Expected Output
-${args.expectedOutput}
-
-${h} Rollback Note
-${args.rollbackNote}
-
-${h} Acceptance Tests
-${args.acceptanceTests}
-
-${h} Verify Protocol
-${args.verifyProtocol}
-`;
-  }
-
-  return `# Plan
-
-${h} Objective
-${args.objective}
-
-${h} Context Summary
-${args.contextSummary}
-
-${h} Non-goals
-${args.nonGoals}
-
-${h} Assumptions / Constraints
-${args.assumptions}
-
-${h} File-level Edit List
-${args.fileEdits}
-
-${h} Steps
-${args.steps}
-
-${h} Expected Output
-${args.expectedOutput}
-
-${h} Rollback Note
-${args.rollbackNote}
-
-${h} Acceptance Tests
-${args.acceptanceTests}
-
-${h} Verify Protocol
-${args.verifyProtocol}
-
-${h} Success Criteria
-Plan is complete only if expected output, acceptance tests, and verify protocol pass.
-`;
-}

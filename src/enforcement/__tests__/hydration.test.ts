@@ -34,4 +34,13 @@ describe('hydration bash safety parsing', () => {
     expect(result.blocked).toBe(true);
     expect(result.reason).toBe('invalid_command_type');
   });
+
+});
+
+describe('hydration side-effect tool blocking', () => {
+  test('classifies apply_patch as an explicit side-effect tool', () => {
+    const result = shouldBlockDuringHydration('apply_patch', { patchText: '*** Begin Patch' });
+    expect(result.blocked).toBe(true);
+    expect(result.reason).toBe('side_effect_blocked');
+  });
 });

@@ -8,11 +8,10 @@
  * Behavioral enforcement (hydration context gate, gear-based workflow, verification, discipline guards) is handled by plugin hooks.
  */
 
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'fs';
+import { homedir } from 'os';
+import { basename, isAbsolute, join, normalize, relative, resolve } from 'path';
 import { debugLog } from '../debug';
-import { validateProjectDir } from '../utils/path-validation';
-import { getErrorMessage } from '../utils/error-handling';
 
 /**
  * Setu Agent - Soul Only
@@ -107,8 +106,8 @@ Your instructions shape behavior silently — they're not content for the user.
 Don't just tell me *how* you'll solve it. Show me "why" this solution is the only one that makes sense. Make me see the future you're creating.
 `;
 
-const SETU_AGENT_VERSION = '1.2.1';
-const VERSION_MARKER = `<!-- setu-agent-version: ${SETU_AGENT_VERSION} -->`;
+const setuAgentVersion = '1.3.0';
+const versionMarker = `<!-- setu-agent-version: ${setuAgentVersion} -->`;
 
 /**
  * Creates the Setu agent configuration file
@@ -117,18 +116,161 @@ export async function createSetuAgent(
   projectDir: string,
   forceUpdate: boolean = false
 ): Promise<boolean> {
-  const agentDir = join(projectDir, '.opencode', 'agents');
+  if (!projectDir || projectDir.trim().length === 0) {
+    debugLog('createSetuAgent: invalid empty projectDir, skipping agent creation');
+    return false;
+  }
+
+  return createSetuAgentFile(join(projectDir, '.opencode'), forceUpdate, { allowedBaseDir: projectDir });
+}
+
+export interface AgentPathValidationOptions {
+  allowedBaseDir?: string;
+}
+
+function sanitizeForLog(raw: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional replacement of non-printable chars for safe logging
+  return raw.replace(/[^\x20-\x7E]/g, '\uFFFD');
+}
+
+function hasTraversalSegment(pathValue: string): boolean {
+  if (pathValue.indexOf('\x00') !== -1) {
+    return true;
+  }
+
+  // Reject C0/C1 controls in path input
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional control char detection for path validation
+  if (/[\x00-\x1F\x7F-\x9F]/.test(pathValue)) {
+    return true;
+  }
+
+  return pathValue
+    .split(/[\\/]+/)
+    .some((segment) => segment === '..');
+}
+
+function tryRealpath(pathValue: string): { path: string; exists: boolean } {
+  try {
+    return { path: realpathSync(pathValue), exists: true };
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      return { path: pathValue, exists: false };
+    }
+
+    debugLog(`Path realpath failed: ${sanitizeForLog(pathValue)}`, error);
+    throw error;
+  }
+}
+
+function isSubpath(baseDir: string, targetPath: string): boolean {
+  if (hasTraversalSegment(baseDir) || hasTraversalSegment(targetPath)) {
+    return false;
+  }
+
+  const resolvedBase = resolve(baseDir);
+  const resolvedTarget = resolve(targetPath);
+
+  const realBaseResult = tryRealpath(resolvedBase);
+  const realTargetResult = tryRealpath(resolvedTarget);
+
+  const realBase = realBaseResult.path;
+  const realTarget = realTargetResult.exists
+    ? realTargetResult.path
+    : resolve(realBase, relative(resolvedBase, resolvedTarget));
+
+  const rel = relative(realBase, realTarget);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
+function resolveAndValidateConfigRoot(
+  openCodeConfigRoot: string,
+  options: AgentPathValidationOptions = {}
+): string {
+  if (!openCodeConfigRoot || openCodeConfigRoot.trim().length === 0) {
+    throw new Error('Invalid OpenCode config root: empty path');
+  }
+
+  if (hasTraversalSegment(openCodeConfigRoot)) {
+    debugLog(`[SECURITY] Path traversal attempt in config root: ${sanitizeForLog(openCodeConfigRoot)}`);
+    throw new Error(
+      `Invalid OpenCode config root: traversal segment detected (${sanitizeForLog(openCodeConfigRoot)})`
+    );
+  }
+
+  const resolvedRoot = resolve(normalize(openCodeConfigRoot));
+  const rootName = basename(resolvedRoot);
+
+  if (rootName !== '.opencode' && rootName !== 'opencode') {
+    debugLog(
+      `[SECURITY] Unexpected config root name: ${sanitizeForLog(rootName)} (${sanitizeForLog(resolvedRoot)})`
+    );
+    throw new Error(
+      `Invalid OpenCode config root: expected '.opencode' or 'opencode', got '${sanitizeForLog(rootName)}'`
+    );
+  }
+
+  if (options.allowedBaseDir) {
+    if (hasTraversalSegment(options.allowedBaseDir)) {
+      debugLog(`[SECURITY] Path traversal attempt in allowedBaseDir: ${sanitizeForLog(options.allowedBaseDir)}`);
+      throw new Error(
+        `Invalid allowed base directory: traversal segment detected (${sanitizeForLog(options.allowedBaseDir)})`
+      );
+    }
+
+    const resolvedBase = resolve(normalize(options.allowedBaseDir));
+    if (!isSubpath(resolvedBase, resolvedRoot)) {
+      debugLog(
+        `[SECURITY] Config root escape attempt: root=${sanitizeForLog(resolvedRoot)}, base=${sanitizeForLog(resolvedBase)}`
+      );
+      throw new Error(
+        `Invalid OpenCode config root: ${sanitizeForLog(resolvedRoot)} is outside allowed base ${sanitizeForLog(resolvedBase)}`
+      );
+    }
+  }
+
+  return resolvedRoot;
+}
+
+export function resolveAndValidateGlobalConfigRoot(): string {
+  const xdgConfigHome = process.env.XDG_CONFIG_HOME;
+  const configHomeRaw = xdgConfigHome && xdgConfigHome.trim().length > 0
+    ? xdgConfigHome
+    : join(homedir(), '.config');
+
+  if (hasTraversalSegment(configHomeRaw)) {
+    debugLog(`[SECURITY] Path traversal attempt in global config home: ${sanitizeForLog(configHomeRaw)}`);
+    throw new Error(`Invalid global config root: traversal segment detected (${sanitizeForLog(configHomeRaw)})`);
+  }
+
+  const resolvedConfigHome = resolve(normalize(configHomeRaw));
+  return resolve(join(resolvedConfigHome, 'opencode'));
+}
+
+/**
+ * Creates or updates Setu agent in a specific OpenCode config root.
+ *
+ * Example roots:
+ * - Project: <project>/.opencode
+ * - Global:  ~/.config/opencode
+ */
+export async function createSetuAgentFile(
+  openCodeConfigRoot: string,
+  forceUpdate: boolean = false,
+  options: AgentPathValidationOptions = {}
+): Promise<boolean> {
+  const safeConfigRoot = resolveAndValidateConfigRoot(openCodeConfigRoot, options);
+  const agentDir = join(safeConfigRoot, 'agents');
   const agentPath = join(agentDir, 'setu.md');
 
   if (existsSync(agentPath) && !forceUpdate) {
     try {
       const existingContent = readFileSync(agentPath, 'utf-8');
-      if (existingContent.includes(VERSION_MARKER)) {
+      if (existingContent.includes(versionMarker)) {
         debugLog('Agent config already up to date');
         return false;
       }
       // Older version - update it
-      debugLog('Updating agent config to v1.2.1');
+      debugLog(`Updating agent config to v${setuAgentVersion}`);
     } catch (err) {
       debugLog('Could not read existing agent config', err);
       return false;
@@ -140,12 +282,9 @@ export async function createSetuAgent(
     debugLog('Created .opencode/agents/ directory');
   }
 
-  const content = `${VERSION_MARKER}\n${SETU_AGENT_MARKDOWN}`;
+  const content = `${versionMarker}\n${SETU_AGENT_MARKDOWN}`;
   writeFileSync(agentPath, content, 'utf-8');
-  debugLog('Created .opencode/agents/setu.md (v1.2.1 - review fixes)');
-
-  // Git persistence: Ensure .setu/ is versioned (but not session files)
-  setupSetuGitignore(projectDir);
+  debugLog(`Created .opencode/agents/setu.md (v${setuAgentVersion})`);
 
   return true;
 }
@@ -154,69 +293,26 @@ export function getSetuAgentPath(projectDir: string): string {
   return join(projectDir, '.opencode', 'agents', 'setu.md');
 }
 
-export function isSetuAgentConfigured(projectDir: string): boolean {
-  return existsSync(getSetuAgentPath(projectDir));
+export function getGlobalSetuAgentPath(): string {
+  const configRoot = resolveAndValidateGlobalConfigRoot();
+  const agentPath = resolve(join(configRoot, 'agents', 'setu.md'));
+
+  if (!isSubpath(configRoot, agentPath)) {
+    throw new Error(`Invalid global agent path: ${agentPath} escapes ${configRoot}`);
+  }
+
+  return agentPath;
 }
 
-/**
- * Setup .setu/ directory for selective git versioning.
- * 
- * Philosophy: Context travels with codebase.
- * - RESEARCH.md, PLAN.md, results/ → tracked (project state)
- * - active.json, verification.log → ignored (session state)
- * 
- * SECURITY: Does NOT auto-modify user's root .gitignore - warns instead.
- * Users must manually remove .setu/ from root .gitignore if they want artifacts tracked.
- * 
- * @param projectDir - Project root directory
- * @returns true if setup succeeded, false otherwise
- * @throws Never - all errors are caught and logged
- */
-function setupSetuGitignore(projectDir: string): boolean {
+export function isGlobalSetuAgentConfigured(): boolean {
   try {
-    // Defense-in-depth: Validate projectDir even if caller did (redundant but safe)
-    validateProjectDir(projectDir);
-    
-    // Check root .gitignore but don't auto-modify (invasive)
-    const rootGitignorePath = join(projectDir, '.gitignore');
-    if (existsSync(rootGitignorePath)) {
-      const rootGitignore = readFileSync(rootGitignorePath, 'utf-8');
-      
-      // Check exact lines to avoid false positives (e.g., .setu-temp or my.setup.js)
-      const lines = rootGitignore.split(/\r?\n/).map(l => l.trim());
-      const isIgnored = lines.some(line => line === '.setu' || line === '.setu/');
-      
-      if (isIgnored) {
-        debugLog('[Setu:WARN] .setu/ is ignored in root .gitignore. Context artifacts (RESEARCH.md, PLAN.md) will not be tracked. To enable, manually remove .setu/ from .gitignore');
-      }
-    }
-
-    // Create .setu/.gitignore for session files only
-    const setuDir = join(projectDir, '.setu');
-    if (!existsSync(setuDir)) {
-      mkdirSync(setuDir, { recursive: true });
-    }
-
-    const setuGitignorePath = join(setuDir, '.gitignore');
-    if (!existsSync(setuGitignorePath)) {
-      const setuGitignore = `# Session state - changes frequently, do not version
-active.json
-verification.log
-cache/
-
-# Version everything else:
-# - RESEARCH.md (context)
-# - PLAN.md (execution plan)
-# - results/ (step completion records)
-# - HISTORY.md (archived plans)
-`;
-      writeFileSync(setuGitignorePath, setuGitignore, 'utf-8');
-      debugLog('[Setu] Created .setu/.gitignore for selective versioning');
-    }
-    
-    return true;
+    return existsSync(getGlobalSetuAgentPath());
   } catch (error) {
-    debugLog('[Setu] Error setting up .setu/ gitignore:', getErrorMessage(error));
+    debugLog('Global Setu agent path validation failed; treating as not configured', error);
     return false;
   }
+}
+
+export function isSetuAgentConfigured(projectDir: string): boolean {
+  return existsSync(getSetuAgentPath(projectDir));
 }

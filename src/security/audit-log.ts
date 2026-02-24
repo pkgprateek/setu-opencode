@@ -7,7 +7,7 @@
 
 import { appendFileSync } from 'fs';
 import { join } from 'path';
-import { ensureSetuDir } from '../context/feedback';
+import { ensureSetuDir } from '../context/storage';
 import { debugLog } from '../debug';
 
 const SECURITY_LOG = 'security.log';
@@ -32,7 +32,8 @@ export enum SecurityEventType {
   SECRETS_DETECTED = 'SECRETS_DETECTED',
   PROMPT_INJECTION_SANITIZED = 'PROMPT_INJECTION_SANITIZED',
 
-  // Info events
+  // Allowance/info events
+  HYDRATION_FALLBACK_ALLOWED = 'HYDRATION_FALLBACK_ALLOWED',
   RATE_LIMIT_TRIGGERED = 'RATE_LIMIT_TRIGGERED',
   CONSTRAINT_ENFORCED = 'CONSTRAINT_ENFORCED'
 }
@@ -61,6 +62,7 @@ const EVENT_SEVERITY: Record<SecurityEventType, SecurityEvent['severity']> = {
   [SecurityEventType.DEPENDENCY_EDIT_BLOCKED]: 'medium',
   [SecurityEventType.GEAR_BLOCKED]: 'medium',
   [SecurityEventType.SAFETY_BLOCKED]: 'high',
+  [SecurityEventType.HYDRATION_FALLBACK_ALLOWED]: 'info',
   [SecurityEventType.BYPASS_ATTEMPT_DETECTED]: 'high',
   [SecurityEventType.SECRETS_DETECTED]: 'critical',
   [SecurityEventType.PROMPT_INJECTION_SANITIZED]: 'medium',
