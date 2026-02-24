@@ -145,8 +145,9 @@ build -> lint -> test
 `;
 
 function assertNever(value: never): never {
-  errorLog(`[SECURITY] assertNever unexpected_gear value=${String(value)} context=prompts/contracts`);
-  throw new Error(`Unhandled gear: ${String(value)}`);
+  const sanitizedValue = String(value).replace(/[\x00-\x1F\x7F]/g, '?');
+  errorLog(`[SECURITY] assertNever unexpected_gear value="${sanitizedValue}" context=prompts/contracts`);
+  throw new Error(`Unhandled gear: ${sanitizedValue}`);
 }
 
 /**
