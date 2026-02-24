@@ -10,7 +10,9 @@ import { debugLog } from '../debug';
 import { PLAN_TOOL_EXPECTATIONS } from '../prompts/contracts';
 import { getErrorMessage } from '../utils/error-handling';
 
-const sanitizeObjective = createPromptMultilineSanitizer(200);
+export const OBJECTIVE_MAX_LENGTH = 200;
+
+const sanitizeObjective = createPromptMultilineSanitizer(OBJECTIVE_MAX_LENGTH);
 
 function sanitizePlanContent(input: string): string {
   if (!input || typeof input !== 'string') return '';

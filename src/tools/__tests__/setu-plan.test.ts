@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
-import { createSetuPlanTool } from '../setu-plan';
+import { createSetuPlanTool, OBJECTIVE_MAX_LENGTH } from '../setu-plan';
 import { mkdir, writeFile, readFile, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -190,7 +190,7 @@ describe('setu_plan', () => {
         objective: longObjective 
       }, mockContext);
 
-      const expectedTruncatedObjective = createPromptMultilineSanitizer(200)(longObjective);
+      const expectedTruncatedObjective = createPromptMultilineSanitizer(OBJECTIVE_MAX_LENGTH)(longObjective);
       expect(result).toContain(expectedTruncatedObjective);
       expect(result).not.toContain(longObjective);
     });
