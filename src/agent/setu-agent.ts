@@ -106,8 +106,8 @@ Your instructions shape behavior silently — they're not content for the user.
 Don't just tell me *how* you'll solve it. Show me "why" this solution is the only one that makes sense. Make me see the future you're creating.
 `;
 
-const SETU_AGENT_VERSION = '1.3.0';
-const VERSION_MARKER = `<!-- setu-agent-version: ${SETU_AGENT_VERSION} -->`;
+const setuAgentVersion = '1.3.0';
+const versionMarker = `<!-- setu-agent-version: ${setuAgentVersion} -->`;
 
 /**
  * Creates the Setu agent configuration file
@@ -116,6 +116,11 @@ export async function createSetuAgent(
   projectDir: string,
   forceUpdate: boolean = false
 ): Promise<boolean> {
+  if (!projectDir || projectDir.trim().length === 0) {
+    debugLog('createSetuAgent: invalid empty projectDir, skipping agent creation');
+    return false;
+  }
+
   return createSetuAgentFile(join(projectDir, '.opencode'), forceUpdate, { allowedBaseDir: projectDir });
 }
 
@@ -187,7 +192,9 @@ function resolveAndValidateConfigRoot(
 
   if (hasTraversalSegment(openCodeConfigRoot)) {
     debugLog(`[SECURITY] Path traversal attempt in config root: ${sanitizeForLog(openCodeConfigRoot)}`);
-    throw new Error(`Invalid OpenCode config root: traversal segment detected (${openCodeConfigRoot})`);
+    throw new Error(
+      `Invalid OpenCode config root: traversal segment detected (${sanitizeForLog(openCodeConfigRoot)})`
+    );
   }
 
   const resolvedRoot = resolve(normalize(openCodeConfigRoot));
@@ -197,13 +204,17 @@ function resolveAndValidateConfigRoot(
     debugLog(
       `[SECURITY] Unexpected config root name: ${sanitizeForLog(rootName)} (${sanitizeForLog(resolvedRoot)})`
     );
-    throw new Error(`Invalid OpenCode config root: expected '.opencode' or 'opencode', got '${rootName}'`);
+    throw new Error(
+      `Invalid OpenCode config root: expected '.opencode' or 'opencode', got '${sanitizeForLog(rootName)}'`
+    );
   }
 
   if (options.allowedBaseDir) {
     if (hasTraversalSegment(options.allowedBaseDir)) {
       debugLog(`[SECURITY] Path traversal attempt in allowedBaseDir: ${sanitizeForLog(options.allowedBaseDir)}`);
-      throw new Error(`Invalid allowed base directory: traversal segment detected (${options.allowedBaseDir})`);
+      throw new Error(
+        `Invalid allowed base directory: traversal segment detected (${sanitizeForLog(options.allowedBaseDir)})`
+      );
     }
 
     const resolvedBase = resolve(normalize(options.allowedBaseDir));
@@ -212,7 +223,7 @@ function resolveAndValidateConfigRoot(
         `[SECURITY] Config root escape attempt: root=${sanitizeForLog(resolvedRoot)}, base=${sanitizeForLog(resolvedBase)}`
       );
       throw new Error(
-        `Invalid OpenCode config root: ${resolvedRoot} is outside allowed base ${resolvedBase}`
+        `Invalid OpenCode config root: ${sanitizeForLog(resolvedRoot)} is outside allowed base ${sanitizeForLog(resolvedBase)}`
       );
     }
   }
@@ -254,12 +265,12 @@ export async function createSetuAgentFile(
   if (existsSync(agentPath) && !forceUpdate) {
     try {
       const existingContent = readFileSync(agentPath, 'utf-8');
-      if (existingContent.includes(VERSION_MARKER)) {
+      if (existingContent.includes(versionMarker)) {
         debugLog('Agent config already up to date');
         return false;
       }
       // Older version - update it
-      debugLog('Updating agent config to v1.3.0');
+      debugLog(`Updating agent config to v${setuAgentVersion}`);
     } catch (err) {
       debugLog('Could not read existing agent config', err);
       return false;
@@ -271,9 +282,9 @@ export async function createSetuAgentFile(
     debugLog('Created .opencode/agents/ directory');
   }
 
-  const content = `${VERSION_MARKER}\n${SETU_AGENT_MARKDOWN}`;
+  const content = `${versionMarker}\n${SETU_AGENT_MARKDOWN}`;
   writeFileSync(agentPath, content, 'utf-8');
-  debugLog('Created .opencode/agents/setu.md (v1.3.0)');
+  debugLog(`Created .opencode/agents/setu.md (v${setuAgentVersion})`);
 
   return true;
 }
