@@ -142,6 +142,10 @@ export const PLAN_EXAMPLE_TEMPLATE = `# Plan
 build -> lint -> test
 `;
 
+function assertNever(value: never): never {
+  throw new Error(`Unhandled gear: ${String(value)}`);
+}
+
 /**
  * Get research contract appropriate for current gear
  * Scout: Full guidance (need to research)
@@ -149,13 +153,16 @@ build -> lint -> test
  * Builder: Empty (already have research, time to plan/execute)
  */
 export function getResearchContractForSystem(gear: Gear): string {
-  if (gear === 'scout') {
-    return RESEARCH_SEMANTIC_REQUIREMENTS;
+  switch (gear) {
+    case 'scout':
+      return RESEARCH_SEMANTIC_REQUIREMENTS;
+    case 'architect':
+      return RESEARCH_SEMANTIC_REQUIREMENTS + '\n\nCreate comprehensive research artifact now.';
+    case 'builder':
+      return '';
+    default:
+      return assertNever(gear);
   }
-  if (gear === 'architect') {
-    return RESEARCH_SEMANTIC_REQUIREMENTS + '\n\nCreate comprehensive research artifact now.';
-  }
-  return '';
 }
 
 /**
@@ -165,11 +172,14 @@ export function getResearchContractForSystem(gear: Gear): string {
  * Scout: Empty (can't plan yet, need research first)
  */
 export function getPlanContractForSystem(gear: Gear): string {
-  if (gear === 'architect') {
-    return PLAN_SEMANTIC_REQUIREMENTS + '\n\nCreate atomic plan artifact now.';
+  switch (gear) {
+    case 'architect':
+      return PLAN_SEMANTIC_REQUIREMENTS + '\n\nCreate atomic plan artifact now.';
+    case 'builder':
+      return 'Execute PLAN.md with fidelity. Verify each step before proceeding.';
+    case 'scout':
+      return '';
+    default:
+      return assertNever(gear);
   }
-  if (gear === 'builder') {
-    return 'Execute PLAN.md with fidelity. Verify each step before proceeding.';
-  }
-  return '';
 }
