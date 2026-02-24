@@ -8,7 +8,7 @@
  * Behavioral enforcement (hydration context gate, gear-based workflow, verification, discipline guards) is handled by plugin hooks.
  */
 
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { basename, isAbsolute, join, normalize, relative, resolve } from 'path';
 import { debugLog } from '../debug';
@@ -119,18 +119,61 @@ export async function createSetuAgent(
   return createSetuAgentFile(join(projectDir, '.opencode'), forceUpdate, { allowedBaseDir: projectDir });
 }
 
-interface AgentPathValidationOptions {
+export interface AgentPathValidationOptions {
   allowedBaseDir?: string;
 }
 
+function sanitizeForLog(raw: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional replacement of non-printable chars for safe logging
+  return raw.replace(/[^\x20-\x7E]/g, '\uFFFD');
+}
+
 function hasTraversalSegment(pathValue: string): boolean {
-  return normalize(pathValue)
+  if (pathValue.indexOf('\x00') !== -1) {
+    return true;
+  }
+
+  // Reject C0/C1 controls in path input
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional control char detection for path validation
+  if (/[\x00-\x1F\x7F-\x9F]/.test(pathValue)) {
+    return true;
+  }
+
+  return pathValue
     .split(/[\\/]+/)
     .some((segment) => segment === '..');
 }
 
+function tryRealpath(pathValue: string): { path: string; exists: boolean } {
+  try {
+    return { path: realpathSync(pathValue), exists: true };
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      return { path: pathValue, exists: false };
+    }
+
+    debugLog(`Path realpath failed: ${sanitizeForLog(pathValue)}`, error);
+    throw error;
+  }
+}
+
 function isSubpath(baseDir: string, targetPath: string): boolean {
-  const rel = relative(baseDir, targetPath);
+  if (hasTraversalSegment(baseDir) || hasTraversalSegment(targetPath)) {
+    return false;
+  }
+
+  const resolvedBase = resolve(baseDir);
+  const resolvedTarget = resolve(targetPath);
+
+  const realBaseResult = tryRealpath(resolvedBase);
+  const realTargetResult = tryRealpath(resolvedTarget);
+
+  const realBase = realBaseResult.path;
+  const realTarget = realTargetResult.exists
+    ? realTargetResult.path
+    : resolve(realBase, relative(resolvedBase, resolvedTarget));
+
+  const rel = relative(realBase, realTarget);
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
 }
 
@@ -143,6 +186,7 @@ function resolveAndValidateConfigRoot(
   }
 
   if (hasTraversalSegment(openCodeConfigRoot)) {
+    debugLog(`[SECURITY] Path traversal attempt in config root: ${sanitizeForLog(openCodeConfigRoot)}`);
     throw new Error(`Invalid OpenCode config root: traversal segment detected (${openCodeConfigRoot})`);
   }
 
@@ -150,16 +194,23 @@ function resolveAndValidateConfigRoot(
   const rootName = basename(resolvedRoot);
 
   if (rootName !== '.opencode' && rootName !== 'opencode') {
+    debugLog(
+      `[SECURITY] Unexpected config root name: ${sanitizeForLog(rootName)} (${sanitizeForLog(resolvedRoot)})`
+    );
     throw new Error(`Invalid OpenCode config root: expected '.opencode' or 'opencode', got '${rootName}'`);
   }
 
   if (options.allowedBaseDir) {
     if (hasTraversalSegment(options.allowedBaseDir)) {
+      debugLog(`[SECURITY] Path traversal attempt in allowedBaseDir: ${sanitizeForLog(options.allowedBaseDir)}`);
       throw new Error(`Invalid allowed base directory: traversal segment detected (${options.allowedBaseDir})`);
     }
 
     const resolvedBase = resolve(normalize(options.allowedBaseDir));
     if (!isSubpath(resolvedBase, resolvedRoot)) {
+      debugLog(
+        `[SECURITY] Config root escape attempt: root=${sanitizeForLog(resolvedRoot)}, base=${sanitizeForLog(resolvedBase)}`
+      );
       throw new Error(
         `Invalid OpenCode config root: ${resolvedRoot} is outside allowed base ${resolvedBase}`
       );
@@ -176,16 +227,12 @@ function resolveAndValidateGlobalConfigRoot(): string {
     : join(homedir(), '.config');
 
   if (hasTraversalSegment(configHomeRaw)) {
-    throw new Error(`Invalid global config root: traversal segment detected (${configHomeRaw})`);
+    debugLog(`[SECURITY] Path traversal attempt in global config home: ${sanitizeForLog(configHomeRaw)}`);
+    throw new Error(`Invalid global config root: traversal segment detected (${sanitizeForLog(configHomeRaw)})`);
   }
 
   const resolvedConfigHome = resolve(normalize(configHomeRaw));
-  const configRoot = resolve(join(resolvedConfigHome, 'opencode'));
-  if (!isSubpath(resolvedConfigHome, configRoot)) {
-    throw new Error(`Invalid global config root: ${configRoot} escapes ${resolvedConfigHome}`);
-  }
-
-  return configRoot;
+  return resolve(join(resolvedConfigHome, 'opencode'));
 }
 
 /**
@@ -247,7 +294,12 @@ export function getGlobalSetuAgentPath(): string {
 }
 
 export function isGlobalSetuAgentConfigured(): boolean {
-  return existsSync(getGlobalSetuAgentPath());
+  try {
+    return existsSync(getGlobalSetuAgentPath());
+  } catch (error) {
+    debugLog('Global Setu agent path validation failed; treating as not configured', error);
+    return false;
+  }
 }
 
 export function isSetuAgentConfigured(projectDir: string): boolean {

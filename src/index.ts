@@ -91,8 +91,17 @@ export const SetuPlugin: Plugin = async (ctx) => {
   // Create the Setu agent configuration file on plugin init
   // This creates .opencode/agents/setu.md with the Setu persona and permissions
   const projectDir = ctx.directory || process.cwd();
+  let globalAgentConfigured = false;
+
   try {
-    if (!isGlobalSetuAgentConfigured()) {
+    globalAgentConfigured = isGlobalSetuAgentConfigured();
+  } catch (error) {
+    debugLog('Global Setu agent check failed; falling back to project-level agent creation', error);
+    globalAgentConfigured = false;
+  }
+
+  try {
+    if (!globalAgentConfigured) {
       const created = await createSetuAgent(projectDir);
       if (created) {
         alwaysLog('Agent configuration updated. Restart may be required if Setu is missing from Tab cycle.');

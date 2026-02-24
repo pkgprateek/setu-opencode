@@ -62,9 +62,12 @@ function normalizePluginList(value: unknown): string[] {
 }
 
 function removePlugin(config: Record<string, unknown>, pluginName: string): boolean {
+  if (!Array.isArray(config.plugin)) {
+    return false;
+  }
+
   const plugins = normalizePluginList(config.plugin);
   if (!plugins.includes(pluginName)) {
-    config.plugin = plugins;
     return false;
   }
 
@@ -126,7 +129,7 @@ export async function bootstrapSetuGlobal(): Promise<BootstrapResult> {
 
   let agentUpdated = false;
   try {
-    agentUpdated = await createSetuAgentFile(configDir, false, { allowedBaseDir: dirname(configDir) });
+    agentUpdated = await createSetuAgentFile(configDir, false /* forceUpdate */, { allowedBaseDir: configDir });
   } catch (error) {
     return warningResult(
       `Config updated, but agent creation failed at ${agentPath}: ${getErrorMessage(error)}. ` +
@@ -199,10 +202,13 @@ export function uninstallSetuGlobal(): UninstallResult {
 }
 
 export function isExplicitGlobalInstallEnv(): boolean {
+  // Primary signal (npm v7+): explicit global install flag.
   if (process.env.npm_config_global === 'true') {
     return true;
   }
 
+  // Legacy compatibility (npm v6): parse npm_config_argv when available.
+  // Keep this defensive path for older environments and malformed payloads.
   const argvRaw = process.env.npm_config_argv;
   if (!argvRaw || argvRaw.trim().length === 0) {
     return false;
