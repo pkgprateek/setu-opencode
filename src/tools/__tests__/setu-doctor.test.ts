@@ -3,21 +3,7 @@ import { createSetuDoctorTool } from '../setu-doctor';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import type { ToolContext } from '@opencode-ai/plugin';
-
-// Minimal mock ToolContext for unit tests
-function createMockToolContext(): ToolContext {
-  return {
-    sessionID: 'test-session',
-    messageID: 'test-msg-1',
-    agent: 'setu',
-    abort: new AbortController().signal,
-    metadata: () => {},
-    ask: async () => {},
-    directory: process.cwd(),
-    worktree: process.cwd(),
-  } as unknown as ToolContext;
-}
+import { createMockToolContext } from './tool-context-fixtures';
 
 describe('setu-doctor project rules check', () => {
   test('reports healthy when AGENTS.md exists', async () => {

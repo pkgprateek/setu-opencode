@@ -4,20 +4,7 @@ import { mkdir, writeFile, readFile, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import type { ToolContext } from '@opencode-ai/plugin';
-
-// Minimal mock ToolContext for unit tests
-function createMockToolContext(): ToolContext {
-  return {
-    sessionID: 'test-session',
-    messageID: 'test-msg-1',
-    agent: 'setu',
-    abort: new AbortController().signal,
-    metadata: () => {},
-    ask: async () => {},
-    directory: process.cwd(),
-    worktree: process.cwd(),
-  } as unknown as ToolContext;
-}
+import { createMockToolContext } from './tool-context-fixtures';
 
 describe('setu_plan', () => {
   let testDir: string;
