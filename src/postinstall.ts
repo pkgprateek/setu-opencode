@@ -11,7 +11,15 @@ async function runPostinstall(): Promise<void> {
     return;
   }
 
-  const result = await bootstrapSetuGlobal();
+  let result: Awaited<ReturnType<typeof bootstrapSetuGlobal>>;
+  try {
+    result = await bootstrapSetuGlobal();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`[setu] Global bootstrap failed unexpectedly: ${message}\n`);
+    process.stderr.write('[setu] Installation will continue. Run `setu init` manually if needed.\n');
+    return;
+  }
 
   if (result.warning) {
     process.stderr.write(`[setu] Global bootstrap skipped: ${result.warning}\n`);
@@ -22,4 +30,7 @@ async function runPostinstall(): Promise<void> {
   process.stdout.write('[setu] Global OpenCode bootstrap complete.\n');
 }
 
-void runPostinstall();
+void runPostinstall().catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(`[setu] Postinstall warning: ${message}\n`);
+});

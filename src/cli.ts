@@ -72,4 +72,8 @@ async function run(): Promise<void> {
   );
 }
 
-void run();
+void run().catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(`[setu] Error: ${message}\n`);
+  process.exitCode = 1;
+});
