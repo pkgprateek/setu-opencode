@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
-import { homedir } from 'os';
 import { dirname, join } from 'path';
-import { createSetuAgentFile } from '../agent/setu-agent';
+import { createSetuAgentFile, resolveAndValidateGlobalConfigRoot } from '../agent/setu-agent';
 import { getErrorMessage } from '../utils/error-handling';
 
 export interface BootstrapResult {
@@ -21,12 +20,7 @@ export interface UninstallResult {
 }
 
 function getGlobalOpenCodeConfigDir(): string {
-  const xdgConfigHome = process.env.XDG_CONFIG_HOME;
-  if (xdgConfigHome && xdgConfigHome.trim().length > 0) {
-    return join(xdgConfigHome, 'opencode');
-  }
-
-  return join(homedir(), '.config', 'opencode');
+  return resolveAndValidateGlobalConfigRoot();
 }
 
 function getGlobalRoots(): { configDir: string; configPath: string; agentPath: string } {
@@ -48,7 +42,12 @@ function readConfig(configPath: string): Record<string, unknown> {
     return {};
   }
 
-  return JSON.parse(content) as Record<string, unknown>;
+  const parsed = JSON.parse(content);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Config JSON must be a non-null object');
+  }
+
+  return parsed as Record<string, unknown>;
 }
 
 function normalizePluginList(value: unknown): string[] {

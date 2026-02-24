@@ -220,7 +220,7 @@ function resolveAndValidateConfigRoot(
   return resolvedRoot;
 }
 
-function resolveAndValidateGlobalConfigRoot(): string {
+export function resolveAndValidateGlobalConfigRoot(): string {
   const xdgConfigHome = process.env.XDG_CONFIG_HOME;
   const configHomeRaw = xdgConfigHome && xdgConfigHome.trim().length > 0
     ? xdgConfigHome
