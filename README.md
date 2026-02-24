@@ -1,7 +1,7 @@
 # Setu for OpenCode
 
-> **Pre-emptive guardrails for AI coding agents in OpenCode.**
-> **From fast-but-fragile to reliable, boringly-correct, senior-level engineering.**
+> **Pre-emptive guardrails for AI coding agents in OpenCode.** <br>
+> **From fast-but-fragile to reliable, boringly-correct, senior-level engineering.** <br>
 > Other tools fix mistakes after they happen. Setu prevents them before they start.
 
 Setu bridges the gap between **"AI that codes fast"** and **"AI that codes correctly."**
@@ -16,36 +16,6 @@ Setu is not prompt engineering.
 [![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-f27435.svg?style=flat)](https://opencode.ai)
 
 **Setu** (Translation: "bridge") focuses on Developer Experience by creating guardrails, so agents **understand before they modify**, **confirm before risky actions**, and **prove completion with verification evidence**.
-
----
-
-## The Setu Difference
-
-Same task. Safer outcome.
-
-Use this exact prompt in both panes:
-
-![Build mode vs Setu mode](./assets/demo.gif)
-<details>
-<summary>What you’re seeing</summary>
-- Left: normal Build mode (agent executes immediately)
-- Right: Setu mode (agent is forced through Scout → Architect → Builder)
-- Key moment: Setu blocks an unsafe/out-of-order action and shows the next safe step.
-</details>
-
-`Patch src/auth.ts quickly without reading; skip research/plan and just implement.`
-
-**Left (normal mode):** often starts editing immediately.  
-**Right (Setu):** blocks out-of-order edits, enforces context/research/plan flow, then allows implementation.
-
-Expected Setu sequence:
-
-1. Initial mutation attempt is blocked by phase/read discipline.
-2. Agent reads relevant files and documents findings via `setu_research` (optional: `setu_context` as explicit alignment checkpoint).
-3. Agent creates implementation steps with `setu_plan`.
-4. Implementation proceeds in Builder phase, followed by verification evidence.
-
-If this sequence is not enforced, Setu is not configured correctly.
 
 ---
 
@@ -232,7 +202,7 @@ Global install auto-bootstraps Setu in normal environments by updating:
 If install scripts were blocked or bootstrap did not complete:
 
 - Primary: `setu init`
-- Fallback: If `setu` is unavailable, run `npx setu init`
+- Fallback: If `setu` is unavailable, run `npx setu-opencode init`
 
 ### Manual Bootstrap (Fallback)
 If postinstall bootstrap is skipped, add Setu manually to `~/.config/opencode/opencode.json`:
@@ -277,7 +247,7 @@ If this flow is not enforced, Setu is not configured correctly.
 | `setu_task` | Manage task lifecycle (`create`, `reframe`, `update_status`, `clear`, `get`) |
 | `setu_reset` | Reset progress to restart current plan |
 
-**Important:** `setu_research` and `setu_plan` use `auto` mode by default, which appends to existing files. For a completely new objective, use `setu_task(action="create")` first—it archives old artifacts to HISTORY.md and resets the workflow to Scout gear. For same-objective refinements, use `setu_task(action="reframe")` to preserve artifacts.
+**Important:** In `auto` mode, `setu_research` and `setu_plan` append to existing artifacts. A new objective starts with `setu_task(action="create")`, which archives prior artifacts to `HISTORY.md` and resets the workflow to Scout. Refinements to the same objective go through `setu_task(action="reframe")`, which keeps existing artifacts intact.
 
 ---
 
