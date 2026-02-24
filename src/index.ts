@@ -249,7 +249,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
     state.isFirstSession = false;
   };
 
-  const onFirstSetuMessageInSession = (sessionID: string): void => {
+  const onSetuMessage = (sessionID: string): void => {
     if (!sessionID || state.setuInitCheckedSessions.has(sessionID)) {
       return;
     }
@@ -268,13 +268,23 @@ export const SetuPlugin: Plugin = async (ctx) => {
       debugLog('Lazy init: failed to create .setu/ directory:', error);
     }
   };
+
+  const registeredTools = {
+    setu_verify: createSetuVerifyTool(markVerificationComplete, getProjectDir),
+    setu_context: createSetuContextTool(getHydrationState, confirmContext, getContextCollector, getProjectDir),
+    setu_task: createSetuTaskTool(getProjectDir, resetVerificationState),
+    setu_research: createSetuResearchTool(getProjectDir),
+    setu_plan: createSetuPlanTool(getProjectDir),
+    setu_reset: createSetuResetTool(getProjectDir),
+    setu_doctor: createSetuDoctorTool(getProjectDir),
+  };
   
   // Log plugin initialization (only in debug mode)
   debugLog('Plugin initialized');
   debugLog('Default mode: Setu (discipline layer)');
   debugLog('Hydration enforcement: ACTIVE');
   debugLog('Context persistence: .setu/ directory');
-  debugLog('Tools: setu_verify, setu_context, setu_task');
+  debugLog(`Tools: ${Object.keys(registeredTools).join(', ')}`);
   debugLog('Skills bundled: setu-bootstrap, setu-verification, setu-rules-creation');
 
   // Create tool.before hook once so session-scoped policy state persists correctly.
@@ -320,7 +330,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
     // Wrapped for graceful degradation (2.10)
     'chat.message': wrapHook(
       'chat.message',
-      createChatMessageHook(setCurrentAgent, onFirstSetuMessageInSession)
+      createChatMessageHook(setCurrentAgent, onSetuMessage)
     ),
     
     // Hydration gate: block side-effect tools until context is confirmed
@@ -390,15 +400,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
     ),
     
     // Custom tools
-    tool: {
-      setu_verify: createSetuVerifyTool(markVerificationComplete, getProjectDir),
-      setu_context: createSetuContextTool(getHydrationState, confirmContext, getContextCollector, getProjectDir),
-      setu_task: createSetuTaskTool(getProjectDir, resetVerificationState),
-      setu_research: createSetuResearchTool(getProjectDir),
-      setu_plan: createSetuPlanTool(getProjectDir),
-      setu_reset: createSetuResetTool(getProjectDir),
-      setu_doctor: createSetuDoctorTool(getProjectDir)
-    }
+    tool: registeredTools
   };
 };
 

@@ -267,6 +267,7 @@ export function createSystemTransformHook(
         // Uses same ranges as sanitizeLogDetails for consistency: [\x00-\x09\x0B-\x0C\x0E-\x1F\x7F-\x9F]
         const safePath = (overwriteRequirement.filePath ?? "")
           .replace(/\r\n|\r|\n/g, " ")
+          // biome-ignore lint/suspicious/noControlCharactersInRegex: security-critical stripping of control chars from user-provided file paths
           .replace(/[\x00-\x09\x0b-\x0c\x0e-\x1f\x7f-\x9f]/g, "");
         output.system.unshift(
           `[SETU: Overwrite Guard]\n` +
