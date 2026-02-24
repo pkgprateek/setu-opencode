@@ -63,6 +63,7 @@ reviews:
         - No implicit returns — all code paths must return
         - Handle all errors explicitly (no silent failures)
         - Validate null/undefined at API boundaries
+        - Naming default is camelCase, but allow explicit exceptions for stable protocol/constants (e.g., UPPER_SNAKE_CASE prompt contract identifiers)
 
         **CRITICAL: Security & Defense in Depth**
         - Path validation: Sanitize all file paths (prevent directory traversal)
