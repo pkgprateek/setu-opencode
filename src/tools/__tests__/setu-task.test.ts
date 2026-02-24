@@ -1,13 +1,24 @@
-import { describe, expect, test } from 'bun:test';
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'fs';
+import { afterEach, describe, expect, test } from 'bun:test';
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { createSetuTaskTool } from '../setu-task';
 import { loadActiveTask } from '../../context/active';
 
 function makeProjectDir(): string {
-  return mkdtempSync(join(tmpdir(), 'setu-task-'));
+  const dir = mkdtempSync(join(tmpdir(), 'setu-task-'));
+  createdProjectDirs.push(dir);
+  return dir;
 }
+
+const createdProjectDirs: string[] = [];
+
+afterEach(() => {
+  for (const dir of createdProjectDirs) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  createdProjectDirs.length = 0;
+});
 
 describe('setu_task lifecycle actions', () => {
   test('create archives existing artifacts and resets workflow boundary', async () => {

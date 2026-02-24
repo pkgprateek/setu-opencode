@@ -25,7 +25,7 @@ import {
   type TaskStatus,
   CONSTRAINT_TYPES
 } from '../context/active';
-import { debugLog } from '../debug';
+import { debugLog, errorLog } from '../debug';
 import { getErrorMessage } from '../utils/error-handling';
 import { removeControlChars } from '../utils/sanitization';
 
@@ -253,11 +253,11 @@ setu_task({
             currentTask.constraints.some((existing) => !validatedConstraintUpdate.includes(existing));
 
           if (attemptedConstraintClear) {
-            debugLog(`[AUDIT] Constraint clear attempt during reframe blocked. Project: ${projectDir}`);
+            errorLog(`[AUDIT] Constraint clear attempt during reframe blocked. Project: ${projectDir}`);
           }
 
           if (attemptedConstraintDowngrade) {
-            debugLog(`[AUDIT] Constraint downgrade attempt during reframe blocked. Project: ${projectDir}`);
+            errorLog(`[AUDIT] Constraint downgrade attempt during reframe blocked. Project: ${projectDir}`);
           }
 
           const nextConstraints = attemptedConstraintDowngrade

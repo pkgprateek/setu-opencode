@@ -141,7 +141,8 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
 
     let content: string;
     if (mode === 'append') {
-      content = `${existingContent!.trimEnd()}\n\n---\n\n## Session Addendum (${new Date().toISOString()})\n\n${sanitizedContent}`;
+      const sanitizedExisting = sanitizeResearchText(existingContent ?? '');
+      content = `${sanitizedExisting.trimEnd()}\n\n---\n\n## Session Addendum (${new Date().toISOString()})\n\n${sanitizedContent}`;
     } else {
       content = sanitizedContent;
     }

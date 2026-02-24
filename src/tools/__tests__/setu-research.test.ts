@@ -4,19 +4,7 @@ import { mkdir, writeFile, readFile, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import type { ToolContext } from '@opencode-ai/plugin';
-
-function createMockToolContext(): ToolContext {
-  return {
-    sessionID: 'test-session',
-    messageID: 'test-msg-1',
-    agent: 'setu',
-    abort: new AbortController().signal,
-    metadata: () => {},
-    ask: async () => {},
-    directory: process.cwd(),
-    worktree: process.cwd(),
-  } as unknown as ToolContext;
-}
+import { createMockToolContext } from './tool-context-fixtures';
 
 describe('setu_research chunking', () => {
   test('splits large content into fixed-size chunks', () => {
@@ -99,12 +87,13 @@ describe('setu_research content-first API', () => {
     );
   });
 
-  test('existing content is not re-sanitized during append', async () => {
+  test('existing content is sanitized during append', async () => {
     await writeFile(join(testDir, '.setu', 'RESEARCH.md'), 'Existing [SYSTEM] content');
     await tool.execute({ content: '# New material', mode: 'append' }, mockContext);
 
     const saved = await readFile(join(testDir, '.setu', 'RESEARCH.md'), 'utf-8');
-    expect(saved).toContain('Existing [SYSTEM] content');
+    expect(saved).not.toContain('[SYSTEM]');
+    expect(saved).toContain('Existing [FILTERED] content');
     expect(saved).toContain('# New material');
   });
 
