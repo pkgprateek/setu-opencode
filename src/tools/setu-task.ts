@@ -13,7 +13,7 @@
 
 import { tool } from '@opencode-ai/plugin';
 import { appendFile, readFile, unlink } from 'fs/promises';
-import { join } from 'path';
+import { isAbsolute, join, normalize } from 'path';
 import {
   createActiveTask,
   saveActiveTask,
@@ -28,6 +28,7 @@ import {
 import { debugLog, errorLog } from '../debug';
 import { getErrorMessage } from '../utils/error-handling';
 import { removeControlChars } from '../utils/sanitization';
+import { validateProjectDir } from '../utils/path-validation';
 
 /**
  * Valid constraint names for input validation
@@ -80,7 +81,21 @@ function sanitizeReferences(references: string[] | undefined): string[] {
       }
 
       // Allow plain file path references while rejecting URI-like schemes.
-      return !reference.includes('://');
+      if (reference.includes('://')) {
+        return false;
+      }
+
+      if (isAbsolute(reference)) {
+        return false;
+      }
+
+      const normalized = normalize(reference).replace(/\\/g, '/');
+      const segments = normalized.split('/').filter(Boolean);
+      if (segments.some((segment) => segment === '..')) {
+        return false;
+      }
+
+      return true;
     });
 }
 
@@ -153,6 +168,7 @@ Active tasks persist to \`.setu/active.json\` and survive:
     
     async execute(args, _context): Promise<string> {
       const projectDir = getProjectDir();
+      validateProjectDir(projectDir);
       const action = removeControlChars(String(args.action ?? '').toLowerCase()).trim() || 'unknown';
       
       switch (action) {
