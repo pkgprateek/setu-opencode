@@ -48,6 +48,10 @@ export function splitResearchContent(input: string, chunkSize = CHUNK_SIZE_CHARS
   return chunks;
 }
 
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error;
+}
+
 async function persistResearchChunks(projectDir: string, content: string): Promise<number> {
   const chunks = splitResearchContent(content, CHUNK_SIZE_CHARS);
   const chunksDir = join(projectDir, '.setu', 'research_chunks');
@@ -62,7 +66,7 @@ async function persistResearchChunks(projectDir: string, content: string): Promi
       debugLog(`setu_research: deleted ${staleFiles.length} stale chunk file(s) in ${chunksDir}`);
     }
   } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error) {
+    if (isNodeError(error)) {
       if (error.code === 'ENOENT' || error.code === 'EACCES' || error.code === 'EPERM') {
         debugLog(`persistResearchChunks: ignoring cleanup error (${error.code})`);
       } else {
@@ -81,10 +85,6 @@ async function persistResearchChunks(projectDir: string, content: string): Promi
   debugLog(`setu_research: wrote ${chunks.length} chunk file(s) in ${chunksDir}`);
 
   return chunks.length;
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error;
 }
 
 export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<typeof tool> => tool({
@@ -146,7 +146,7 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
       }
       const sanitizedExisting = sanitizeResearchText(existingContent);
       const appendBase = (!sanitizedExisting && existingContent.trim().length > 0)
-        ? existingContent
+        ? removeControlChars(existingContent)
         : sanitizedExisting;
 
       if (appendBase === existingContent && sanitizedExisting !== existingContent) {
