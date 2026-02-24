@@ -82,6 +82,48 @@ describe('setu_task lifecycle actions', () => {
     expect(existsSync(join(setuDir, 'PLAN.md'))).toBe(true);
   });
 
+  test('reframe blocks constraint downgrade attempts', async () => {
+    const projectDir = makeProjectDir();
+    const tool = createSetuTaskTool(() => projectDir);
+
+    await tool.execute(
+      { action: 'create', task: 'Harden scout boundaries', constraints: ['READ_ONLY', 'NO_DELETE'] },
+      {} as never
+    );
+
+    const result = await tool.execute(
+      { action: 'reframe', task: 'Harden scout boundaries v2', constraints: ['NO_PUSH'] },
+      {} as never
+    );
+
+    expect(result).toContain('Task Reframed');
+
+    const active = loadActiveTask(projectDir);
+    expect(active?.task).toBe('Harden scout boundaries v2');
+    expect(active?.constraints).toEqual(['READ_ONLY', 'NO_DELETE']);
+  });
+
+  test('create and reframe sanitize control characters in task text', async () => {
+    const projectDir = makeProjectDir();
+    const tool = createSetuTaskTool(() => projectDir);
+
+    await tool.execute(
+      { action: 'create', task: 'Fix auth\u0000 flow\u0007' },
+      {} as never
+    );
+
+    let active = loadActiveTask(projectDir);
+    expect(active?.task).toBe('Fix auth flow');
+
+    await tool.execute(
+      { action: 'reframe', task: 'Refine\u0000 auth\u0007 flow' },
+      {} as never
+    );
+
+    active = loadActiveTask(projectDir);
+    expect(active?.task).toBe('Refine auth flow');
+  });
+
   test('legacy update action is rejected', async () => {
     const projectDir = makeProjectDir();
     const tool = createSetuTaskTool(() => projectDir);

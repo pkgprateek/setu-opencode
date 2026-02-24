@@ -27,6 +27,7 @@ import {
 } from '../context/active';
 import { debugLog } from '../debug';
 import { getErrorMessage } from '../utils/error-handling';
+import { removeControlChars } from '../utils/sanitization';
 
 /**
  * Valid constraint names for input validation
@@ -131,7 +132,9 @@ Active tasks persist to \`.setu/active.json\` and survive:
       
       switch (action) {
         case 'create': {
-          if (!args.task) {
+          const sanitizedTask = removeControlChars(args.task ?? '').trim();
+
+          if (!sanitizedTask) {
             return `**Error:** Task description is required for create action.
 
 Example:
@@ -182,7 +185,7 @@ setu_task({
           const constraints = validateConstraints(args.constraints);
           
           // Create and save the task
-          const newTask = createActiveTask(args.task, constraints);
+          const newTask = createActiveTask(sanitizedTask, constraints);
           
           // Add references if provided
           if (args.references && args.references.length > 0) {
@@ -202,7 +205,7 @@ setu_task({
             debugLog('Verification state reset for new task');
           }
           
-          debugLog(`Created active task: "${args.task.slice(0, 50)}..."`);
+          debugLog(`Created active task: "${sanitizedTask.slice(0, 50)}..."`);
           
           const constraintNote = constraints.length > 0
             ? `\n\n**Enforcement:** The following constraints are now active and will block violating tool calls:\n${constraints.map(c => `- \`${c}\``).join('\n')}`
@@ -227,7 +230,9 @@ setu_task({ action: "create", task: "Your task description" })
 \`\`\``;
           }
 
-          if (!args.task?.trim()) {
+          const sanitizedTask = removeControlChars(args.task ?? '').trim();
+
+          if (!sanitizedTask) {
             return `**Error:** Task description is required for reframe action.
 
 Example:
@@ -242,17 +247,29 @@ setu_task({
 
           const validatedConstraintUpdate = args.constraints ? validateConstraints(args.constraints) : null;
           const attemptedConstraintClear = args.constraints !== undefined && (validatedConstraintUpdate?.length ?? 0) === 0;
+          const attemptedConstraintDowngrade =
+            validatedConstraintUpdate !== null &&
+            validatedConstraintUpdate.length > 0 &&
+            currentTask.constraints.some((existing) => !validatedConstraintUpdate.includes(existing));
 
           if (attemptedConstraintClear) {
             debugLog(`[AUDIT] Constraint clear attempt during reframe blocked. Project: ${projectDir}`);
           }
 
+          if (attemptedConstraintDowngrade) {
+            debugLog(`[AUDIT] Constraint downgrade attempt during reframe blocked. Project: ${projectDir}`);
+          }
+
+          const nextConstraints = attemptedConstraintDowngrade
+            ? currentTask.constraints
+            : (validatedConstraintUpdate && validatedConstraintUpdate.length > 0
+              ? validatedConstraintUpdate
+              : currentTask.constraints);
+
           const reframedTask: ActiveTask = {
             ...currentTask,
-            task: args.task,
-            constraints: validatedConstraintUpdate && validatedConstraintUpdate.length > 0
-              ? validatedConstraintUpdate
-              : currentTask.constraints,
+            task: sanitizedTask,
+            constraints: nextConstraints,
           };
 
           if (args.references && args.references.length > 0) {
@@ -265,7 +282,7 @@ setu_task({
             debugLog(`Failed to save reframed task in ${projectDir}: ${getErrorMessage(saveError)}`);
             return `**Error:** Failed to save reframed task. Please retry.`;
           }
-          debugLog(`Reframed active task: "${args.task.slice(0, 50)}..."`);
+          debugLog(`Reframed active task: "${sanitizedTask.slice(0, 50)}..."`);
 
           return `## Task Reframed
 
