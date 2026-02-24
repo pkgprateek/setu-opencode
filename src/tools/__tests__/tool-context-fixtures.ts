@@ -8,6 +8,7 @@ import type { ToolContext } from '@opencode-ai/plugin';
 export function createMockToolContext(overrides: Partial<ToolContext> = {}): ToolContext {
   const metadata: ToolContext['metadata'] = () => undefined;
   const ask: ToolContext['ask'] = async () => undefined;
+  // Intentionally non-abortable default signal; tests that need cancellation can override `abort`.
 
   const base: ToolContext = {
     sessionID: 'test-session',
