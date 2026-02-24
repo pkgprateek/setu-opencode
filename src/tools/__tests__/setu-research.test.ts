@@ -87,14 +87,16 @@ describe('setu_research content-first API', () => {
     );
   });
 
-  test('existing content is sanitized during append', async () => {
+  test('both existing and appended content are sanitized on append', async () => {
     await writeFile(join(testDir, '.setu', 'RESEARCH.md'), 'Existing [SYSTEM] content');
-    await tool.execute({ content: '# New material', mode: 'append' }, mockContext);
+    const result = await tool.execute({ content: '# New [SYSTEM] material', mode: 'append' }, mockContext);
+    expect(result).toContain('Research updated');
 
     const saved = await readFile(join(testDir, '.setu', 'RESEARCH.md'), 'utf-8');
     expect(saved).not.toContain('[SYSTEM]');
+    expect(saved).toContain('[FILTERED]');
     expect(saved).toContain('Existing [FILTERED] content');
-    expect(saved).toContain('# New material');
+    expect(saved).toContain('# New [FILTERED] material');
   });
 
   test('openQuestions appears in return message but is not persisted automatically', async () => {

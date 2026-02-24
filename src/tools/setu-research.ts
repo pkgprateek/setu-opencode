@@ -141,8 +141,19 @@ export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<
 
     let content: string;
     if (mode === 'append') {
-      const sanitizedExisting = sanitizeResearchText(existingContent ?? '');
-      content = `${sanitizedExisting.trimEnd()}\n\n---\n\n## Session Addendum (${new Date().toISOString()})\n\n${sanitizedContent}`;
+      if (existingContent === undefined) {
+        throw new Error('setu_research: existingContent expected for append mode');
+      }
+      const sanitizedExisting = sanitizeResearchText(existingContent);
+      const appendBase = (!sanitizedExisting && existingContent.trim().length > 0)
+        ? existingContent
+        : sanitizedExisting;
+
+      if (appendBase === existingContent && sanitizedExisting !== existingContent) {
+        debugLog('setu_research: sanitization stripped existing content; preserving raw content to avoid data loss');
+      }
+
+      content = `${appendBase.trimEnd()}\n\n---\n\n## Session Addendum (${new Date().toISOString()})\n\n${sanitizedContent}`;
     } else {
       content = sanitizedContent;
     }
