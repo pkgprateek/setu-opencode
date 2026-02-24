@@ -2,7 +2,8 @@
  * Chat message hook - tracks active agent only.
  */
 
-import { debugLog } from '../debug';
+import { debugLog, errorLog } from '../debug';
+import { removeControlChars } from '../utils/sanitization';
 
 /**
  * Agent state tracking
@@ -34,12 +35,19 @@ export function createChatMessageHook(
     input: { sessionID: string; agent?: string; messageID?: string },
     _output: { message: { id: string }; parts: Array<{ type: string; content?: string }> }
   ): Promise<void> => {
+    const rawSessionID = input.sessionID ?? '';
+    const safeSessionID = removeControlChars(rawSessionID).trim();
+
     if (input.agent && input.agent.toLowerCase() === 'setu' && onSetuMessage) {
       try {
-        onSetuMessage(input.sessionID);
+        if (!safeSessionID) {
+          errorLog('[setu] security_event hook=onSetuMessage type=empty_sanitized_session_id');
+        } else {
+          onSetuMessage(safeSessionID);
+        }
       } catch (error) {
         // Graceful degradation: lazy init is non-critical
-        debugLog('Failed to run first Setu message initialization:', error);
+        debugLog('Failed to invoke onSetuMessage callback:', error);
       }
     }
 

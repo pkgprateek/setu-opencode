@@ -24,7 +24,7 @@ import {
   getOverwriteRequirement,
 } from "../context";
 import { determineGear } from "../enforcement";
-import { debugLog } from "../debug";
+import { debugLog, errorLog } from "../debug";
 import { getErrorMessage } from "../utils/error-handling";
 import {
   getResearchContractForSystem,
@@ -244,23 +244,27 @@ export function createSystemTransformHook(
             output.system.push(planContract);
           }
 
-          if (process.env.SETU_DEBUG === "true") {
-            debugLog(
-              `Contracts injected: research=${!!researchContract}, plan=${!!planContract}`,
-            );
-          }
+          debugLog(
+            `Contracts injected: research=${!!researchContract}, plan=${!!planContract}`,
+          );
         }
       }
 
-      const sessionID = input.sessionID ?? 'unknown';
-      const disciplineState = getDisciplineState(sessionID);
+      const sessionID = input.sessionID?.trim();
+      if (!sessionID) {
+        errorLog('[setu] system.transform missing sessionID; using isolated non-persistent discipline defaults');
+      }
+
+      const disciplineState = sessionID
+        ? getDisciplineState(sessionID)
+        : { questionBlocked: false, safetyBlocked: false, updatedAt: Date.now() };
       if (disciplineState.questionBlocked) {
         output.system.unshift(
           `[SETU: Clarification Required] Ask one direct question to the user, then wait. Do not run mutating tools until they answer.`,
         );
       }
 
-      const overwriteRequirement = getOverwriteRequirement(sessionID);
+      const overwriteRequirement = sessionID ? getOverwriteRequirement(sessionID) : null;
       if (overwriteRequirement?.pending) {
         // Sanitize filePath before interpolation: strip control chars and newlines
         // Convert CR/LF to spaces first, then strip C0 (except CR/LF already handled) and C1 controls

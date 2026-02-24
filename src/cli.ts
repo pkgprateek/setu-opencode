@@ -2,6 +2,11 @@
 
 import { bootstrapSetuGlobal, uninstallSetuGlobal } from './install/bootstrap';
 
+function sanitizeCliInput(input: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional control char stripping for CLI error output safety
+  return input.replace(/[\x00-\x1F\x7F-\x9F]/g, '');
+}
+
 function printUsage(): void {
   process.stdout.write(
     [
@@ -31,7 +36,8 @@ async function run(): Promise<void> {
   }
 
   if (command !== 'init' && command !== 'uninstall') {
-    process.stderr.write(`Unknown command: ${command}\n\n`);
+    const safeCommand = sanitizeCliInput(command);
+    process.stderr.write(`Unknown command: ${safeCommand}\n\n`);
     printUsage();
     process.exitCode = 1;
     return;
