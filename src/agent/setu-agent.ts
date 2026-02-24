@@ -10,7 +10,7 @@
 
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { homedir } from 'os';
-import { join } from 'path';
+import { basename, isAbsolute, join, normalize, relative, resolve } from 'path';
 import { debugLog } from '../debug';
 
 /**
@@ -116,7 +116,76 @@ export async function createSetuAgent(
   projectDir: string,
   forceUpdate: boolean = false
 ): Promise<boolean> {
-  return createSetuAgentFile(join(projectDir, '.opencode'), forceUpdate);
+  return createSetuAgentFile(join(projectDir, '.opencode'), forceUpdate, { allowedBaseDir: projectDir });
+}
+
+interface AgentPathValidationOptions {
+  allowedBaseDir?: string;
+}
+
+function hasTraversalSegment(pathValue: string): boolean {
+  return normalize(pathValue)
+    .split(/[\\/]+/)
+    .some((segment) => segment === '..');
+}
+
+function isSubpath(baseDir: string, targetPath: string): boolean {
+  const rel = relative(baseDir, targetPath);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
+function resolveAndValidateConfigRoot(
+  openCodeConfigRoot: string,
+  options: AgentPathValidationOptions = {}
+): string {
+  if (!openCodeConfigRoot || openCodeConfigRoot.trim().length === 0) {
+    throw new Error('Invalid OpenCode config root: empty path');
+  }
+
+  if (hasTraversalSegment(openCodeConfigRoot)) {
+    throw new Error(`Invalid OpenCode config root: traversal segment detected (${openCodeConfigRoot})`);
+  }
+
+  const resolvedRoot = resolve(normalize(openCodeConfigRoot));
+  const rootName = basename(resolvedRoot);
+
+  if (rootName !== '.opencode' && rootName !== 'opencode') {
+    throw new Error(`Invalid OpenCode config root: expected '.opencode' or 'opencode', got '${rootName}'`);
+  }
+
+  if (options.allowedBaseDir) {
+    if (hasTraversalSegment(options.allowedBaseDir)) {
+      throw new Error(`Invalid allowed base directory: traversal segment detected (${options.allowedBaseDir})`);
+    }
+
+    const resolvedBase = resolve(normalize(options.allowedBaseDir));
+    if (!isSubpath(resolvedBase, resolvedRoot)) {
+      throw new Error(
+        `Invalid OpenCode config root: ${resolvedRoot} is outside allowed base ${resolvedBase}`
+      );
+    }
+  }
+
+  return resolvedRoot;
+}
+
+function resolveAndValidateGlobalConfigRoot(): string {
+  const xdgConfigHome = process.env.XDG_CONFIG_HOME;
+  const configHomeRaw = xdgConfigHome && xdgConfigHome.trim().length > 0
+    ? xdgConfigHome
+    : join(homedir(), '.config');
+
+  if (hasTraversalSegment(configHomeRaw)) {
+    throw new Error(`Invalid global config root: traversal segment detected (${configHomeRaw})`);
+  }
+
+  const resolvedConfigHome = resolve(normalize(configHomeRaw));
+  const configRoot = resolve(join(resolvedConfigHome, 'opencode'));
+  if (!isSubpath(resolvedConfigHome, configRoot)) {
+    throw new Error(`Invalid global config root: ${configRoot} escapes ${resolvedConfigHome}`);
+  }
+
+  return configRoot;
 }
 
 /**
@@ -128,9 +197,11 @@ export async function createSetuAgent(
  */
 export async function createSetuAgentFile(
   openCodeConfigRoot: string,
-  forceUpdate: boolean = false
+  forceUpdate: boolean = false,
+  options: AgentPathValidationOptions = {}
 ): Promise<boolean> {
-  const agentDir = join(openCodeConfigRoot, 'agents');
+  const safeConfigRoot = resolveAndValidateConfigRoot(openCodeConfigRoot, options);
+  const agentDir = join(safeConfigRoot, 'agents');
   const agentPath = join(agentDir, 'setu.md');
 
   if (existsSync(agentPath) && !forceUpdate) {
@@ -165,12 +236,14 @@ export function getSetuAgentPath(projectDir: string): string {
 }
 
 export function getGlobalSetuAgentPath(): string {
-  const xdgConfigHome = process.env.XDG_CONFIG_HOME;
-  const configRoot = xdgConfigHome && xdgConfigHome.trim().length > 0
-    ? join(xdgConfigHome, 'opencode')
-    : join(homedir(), '.config', 'opencode');
+  const configRoot = resolveAndValidateGlobalConfigRoot();
+  const agentPath = resolve(join(configRoot, 'agents', 'setu.md'));
 
-  return join(configRoot, 'agents', 'setu.md');
+  if (!isSubpath(configRoot, agentPath)) {
+    throw new Error(`Invalid global agent path: ${agentPath} escapes ${configRoot}`);
+  }
+
+  return agentPath;
 }
 
 export function isGlobalSetuAgentConfigured(): boolean {

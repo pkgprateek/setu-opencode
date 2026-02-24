@@ -126,7 +126,7 @@ export async function bootstrapSetuGlobal(): Promise<BootstrapResult> {
 
   let agentUpdated = false;
   try {
-    agentUpdated = await createSetuAgentFile(configDir);
+    agentUpdated = await createSetuAgentFile(configDir, false, { allowedBaseDir: dirname(configDir) });
   } catch (error) {
     return warningResult(
       `Config updated, but agent creation failed at ${agentPath}: ${getErrorMessage(error)}. ` +
