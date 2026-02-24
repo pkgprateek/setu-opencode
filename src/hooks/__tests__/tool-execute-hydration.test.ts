@@ -11,6 +11,46 @@ mock.module('../../debug', () => ({
   errorLog: () => {},
 }));
 
+function createMockCollector(overrides: Partial<ContextCollector> = {}): ContextCollector {
+  let confirmed = false;
+  let loadFromDiskCalls = 0;
+
+  const base: ContextCollector = {
+    getContext: () => ({
+      version: '1.0',
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString(),
+      confirmed,
+      project: {},
+      filesRead: [],
+      searchesPerformed: [],
+      patterns: [],
+    }),
+    recordFileRead: () => {},
+    recordSearch: () => {},
+    addPattern: () => {},
+    updateProjectInfo: () => {},
+    confirm: () => {
+      confirmed = true;
+    },
+    reset: () => {
+      confirmed = false;
+    },
+    loadFromDisk: () => {
+      loadFromDiskCalls += 1;
+      confirmed = true;
+      return true;
+    },
+    saveToDisk: () => {},
+    debouncedSave: Object.assign(() => {}, { cancel: () => {} }),
+  };
+
+  return {
+    ...base,
+    ...overrides,
+  };
+}
+
 describe('tool-execute before hook hydration enforcement', () => {
   let projectDir = '';
   let sessionID = '';
@@ -163,8 +203,7 @@ describe('tool-execute before hook hydration enforcement', () => {
 
     let loadFromDiskCalls = 0;
     let confirmed = false;
-
-    const collector: ContextCollector = {
+    const collector = createMockCollector({
       getContext: () => ({
         version: '1.0',
         createdAt: new Date(0).toISOString(),
@@ -175,20 +214,12 @@ describe('tool-execute before hook hydration enforcement', () => {
         searchesPerformed: [],
         patterns: [],
       }),
-      recordFileRead: () => {},
-      recordSearch: () => {},
-      addPattern: () => {},
-      updateProjectInfo: () => {},
-      confirm: () => {},
-      reset: () => {},
       loadFromDisk: () => {
         loadFromDiskCalls += 1;
         confirmed = true;
         return true;
       },
-      saveToDisk: () => {},
-      debouncedSave: Object.assign(() => {}, { cancel: () => {} }),
-    };
+    });
 
     const hook = createToolExecuteBeforeHook(
       () => 'setu',
@@ -213,7 +244,7 @@ describe('tool-execute before hook hydration enforcement', () => {
   });
 
   test('still blocks write when hydration is stale and persisted context is not confirmed', async () => {
-    const collector: ContextCollector = {
+    const collector = createMockCollector({
       getContext: () => ({
         version: '1.0',
         createdAt: new Date(0).toISOString(),
@@ -224,16 +255,8 @@ describe('tool-execute before hook hydration enforcement', () => {
         searchesPerformed: [],
         patterns: [],
       }),
-      recordFileRead: () => {},
-      recordSearch: () => {},
-      addPattern: () => {},
-      updateProjectInfo: () => {},
-      confirm: () => {},
-      reset: () => {},
       loadFromDisk: () => false,
-      saveToDisk: () => {},
-      debouncedSave: Object.assign(() => {}, { cancel: () => {} }),
-    };
+    });
 
     const hook = createToolExecuteBeforeHook(
       () => 'setu',

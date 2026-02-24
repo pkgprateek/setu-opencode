@@ -43,7 +43,10 @@ describe('install/bootstrap', () => {
 
     try {
       await rm(testDir, { recursive: true, force: true });
-    } catch {}
+    } catch (error) {
+      console.error(`cleanup failed for ${testDir}:`, error);
+      throw error;
+    }
   });
 
   test('detects explicit global install via npm_config_global=true', () => {
