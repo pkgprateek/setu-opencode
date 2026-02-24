@@ -1,3 +1,5 @@
+import { errorLog } from '../debug';
+
 /**
  * Contract-driven quality guidance for Setu
  * 
@@ -143,6 +145,7 @@ build -> lint -> test
 `;
 
 function assertNever(value: never): never {
+  errorLog(`[SECURITY] assertNever unexpected_gear value=${String(value)} context=prompts/contracts`);
   throw new Error(`Unhandled gear: ${String(value)}`);
 }
 

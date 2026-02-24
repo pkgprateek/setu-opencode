@@ -192,6 +192,7 @@ describe('setu_plan', () => {
 
       const expectedTruncatedObjective = createPromptMultilineSanitizer(200)(longObjective);
       expect(result).toContain(expectedTruncatedObjective);
+      expect(result).not.toContain(longObjective);
     });
 
     test('control chars removed from objective', async () => {
