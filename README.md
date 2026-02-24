@@ -23,13 +23,13 @@ Setu is not prompt engineering.
 
 I was building a product. Three times, my AI agent — one of the best available — cost me hours of work. Not maliciously. It just *forgot*.
 
-### Incident 1: The 12-Hour Deletion
+#### Incident 1: The 12-Hour Deletion
 It forgot I told it not to touch certain files. It forgot the architecture we discussed. It forgot why we made specific decisions 3-4 prompts ago. Gone. Twelve hours of careful work - hard overwrite, all gone. Wasted additional 3+ hours to recover everything.
 
-### Incident 2: The Git Reset From Hell
+#### Incident 2: The Git Reset From Hell
 I had uncommitted changes — experimental work I wasn't ready to commit yet. The agent decided to "clean up" and ran `git reset --hard`. My entire afternoon of exploration: vanished. No warning, no "are you sure?" Just gone.
 
-### Incident 3: The Build That Wasn't
+#### Incident 3: The Build That Wasn't
 I asked it to check if my `dev server` was running before building. It nodded along, said "absolutely," then immediately ran `bun run build` anyway — overwriting my bundles, killing my server, and breaking my local environment. It *said* it understood. It didn't.
 
 ### The Daily Grind
