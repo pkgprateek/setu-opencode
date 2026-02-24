@@ -7,6 +7,9 @@
 
 export type Gear = 'scout' | 'architect' | 'builder';
 
+// NOTE: These exported prompt contract constants intentionally use UPPER_SNAKE_CASE
+// as stable identifiers for shared policy text across runtime hooks, tools, and tests.
+
 /**
  * Full research guidance for system prompt injection
  * Provides detailed expectations with good/bad examples
