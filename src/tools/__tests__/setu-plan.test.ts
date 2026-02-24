@@ -5,6 +5,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import type { ToolContext } from '@opencode-ai/plugin';
 import { createMockToolContext } from './tool-context-fixtures';
+import { createPromptMultilineSanitizer } from '../../utils/sanitization';
 
 describe('setu_plan', () => {
   let testDir: string;
@@ -27,7 +28,10 @@ describe('setu_plan', () => {
   afterEach(async () => {
     try {
       await rm(testDir, { recursive: true, force: true });
-    } catch {}
+    } catch (error) {
+      console.error(`setu_plan test cleanup failed for ${testDir}:`, error);
+      throw error;
+    }
   });
 
   describe('content-first API', () => {
@@ -185,9 +189,9 @@ describe('setu_plan', () => {
         content: '# Plan', 
         objective: longObjective 
       }, mockContext);
-      
-      // Should be truncated to 200 chars
-      expect(result.length).toBeLessThan(350);
+
+      const expectedTruncatedObjective = createPromptMultilineSanitizer(200)(longObjective);
+      expect(result).toContain(expectedTruncatedObjective);
     });
 
     test('control chars removed from objective', async () => {

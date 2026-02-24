@@ -4,14 +4,15 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { createSetuTaskTool } from '../setu-task';
 import { loadActiveTask } from '../../context/active';
+import { createMockToolContext } from './tool-context-fixtures';
+
+const createdProjectDirs: string[] = [];
 
 function makeProjectDir(): string {
   const dir = mkdtempSync(join(tmpdir(), 'setu-task-'));
   createdProjectDirs.push(dir);
   return dir;
 }
-
-const createdProjectDirs: string[] = [];
 
 afterEach(() => {
   for (const dir of createdProjectDirs) {
@@ -29,7 +30,7 @@ describe('setu_task lifecycle actions', () => {
     writeFileSync(join(setuDir, 'PLAN.md'), '# old plan\n', 'utf-8');
 
     const tool = createSetuTaskTool(() => projectDir);
-    const result = await tool.execute({ action: 'create', task: 'Fix auth bug' }, {} as never);
+    const result = await tool.execute({ action: 'create', task: 'Fix auth bug' }, createMockToolContext());
 
     expect(result).toContain('Task Created');
     expect(existsSync(join(setuDir, 'RESEARCH.md'))).toBe(false);
@@ -52,7 +53,7 @@ describe('setu_task lifecycle actions', () => {
     writeFileSync(join(setuDir, 'PLAN.md'), '# current plan\n', 'utf-8');
 
     const tool = createSetuTaskTool(() => projectDir);
-    await tool.execute({ action: 'create', task: 'Implement auth flow' }, {} as never);
+    await tool.execute({ action: 'create', task: 'Implement auth flow' }, createMockToolContext());
 
     // Re-create artifacts after create boundary reset to verify reframe preserves them
     writeFileSync(join(setuDir, 'RESEARCH.md'), '# reframed research\n', 'utf-8');
@@ -60,7 +61,7 @@ describe('setu_task lifecycle actions', () => {
 
     const result = await tool.execute(
       { action: 'reframe', task: 'Refine auth flow for backward compatibility', constraints: ['NO_PUSH'] },
-      {} as never
+      createMockToolContext()
     );
 
     expect(result).toContain('Task Reframed');
@@ -78,12 +79,12 @@ describe('setu_task lifecycle actions', () => {
     mkdirSync(setuDir, { recursive: true });
 
     const tool = createSetuTaskTool(() => projectDir);
-    await tool.execute({ action: 'create', task: 'Stabilize verify behavior' }, {} as never);
+    await tool.execute({ action: 'create', task: 'Stabilize verify behavior' }, createMockToolContext());
 
     writeFileSync(join(setuDir, 'RESEARCH.md'), '# keep me\n', 'utf-8');
     writeFileSync(join(setuDir, 'PLAN.md'), '# keep me too\n', 'utf-8');
 
-    const result = await tool.execute({ action: 'update_status', status: 'blocked' }, {} as never);
+    const result = await tool.execute({ action: 'update_status', status: 'blocked' }, createMockToolContext());
     expect(result).toContain('Task Updated');
     expect(result).toContain('blocked');
 
@@ -99,12 +100,12 @@ describe('setu_task lifecycle actions', () => {
 
     await tool.execute(
       { action: 'create', task: 'Harden scout boundaries', constraints: ['READ_ONLY', 'NO_DELETE'] },
-      {} as never
+      createMockToolContext()
     );
 
     const result = await tool.execute(
       { action: 'reframe', task: 'Harden scout boundaries v2', constraints: ['NO_PUSH'] },
-      {} as never
+      createMockToolContext()
     );
 
     expect(result).toContain('Task Reframed');
@@ -120,7 +121,7 @@ describe('setu_task lifecycle actions', () => {
 
     await tool.execute(
       { action: 'create', task: 'Fix auth\u0000 flow\u0007' },
-      {} as never
+      createMockToolContext()
     );
 
     let active = loadActiveTask(projectDir);
@@ -128,7 +129,7 @@ describe('setu_task lifecycle actions', () => {
 
     await tool.execute(
       { action: 'reframe', task: 'Refine\u0000 auth\u0007 flow' },
-      {} as never
+      createMockToolContext()
     );
 
     active = loadActiveTask(projectDir);
@@ -139,7 +140,7 @@ describe('setu_task lifecycle actions', () => {
     const projectDir = makeProjectDir();
     const tool = createSetuTaskTool(() => projectDir);
 
-    const result = await tool.execute({ action: 'update', status: 'completed' }, {} as never);
+    const result = await tool.execute({ action: 'update', status: 'completed' }, createMockToolContext());
     expect(result).toContain('Unknown action');
     expect(result).toContain('update_status');
   });

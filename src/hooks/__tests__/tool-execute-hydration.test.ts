@@ -13,7 +13,6 @@ mock.module('../../debug', () => ({
 
 function createMockCollector(overrides: Partial<ContextCollector> = {}): ContextCollector {
   let confirmed = false;
-  let loadFromDiskCalls = 0;
 
   const base: ContextCollector = {
     getContext: () => ({
@@ -37,7 +36,6 @@ function createMockCollector(overrides: Partial<ContextCollector> = {}): Context
       confirmed = false;
     },
     loadFromDisk: () => {
-      loadFromDiskCalls += 1;
       confirmed = true;
       return true;
     },
