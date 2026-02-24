@@ -14,6 +14,12 @@ mock.module('../../debug', () => ({
 function createMockCollector(overrides: Partial<ContextCollector> = {}): ContextCollector {
   let confirmed = false;
 
+  const {
+    getContext: overrideGetContext,
+    loadFromDisk: overrideLoadFromDisk,
+    ...restOverrides
+  } = overrides;
+
   const base: ContextCollector = {
     getContext: () => ({
       version: '1.0',
@@ -45,7 +51,22 @@ function createMockCollector(overrides: Partial<ContextCollector> = {}): Context
 
   return {
     ...base,
-    ...overrides,
+    ...restOverrides,
+    getContext: () => {
+      const overrideContext = overrideGetContext?.();
+      return {
+        ...base.getContext(),
+        ...overrideContext,
+        confirmed,
+      };
+    },
+    loadFromDisk: () => {
+      const loaded = overrideLoadFromDisk ? overrideLoadFromDisk() : true;
+      if (loaded) {
+        confirmed = true;
+      }
+      return loaded;
+    },
   };
 }
 
