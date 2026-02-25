@@ -1,6 +1,6 @@
 # setu-opencode Roadmap
 
-Updated: 2026-02-22
+Updated: 2026-02-25
 
 ## Vision
 
@@ -11,7 +11,7 @@ Setu should be the most reliable way to ship AI-assisted code in OpenCode:
 - verify before completion
 - preserve context across long sessions
 
-## Current State (v1.3.0)
+## Current State (v1.3.1)
 
 Shipped:
 

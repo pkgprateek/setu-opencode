@@ -1,8 +1,9 @@
-# Setu for OpenCode
+# Setu (setu-opencode)
 
 > **Pre-emptive guardrails for AI coding agents in OpenCode.** <br>
 > **From fast-but-fragile to reliable, boringly-correct, senior-level engineering.** <br>
-> Other tools fix mistakes after they happen. Setu prevents them before they start.
+> Other tools fix mistakes after they happen. Setu prevents them before they start.<br>
+> Independent open-source plugin for OpenCode AI coding agents.
 
 Setu bridges the gap between **"AI that codes fast"** and **"AI that codes correctly."**
 

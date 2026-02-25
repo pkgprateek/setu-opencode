@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here.
 
+## [1.3.1] - 2026-02-25
+
+### Documentation
+
+- Clarify top-level README naming and positioning for `setu-opencode`.
+- Improve release metadata alignment across docs.
+
+### Changed
+
+- Bump package version to `1.3.1` for npm republish.
+
 ## [1.3.0] - 2026-02-25
 
 ### Documentation
