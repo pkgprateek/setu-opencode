@@ -69,6 +69,45 @@ Setu is built on four foundations that work together:
 
 ---
 
+## Installation (30 Seconds)
+
+`setu-opencode` is published on npm, so npm/pnpm/bun can install the same package.
+
+### Option A: Global install (recommended)
+
+```bash
+npm install -g setu-opencode
+# or
+pnpm add -g setu-opencode
+# or
+bun add -g setu-opencode
+```
+
+Global install auto-bootstraps Setu in normal environments by updating:
+
+- `~/.config/opencode/opencode.json` (adds `setu-opencode` plugin)
+- Setu agent profile under OpenCode global config
+
+If install scripts were blocked or bootstrap did not complete:
+
+- Primary: `setu init`
+- Fallback: If `setu` is unavailable, run `npx setu-opencode init`
+
+### Manual Bootstrap (Fallback)
+If postinstall bootstrap is skipped, add Setu manually to `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "plugin": ["setu-opencode"]
+}
+```
+
+Restart OpenCode. Setu should appear as default agent/mode in your OpenCode.
+
+If this is not the case, Setu is not configured correctly. Please open an issue, with details.
+
+---
+
 ## How It Works (No Willpower Required)
 
 Setu hydrates each session — gathering context and understanding your codebase before any gears engage. Your agent then progresses through three phases with artifact-driven, hook-enforced transitions.
@@ -177,61 +216,6 @@ Three independent layers protect your codebase:
 | **Read-Before-Write** | Prevents accidental overwrites | Agent must read existing files before editing them |
 
 These aren't roadblocks—they're guardrails that keep your agent on the right path.
-
----
-
-## Installation (30 Seconds)
-
-`setu-opencode` is published on npm, so npm/pnpm/bun can install the same package.
-
-### Option A: Global install (recommended)
-
-```bash
-npm install -g setu-opencode
-# or
-pnpm add -g setu-opencode
-# or
-bun add -g setu-opencode
-```
-
-Global install auto-bootstraps Setu in normal environments by updating:
-
-- `~/.config/opencode/opencode.json` (adds `setu-opencode` plugin)
-- Setu agent profile under OpenCode global config
-
-If install scripts were blocked or bootstrap did not complete:
-
-- Primary: `setu init`
-- Fallback: If `setu` is unavailable, run `npx setu-opencode init`
-
-### Manual Bootstrap (Fallback)
-If postinstall bootstrap is skipped, add Setu manually to `~/.config/opencode/opencode.json`:
-
-```json
-{
-  "plugin": ["setu-opencode"]
-}
-```
-
-Restart OpenCode.
-
-### 30-Second Proof (Run This)
-
-```text
-You: Update auth middleware to support JWT rotation
-Agent: [Scout gear] I need to read existing auth files first.
-Agent tries edit first -> blocked
-
-Agent: [Reads src/auth/* and related middleware]
-Agent: setu_research(...) -> writes .setu/RESEARCH.md
-Agent: setu_plan(...) -> writes .setu/PLAN.md
-
-You: approve
-Agent: implements changes
-Agent: setu_verify(...) -> build/test/lint evidence
-```
-
-If this flow is not enforced, Setu is not configured correctly.
 
 ---
 
