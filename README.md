@@ -77,22 +77,21 @@ Setu is built on four foundations that work together:
 ### Option A: Global install (recommended)
 
 ```bash
-npm install -g setu-opencode
+npm install -g setu-opencode && setu init
 # or
-pnpm add -g setu-opencode
+pnpm add -g setu-opencode && setu init
 # or
-bun add -g setu-opencode
+bun add -g setu-opencode && setu init
 ```
 
-Global install auto-bootstraps Setu in normal environments by updating:
+`setu init` ensures consistent setup across npm, pnpm, and bun — even when install scripts are skipped.
+
+Global setup updates:
 
 - `~/.config/opencode/opencode.json` (adds `setu-opencode` plugin)
 - Setu agent profile under OpenCode global config
 
-If install scripts were blocked or bootstrap did not complete:
-
-- Primary: `setu init`
-- Fallback: If `setu` is unavailable, run `npx setu-opencode init`
+Fallback: If `setu` is unavailable after install, run `npx setu-opencode init`.
 
 ### Manual Bootstrap (Fallback)
 If postinstall bootstrap is skipped, add Setu manually to `~/.config/opencode/opencode.json`:
@@ -106,6 +105,20 @@ If postinstall bootstrap is skipped, add Setu manually to `~/.config/opencode/op
 Restart OpenCode. Setu should appear as default agent/mode in your OpenCode.
 
 If this is not the case, Setu is not configured correctly. Please open an issue, with details.
+
+### Uninstall (Clean Removal)
+
+```bash
+setu uninstall && npm uninstall -g setu-opencode
+# or
+setu uninstall && pnpm remove -g setu-opencode
+# or
+setu uninstall && bun remove -g setu-opencode
+```
+
+`setu uninstall` removes Setu wiring from global OpenCode config.
+
+Restart OpenCode. Setu should no longer appear as default agent/mode.
 
 ---
 

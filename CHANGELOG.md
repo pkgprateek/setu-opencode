@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here.
 
+## [1.3.2] - 2026-02-26
+
+### Documentation
+
+- Update installation guidance to use deterministic one-liners across npm/pnpm/bun with `setu init`.
+- Add explicit uninstall section for clean global removal from OpenCode config.
+
+### Changed
+
+- Bump package and agent metadata version to `1.3.2` for release consistency.
+
 ## [1.3.1] - 2026-02-25
 
 ### Documentation
