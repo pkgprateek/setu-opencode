@@ -118,4 +118,5 @@ describe('agent/setu-agent global config root resolution', () => {
   test('legacy root rejects relative homeDir', () => {
     expect(() => resolveAndValidateLegacyHomeConfigRoot('relative/home')).toThrow('must be absolute');
   });
+
 });
