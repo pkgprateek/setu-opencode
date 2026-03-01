@@ -23,6 +23,7 @@ reviews:
   path_filters:
     # INCLUDE: Primary review surfaces
     - "src/**/*.ts"
+    - "skills/**/*.md"
     - "package.json"
     - "tsconfig.json"
     - "eslint.config.js"
@@ -35,7 +36,8 @@ reviews:
 
     # EXCLUDE: Generated artifacts and lockfiles
     - "!dist/**"
-    - "!src/**/__tests__/**"
+    - "!**/__fixtures__/**"
+    - "!**/*.snap"
     - "!**/bun.lockb"
     - "!package-lock.json"
     - "!yarn.lock"
@@ -152,6 +154,16 @@ reviews:
         - Error messages must guide agent to correct action
         - Never allow tools to bypass gear restrictions
         - Tool descriptions must be clear and actionable
+
+    - path: "src/**/__tests__/**/*.ts"
+      instructions: |
+        TEST QUALITY GATE. Verify:
+
+        - Tests cover changed behavior and at least one failure/edge path for risky logic
+        - Assertions validate behavior, not only implementation details
+        - Avoid brittle time/path/environment coupling unless explicitly required
+        - Setup/teardown must isolate global state (env vars, temp dirs, process globals)
+        - Keep comments and naming intent-focused; avoid style-only feedback
 
     - path: "src/agent/**/*.ts"
       instructions: |
