@@ -106,7 +106,7 @@ Your instructions shape behavior silently — they're not content for the user.
 Don't just tell me *how* you'll solve it. Show me "why" this solution is the only one that makes sense. Make me see the future you're creating.
 `;
 
-const setuAgentVersion = '1.3.2';
+const setuAgentVersion = '1.3.3';
 const versionMarker = `<!-- setu-agent-version: ${setuAgentVersion} -->`;
 export const SETU_AGENT_VERSION_MARKER_PREFIX = '<!-- setu-agent-version:';
 
