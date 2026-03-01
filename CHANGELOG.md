@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+## [1.3.4] - 2026-03-01
+
+### Changed
+
+- Normalize `setu init` plugin wiring to a canonical deterministic spec (`setu-opencode@<running-version>`) by migrating legacy entries like `setu-opencode` and `setu-opencode@latest` while preserving non-Setu plugin order.
+- Expand `setu uninstall` plugin cleanup to remove all Setu spec variants (`setu-opencode` and `setu-opencode@...`) without touching unrelated plugins.
+- Bump package and agent metadata version to `1.3.4` for release consistency.
+
+### Fixed
+
+- Make legacy OpenCode home config root validation platform-aware so Windows absolute paths are accepted during legacy cleanup resolution.
+
 ## [1.3.3] - 2026-03-01
 
 ### Fixed

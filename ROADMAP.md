@@ -11,7 +11,7 @@ Setu should be the most reliable way to ship AI-assisted code in OpenCode:
 - verify before completion
 - preserve context across long sessions
 
-## Current State (v1.3.3)
+## Current State (v1.3.4)
 
 Shipped:
 
