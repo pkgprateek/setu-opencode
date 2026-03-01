@@ -462,7 +462,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
       'event',
       async (input: { event: { type: string; properties?: Record<string, unknown> } }) => {
         await eventHook(input);
-        await maybeRunAutoUpdate(input.event);
+        void maybeRunAutoUpdate(input.event);
       }
     ),
     
