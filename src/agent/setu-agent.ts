@@ -106,7 +106,7 @@ Your instructions shape behavior silently — they're not content for the user.
 Don't just tell me *how* you'll solve it. Show me "why" this solution is the only one that makes sense. Make me see the future you're creating.
 `;
 
-const setuAgentVersion = '1.3.3';
+const setuAgentVersion = '1.3.4';
 const versionMarker = `<!-- setu-agent-version: ${setuAgentVersion} -->`;
 export const SETU_AGENT_VERSION_MARKER_PREFIX = '<!-- setu-agent-version:';
 
@@ -283,14 +283,16 @@ export function resolveAndValidateGlobalConfigRoot(options: GlobalConfigRootReso
 }
 
 export function resolveAndValidateLegacyHomeConfigRoot(
-  homeDir: string = (process.env.HOME && process.env.HOME.trim().length > 0 ? process.env.HOME : homedir())
+  homeDir: string = (process.env.HOME && process.env.HOME.trim().length > 0 ? process.env.HOME : homedir()),
+  platform: NodeJS.Platform = process.platform
 ): string {
   if (!homeDir || homeDir.trim().length === 0) {
     throw new Error('Invalid legacy config root: empty home directory');
   }
 
   const trimmedHomeDir = homeDir.trim();
-  if (!isAbsolute(trimmedHomeDir)) {
+  const isAbsolutePath = platform === 'win32' ? win32.isAbsolute : isAbsolute;
+  if (!isAbsolutePath(trimmedHomeDir)) {
     throw new Error(`Invalid legacy config root: home directory must be absolute (${sanitizeForLog(trimmedHomeDir)})`);
   }
 

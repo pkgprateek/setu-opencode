@@ -4,6 +4,8 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { bootstrapSetuGlobal, isExplicitGlobalInstallEnv, uninstallSetuGlobal } from '../bootstrap';
 
+const SETU_EXACT_SPEC_PATTERN = /^setu-opencode@.+$/;
+
 async function fileExists(path: string): Promise<boolean> {
   try {
     await access(path);
@@ -11,6 +13,20 @@ async function fileExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function readPluginList(configPath: string): Promise<string[]> {
+  const raw = await readFile(configPath, 'utf-8');
+  const parsed = JSON.parse(raw) as { plugin?: unknown };
+  return Array.isArray(parsed.plugin) ? parsed.plugin.filter((entry): entry is string => typeof entry === 'string') : [];
+}
+
+function getSingleSetuPluginEntry(plugins: string[]): string | null {
+  const setuEntries = plugins.filter(entry => /^setu-opencode(?:@.+)?$/.test(entry));
+  if (setuEntries.length !== 1) {
+    return null;
+  }
+  return setuEntries[0];
 }
 
 describe('install/bootstrap', () => {
@@ -116,8 +132,10 @@ describe('install/bootstrap', () => {
     expect(result.pluginAdded).toBe(true);
     expect(result.agentUpdated).toBe(false);
 
-    const updatedConfig = await readFile(join(testDir, 'opencode', 'opencode.json'), 'utf-8');
-    expect(updatedConfig).toContain('setu-opencode');
+    const plugins = await readPluginList(join(testDir, 'opencode', 'opencode.json'));
+    const setuEntry = getSingleSetuPluginEntry(plugins);
+    expect(setuEntry).not.toBeNull();
+    expect(SETU_EXACT_SPEC_PATTERN.test(setuEntry ?? '')).toBe(true);
   });
 
   test('succeeds on happy path', async () => {
@@ -127,8 +145,89 @@ describe('install/bootstrap', () => {
     expect(result.configPath).toBe(join(testDir, 'opencode', 'opencode.json'));
     expect(result.agentPath).toBe(join(testDir, 'opencode', 'agents', 'setu.md'));
 
-    const config = await readFile(join(testDir, 'opencode', 'opencode.json'), 'utf-8');
-    expect(config).toContain('setu-opencode');
+    const plugins = await readPluginList(join(testDir, 'opencode', 'opencode.json'));
+    const setuEntry = getSingleSetuPluginEntry(plugins);
+    expect(setuEntry).not.toBeNull();
+    expect(SETU_EXACT_SPEC_PATTERN.test(setuEntry ?? '')).toBe(true);
+  });
+
+  test('init canonicalizes bare plugin entry to exact Setu spec', async () => {
+    const configDir = join(testDir, 'opencode');
+    const configPath = join(configDir, 'opencode.json');
+    await mkdir(configDir, { recursive: true });
+    await writeFile(configPath, '{"plugin": ["other-plugin", "setu-opencode"]}\n', 'utf-8');
+
+    const result = await bootstrapSetuGlobal();
+    expect(result.warning).toBeUndefined();
+
+    const plugins = await readPluginList(configPath);
+    expect(plugins[0]).toBe('other-plugin');
+    const setuEntry = getSingleSetuPluginEntry(plugins);
+    expect(setuEntry).not.toBeNull();
+    expect(SETU_EXACT_SPEC_PATTERN.test(setuEntry ?? '')).toBe(true);
+    if (!setuEntry) {
+      throw new Error('Expected canonical Setu entry');
+    }
+    expect(plugins[plugins.length - 1]).toBe(setuEntry);
+  });
+
+  test('init canonicalizes latest and deduplicates all Setu variants', async () => {
+    const configDir = join(testDir, 'opencode');
+    const configPath = join(configDir, 'opencode.json');
+    await mkdir(configDir, { recursive: true });
+    await writeFile(
+      configPath,
+      '{"plugin": ["setu-opencode@latest", "other-plugin", "setu-opencode@1.2.1", "setu-opencode"]}\n',
+      'utf-8'
+    );
+
+    const result = await bootstrapSetuGlobal();
+    expect(result.warning).toBeUndefined();
+
+    const plugins = await readPluginList(configPath);
+    expect(plugins.filter(entry => /^setu-opencode(?:@.+)?$/.test(entry)).length).toBe(1);
+    const setuEntry = getSingleSetuPluginEntry(plugins);
+    expect(setuEntry).not.toBeNull();
+    expect(SETU_EXACT_SPEC_PATTERN.test(setuEntry ?? '')).toBe(true);
+    if (!setuEntry) {
+      throw new Error('Expected canonical Setu entry');
+    }
+    expect(plugins).toEqual(['other-plugin', setuEntry]);
+  });
+
+  test('init matcher is strict and preserves similarly named or file URL plugins', async () => {
+    const configDir = join(testDir, 'opencode');
+    const configPath = join(configDir, 'opencode.json');
+    await mkdir(configDir, { recursive: true });
+    await writeFile(
+      configPath,
+      '{"plugin": ["setu-opencode-tools", "file://setu-opencode", "setu-opencode"]}\n',
+      'utf-8'
+    );
+
+    const result = await bootstrapSetuGlobal();
+    expect(result.warning).toBeUndefined();
+
+    const plugins = await readPluginList(configPath);
+    const setuEntries = plugins.filter(entry => /^setu-opencode(?:@.+)?$/.test(entry));
+    expect(setuEntries.length).toBe(1);
+    expect(SETU_EXACT_SPEC_PATTERN.test(setuEntries[0] ?? '')).toBe(true);
+    expect(plugins).toContain('setu-opencode-tools');
+    expect(plugins).toContain('file://setu-opencode');
+  });
+
+  test('init is idempotent for canonical plugin list output', async () => {
+    const first = await bootstrapSetuGlobal();
+    expect(first.warning).toBeUndefined();
+
+    const configPath = join(testDir, 'opencode', 'opencode.json');
+    const firstPlugins = await readPluginList(configPath);
+
+    const second = await bootstrapSetuGlobal();
+    expect(second.warning).toBeUndefined();
+
+    const secondPlugins = await readPluginList(configPath);
+    expect(secondPlugins).toEqual(firstPlugins);
   });
 
   test('init always overwrites existing global setu.md', async () => {
@@ -223,7 +322,7 @@ describe('install/bootstrap', () => {
     const legacyDir = join(testDir, '.opencode');
     await mkdir(join(legacyDir, 'agents'), { recursive: true });
     await mkdir(join(legacyDir, 'agent'), { recursive: true });
-    await writeFile(join(legacyDir, 'opencode.json'), '{"plugin": ["setu-opencode", "other-plugin"]}\n', 'utf-8');
+    await writeFile(join(legacyDir, 'opencode.json'), '{"plugin": ["setu-opencode@1.2.1", "other-plugin"]}\n', 'utf-8');
     await writeFile(join(legacyDir, 'agents', 'setu.md'), '<!-- setu-agent-version: 0.9.0 -->\nlegacy\n', 'utf-8');
     await writeFile(join(legacyDir, 'agent', 'setu.md'), '<!-- setu-agent-version: 0.9.0 -->\nlegacy singular\n', 'utf-8');
 
@@ -256,5 +355,23 @@ describe('install/bootstrap', () => {
     expect(result.pluginRemoved).toBe(false);
     expect(result.agentRemoved).toBe(false);
     expect(await fileExists(customAgentPath)).toBe(true);
+  });
+
+  test('uninstall removes all Setu plugin spec variants', async () => {
+    const configDir = join(testDir, 'opencode');
+    const configPath = join(configDir, 'opencode.json');
+    await mkdir(configDir, { recursive: true });
+    await writeFile(
+      configPath,
+      '{"plugin": ["setu-opencode", "setu-opencode@latest", "setu-opencode@1.2.1", "other-plugin"]}\n',
+      'utf-8'
+    );
+
+    const result = uninstallSetuGlobal();
+    expect(result.warning).toBeUndefined();
+    expect(result.pluginRemoved).toBe(true);
+
+    const plugins = await readPluginList(configPath);
+    expect(plugins).toEqual(['other-plugin']);
   });
 });

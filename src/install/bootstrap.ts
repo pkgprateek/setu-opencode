@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import {
   createSetuAgentFile,
   resolveAndValidateGlobalConfigRoot,
@@ -8,6 +9,9 @@ import {
 } from '../agent/setu-agent';
 import { debugLog } from '../debug';
 import { getErrorMessage } from '../utils/error-handling';
+
+const SETU_PLUGIN_NAME = 'setu-opencode';
+const SETU_PLUGIN_SPEC_PATTERN = /^setu-opencode(?:@.+)?$/;
 
 export interface BootstrapResult {
   configPath: string;
@@ -100,29 +104,99 @@ function normalizePluginList(value: unknown): string[] {
     .map(entry => entry.trim());
 }
 
-function removePlugin(config: Record<string, unknown>, pluginName: string): boolean {
-  if (!Array.isArray(config.plugin)) {
-    return false;
-  }
+function isSetuPluginSpec(entry: string): boolean {
+  return SETU_PLUGIN_SPEC_PATTERN.test(entry.trim());
+}
 
+function removeSetuPluginSpecs(config: Record<string, unknown>): boolean {
   const plugins = normalizePluginList(config.plugin);
-  if (!plugins.includes(pluginName)) {
+  const filtered = plugins.filter(plugin => !isSetuPluginSpec(plugin));
+
+  if (filtered.length === plugins.length) {
     return false;
   }
 
-  config.plugin = plugins.filter(plugin => plugin !== pluginName);
+  config.plugin = filtered;
   return true;
 }
 
-function upsertPlugin(config: Record<string, unknown>, pluginName: string): boolean {
-  const plugins = normalizePluginList(config.plugin);
-  if (plugins.includes(pluginName)) {
-    config.plugin = plugins;
+function arraysEqual(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
     return false;
   }
 
-  config.plugin = [...plugins, pluginName];
-  return true;
+  return left.every((value, index) => value === right[index]);
+}
+
+function upsertCanonicalSetuPlugin(config: Record<string, unknown>, canonicalSpec: string): boolean {
+  const plugins = normalizePluginList(config.plugin);
+  const filtered = plugins.filter(plugin => !isSetuPluginSpec(plugin));
+  const next = [...filtered, canonicalSpec];
+
+  const changed = !arraysEqual(plugins, next);
+  config.plugin = next;
+  return changed;
+}
+
+function readPackageJson(filePath: string): Record<string, unknown> | null {
+  if (!existsSync(filePath)) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(filePath, 'utf-8'));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null;
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function resolveSetuVersionFromAncestor(startDir: string): string | null {
+  let currentDir = startDir;
+
+  while (true) {
+    const packageJsonPath = join(currentDir, 'package.json');
+    const parsed = readPackageJson(packageJsonPath);
+    const name = typeof parsed?.name === 'string' ? parsed.name.trim() : '';
+    const version = typeof parsed?.version === 'string' ? parsed.version.trim() : '';
+
+    if (name === SETU_PLUGIN_NAME && version.length > 0) {
+      return version;
+    }
+
+    const parent = dirname(currentDir);
+    if (parent === currentDir) {
+      break;
+    }
+    currentDir = parent;
+  }
+
+  return null;
+}
+
+function resolveCurrentSetuVersion(): string | null {
+  const moduleDir = dirname(fileURLToPath(import.meta.url));
+  const fromModule = resolveSetuVersionFromAncestor(moduleDir);
+  if (fromModule) {
+    return fromModule;
+  }
+
+  const fromCwd = resolveSetuVersionFromAncestor(process.cwd());
+  if (fromCwd) {
+    return fromCwd;
+  }
+
+  if (process.env.npm_package_name === SETU_PLUGIN_NAME) {
+    const envVersion = process.env.npm_package_version?.trim();
+    if (envVersion) {
+      return envVersion;
+    }
+  }
+
+  return null;
 }
 
 function writeConfig(configPath: string, config: Record<string, unknown>): void {
@@ -147,7 +221,7 @@ function removePluginFromConfigPath(configPath: string): { removed: boolean; war
   }
 
   try {
-    const removed = removePlugin(config, 'setu-opencode');
+    const removed = removeSetuPluginSpecs(config);
     if (removed) {
       writeConfig(configPath, config);
     }
@@ -231,6 +305,8 @@ function cleanupLegacyManagedAgentFiles(primaryConfigDir: string): { removedAny:
 
 export async function bootstrapSetuGlobal(): Promise<BootstrapResult> {
   const { configDir, configPath, agentPath } = getGlobalRoots();
+  const resolvedVersion = resolveCurrentSetuVersion();
+  const canonicalSetuSpec = resolvedVersion ? `${SETU_PLUGIN_NAME}@${resolvedVersion}` : null;
 
   const warningResult = (warning: string, pluginAdded = false, agentUpdated = false): BootstrapResult => ({
     configPath,
@@ -249,9 +325,16 @@ export async function bootstrapSetuGlobal(): Promise<BootstrapResult> {
     );
   }
 
+  if (!canonicalSetuSpec) {
+    return warningResult(
+      `Could not resolve running ${SETU_PLUGIN_NAME} version for deterministic plugin setup. ` +
+      'Ensure Setu is installed correctly and re-run init.'
+    );
+  }
+
   let pluginAdded = false;
   try {
-    pluginAdded = upsertPlugin(config, 'setu-opencode');
+    pluginAdded = upsertCanonicalSetuPlugin(config, canonicalSetuSpec);
     writeConfig(configPath, config);
   } catch (error) {
     return warningResult(
