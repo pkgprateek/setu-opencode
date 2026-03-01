@@ -134,7 +134,7 @@ export function createSetuTaskTool(
 - \`create\`: Start a new task with optional constraints
 - \`reframe\`: Update task intent/constraints without resetting workflow artifacts
 - \`update_status\`: Change task status (in_progress, completed, blocked)
-- \`clear\`: Remove the active task (on completion or cancellation)
+- \`clear\`: Manually remove the active task only when user explicitly requests task cancellation/reset
 - \`get\`: View current active task
 
 **Constraints:**
@@ -150,7 +150,7 @@ Active tasks persist to \`.setu/active.json\` and survive:
     
     args: {
       action: tool.schema.string().describe(
-        'Action to perform: create, reframe, update_status, clear, get'
+        'Action to perform: create, reframe, update_status, clear (manual), get'
       ),
       task: tool.schema.string().optional().describe(
         'Task description (required for create)'
@@ -261,7 +261,7 @@ setu_task({
 
 ${formatTask(newTask)}${constraintNote}
 
-Task saved to \`.setu/active.json\`. Constraints will be enforced until task is cleared.`;
+Task saved to \`.setu/active.json\`. This replaces the previous task boundary and constraints will be enforced until explicitly changed.`;
         }
 
         case 'reframe': {
@@ -375,7 +375,7 @@ ${formatTask(currentTask)}`;
 
 ${formatTask(updatedTask)}
 
-Status changed to \`${newStatus}\`.`;
+Status changed to \`${newStatus}\`. Task remains active for follow-up \`reframe\` or additional status updates.`;
         }
         
         case 'clear': {
@@ -425,7 +425,7 @@ Valid actions:
 - \`create\`: Start a new task
 - \`reframe\`: Update task intent/constraints while preserving artifacts
 - \`update_status\`: Change task status
-- \`clear\`: Remove active task
+- \`clear\`: Manual reset (explicit user request only)
 - \`get\`: View current task
 
 Example:

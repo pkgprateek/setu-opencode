@@ -53,6 +53,7 @@ describe('contracts', () => {
       expect(content).toContain('TRADEOFFS');
       expect(content).toContain('RISKS');
       expect(content).toContain('VERIFICATION');
+      expect(content).toContain('Do not auto-call clear after status updates');
       expect(content).toContain('Example GOOD');
       expect(content).toContain('Example BAD');
     });
@@ -65,6 +66,7 @@ describe('contracts', () => {
       expect(content).toContain('FILES');
       expect(content).toContain('CHANGE INTENT');
       expect(content).toContain('VERIFICATION');
+      expect(content).toContain('Do not auto-call clear after status updates');
       expect(content).toContain('Example GOOD');
       expect(content).toContain('Example BAD');
     });
