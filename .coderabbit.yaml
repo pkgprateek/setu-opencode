@@ -21,7 +21,7 @@ reviews:
       - dev
 
   path_filters:
-    # INCLUDE: Runtime and config surfaces only
+    # INCLUDE: Primary review surfaces
     - "src/**/*.ts"
     - "package.json"
     - "tsconfig.json"
@@ -29,20 +29,17 @@ reviews:
     - ".coderabbit.yaml"
     - "README.md"
     - "CONTRIBUTING.md"
+    - "AGENTS.md"
+    - "ROADMAP.md"
+    - "CHANGELOG.md"
 
-    # EXCLUDE: Generated/vendor/noisy paths
+    # EXCLUDE: Generated artifacts and lockfiles
     - "!dist/**"
-    - "!skills/**"
-    - "!docs/**"
-    - "!CHANGELOG.md"
-    - "!ROADMAP.md"
-    - "!AGENTS.md"
+    - "!src/**/__tests__/**"
     - "!**/bun.lockb"
     - "!package-lock.json"
     - "!yarn.lock"
     - "!pnpm-lock.yaml"
-    - "!**/*.txt"
-    - "!**/.gitignore"
     - "!.git/**"
 
   path_instructions:
@@ -57,6 +54,11 @@ reviews:
         - Handle all errors explicitly (no silent failures)
         - Validate null/undefined at API boundaries
         - Naming default is camelCase, but allow explicit exceptions for stable protocol/constants (e.g., UPPER_SNAKE_CASE prompt contract identifiers)
+
+        **CRITICAL: Review Signal Quality**
+        - Prioritize correctness, security, and regression risk over style preferences
+        - Do not raise stylistic nitpicks unless they create a concrete maintainability or defect risk
+        - Do not raise hypothetical concerns without a concrete breakage path in this change set
 
         **CRITICAL: Security & Defense in Depth**
         - Path validation: Sanitize all file paths (prevent directory traversal)
