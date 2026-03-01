@@ -120,8 +120,14 @@ describe('agent/setu-agent global config root resolution', () => {
   });
 
   test('legacy root supports win32 absolute homeDir inputs', () => {
+    expect(() => resolveAndValidateLegacyHomeConfigRoot('C:\\Users\\dev', 'win32')).not.toThrow();
+
     const root = resolveAndValidateLegacyHomeConfigRoot('C:\\Users\\dev', 'win32');
     expect(root).toContain('.opencode');
+
+    if (process.platform === 'win32') {
+      expect(root.startsWith('C:\\')).toBe(true);
+    }
   });
 
 });
