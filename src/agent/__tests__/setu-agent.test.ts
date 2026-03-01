@@ -58,4 +58,26 @@ describe('agent/setu-agent global config root resolution', () => {
       })
     ).toThrow('Invalid global config root');
   });
+
+  test('rejects traversal segments in XDG_CONFIG_HOME', () => {
+    expect(() =>
+      resolveAndValidateGlobalConfigRoot({
+        platform: 'linux',
+        homeDir: '/home/dev',
+        env: {
+          XDG_CONFIG_HOME: '/safe/../escape',
+        },
+      })
+    ).toThrow('Invalid global config root');
+  });
+
+  test('rejects empty homeDir when explicitly provided', () => {
+    expect(() =>
+      resolveAndValidateGlobalConfigRoot({
+        platform: 'linux',
+        homeDir: '   ',
+        env: {},
+      })
+    ).toThrow('Invalid homeDir');
+  });
 });

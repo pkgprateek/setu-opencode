@@ -241,7 +241,13 @@ function resolveAndValidateConfigRoot(
 export function resolveAndValidateGlobalConfigRoot(options: GlobalConfigRootResolveOptions = {}): string {
   const env = options.env ?? process.env;
   const platform = options.platform ?? process.platform;
-  const homeDir = options.homeDir ?? homedir();
+  let homeDir = homedir();
+  if (options.homeDir !== undefined) {
+    if (typeof options.homeDir !== 'string' || options.homeDir.trim().length === 0) {
+      throw new Error('Invalid homeDir: empty or whitespace');
+    }
+    homeDir = options.homeDir.trim();
+  }
 
   const configHomeRaw = platform === 'win32'
     ? (env.APPDATA && env.APPDATA.trim().length > 0
