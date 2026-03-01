@@ -114,6 +114,22 @@ describe('install/bootstrap', () => {
     expect(config).toContain('setu-opencode');
   });
 
+  test('init always overwrites existing global setu.md', async () => {
+    const first = await bootstrapSetuGlobal();
+    expect(first.warning).toBeUndefined();
+
+    const agentPath = join(testDir, 'opencode', 'agents', 'setu.md');
+    await writeFile(agentPath, '# stale agent content\n', 'utf-8');
+
+    const second = await bootstrapSetuGlobal();
+    expect(second.warning).toBeUndefined();
+    expect(second.agentUpdated).toBe(true);
+
+    const updatedAgent = await readFile(agentPath, 'utf-8');
+    expect(updatedAgent).toContain('setu-agent-version');
+    expect(updatedAgent).not.toContain('stale agent content');
+  });
+
   test('uninstall removes plugin and agent wiring', async () => {
     const setup = await bootstrapSetuGlobal();
     expect(setup.warning).toBeUndefined();
