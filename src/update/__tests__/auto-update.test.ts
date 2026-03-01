@@ -7,6 +7,7 @@ import { checkAndPrepareSetuUpdate, isRootSessionCreatedEvent, resolveOpenCodePa
 describe('update/auto-update', () => {
   let testRoot: string;
   let cacheDir: string;
+  type MockCommandResult = { code: number; stdout: string; stderr: string };
 
   beforeEach(async () => {
     testRoot = join(tmpdir(), `setu-auto-update-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -44,7 +45,7 @@ describe('update/auto-update', () => {
     await createCacheFixture('1.0.0');
 
     const calls: string[] = [];
-    const commandRunner = async (_command: string, args: string[]) => {
+    const commandRunner = async (_command: string, args: string[]): Promise<MockCommandResult> => {
       calls.push(args.join(' '));
 
       if (args.includes('add')) {
@@ -96,7 +97,7 @@ describe('update/auto-update', () => {
     await createCacheFixture('1.0.0');
 
     let commandCount = 0;
-    const commandRunner = async (_command: string, args: string[]) => {
+    const commandRunner = async (_command: string, args: string[]): Promise<MockCommandResult> => {
       commandCount += 1;
 
       if (args.includes('add')) {
