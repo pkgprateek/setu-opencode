@@ -84,23 +84,28 @@ pnpm add -g setu-opencode && setu init
 bun add -g setu-opencode && setu init
 ```
 
-`setu init` ensures consistent setup across npm, pnpm, and bun — even when install scripts are skipped. It also cleans legacy managed `~/.opencode/agents/setu.md` files that can shadow global agent updates.
+`setu init` ensures consistent setup across npm, pnpm, and bun — even when install scripts are skipped. It also normalizes plugin wiring and cleans legacy files that can shadow global agent updates.
 
 Global setup updates:
 
-- `~/.config/opencode/opencode.json` (adds `setu-opencode` plugin)
+- `~/.config/opencode/opencode.json` (adds/normalizes Setu plugin to exact `setu-opencode@x.y.z`)
 - Setu agent profile under OpenCode global config
 
-Fallback: If `setu` is unavailable after install, run `npx setu-opencode init`.
+Fallback: If `setu` is unavailable or `postinstall` bootstrap is skipped after install:
+```bash
+npx setu-opencode init
+```
 
 ### Manual Bootstrap (Fallback)
-If postinstall bootstrap is skipped, add Setu manually to `~/.config/opencode/opencode.json`:
+Add Setu manually to `~/.config/opencode/opencode.json`:
 
 ```json
 {
   "plugin": ["setu-opencode"]
 }
 ```
+
+Then run `setu init` once to normalize this to the canonical exact plugin spec.
 
 Restart OpenCode. Setu should appear as default agent/mode in your OpenCode.
 
