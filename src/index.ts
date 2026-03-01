@@ -44,6 +44,7 @@ import {
 import { debugLog, alwaysLog, errorLog } from './debug';
 import { type FileAvailability } from './prompts/persona';
 import { wrapHook } from './utils/error-handling';
+import { checkAndPrepareSetuUpdate, isRootSessionCreatedEvent } from './update/auto-update';
 
 // Plugin state
 interface SetuState {
@@ -73,6 +74,22 @@ interface SetuState {
 
   // Tracks whether first Setu message initialization was checked per session
   setuInitCheckedSessions: Set<string>;
+
+  // Tracks whether runtime update check has already run for this process
+  autoUpdateChecked: boolean;
+}
+
+interface ToastBody {
+  title: string;
+  message: string;
+  variant: 'info' | 'success' | 'warning' | 'error';
+  duration?: number;
+}
+
+interface ToastClient {
+  tui?: {
+    showToast?: (input: { body: ToastBody }) => Promise<unknown>;
+  };
 }
 
 /**
@@ -153,7 +170,10 @@ export const SetuPlugin: Plugin = async (ctx) => {
     fileCache: new Map(),
 
     // Session-scoped first Setu message initialization
-    setuInitCheckedSessions: new Set()
+    setuInitCheckedSessions: new Set(),
+
+    // Runtime auto-update guard
+    autoUpdateChecked: false
   };
   
   // Create attempt tracker for "3 tries then suggest gear shift" pattern
@@ -278,6 +298,46 @@ export const SetuPlugin: Plugin = async (ctx) => {
     }
   };
 
+  const maybeRunAutoUpdate = async (event: { type: string; properties?: Record<string, unknown> }): Promise<void> => {
+    if (state.autoUpdateChecked) {
+      return;
+    }
+
+    const runtimePath = import.meta.url;
+    const npmRuntime = runtimePath.includes('/node_modules/setu-opencode/') || runtimePath.includes('\\node_modules\\setu-opencode\\');
+    if (!npmRuntime) {
+      state.autoUpdateChecked = true;
+      return;
+    }
+
+    if (!isRootSessionCreatedEvent(event)) {
+      return;
+    }
+
+    state.autoUpdateChecked = true;
+
+    try {
+      const result = await checkAndPrepareSetuUpdate();
+      if (!result.updated || !result.latestVersion) {
+        return;
+      }
+
+      const message = `Setu updated v${result.latestVersion}. restart opencode to apply.`;
+      const toastClient = (ctx as unknown as { client?: ToastClient }).client;
+
+      await toastClient?.tui?.showToast?.({
+        body: {
+          title: 'Setu',
+          message,
+          variant: 'info',
+          duration: 2500
+        }
+      });
+    } catch (error) {
+      debugLog('Auto-update check failed:', error);
+    }
+  };
+
   const registeredTools = {
     setu_verify: createSetuVerifyTool(markVerificationComplete, getProjectDir),
     setu_context: createSetuContextTool(getHydrationState, confirmContext, getContextCollector, getProjectDir),
@@ -303,6 +363,20 @@ export const SetuPlugin: Plugin = async (ctx) => {
     getProjectDir,
     getVerificationState,
     getHydrationState
+  );
+
+  // Create event hook once so lifecycle state handling remains deterministic.
+  const eventHook = createEventHook(
+    resetVerificationState,
+    () => attemptTracker.clearAll(),
+    setFirstSessionDone,
+    confirmContext,
+    resetHydration,
+    getContextCollector,
+    refreshSetuFilesExist,  // Silent file existence check
+    setProjectRules,         // Silent Exploration: store loaded rules
+    getProjectDir,           // Project directory accessor (avoids process.cwd())
+    activeBatches            // Parallel execution tracking cleanup
   );
   
   return {
@@ -386,18 +460,10 @@ export const SetuPlugin: Plugin = async (ctx) => {
     // Wrapped for graceful degradation (2.10)
     event: wrapHook(
       'event',
-      createEventHook(
-        resetVerificationState,
-        () => attemptTracker.clearAll(),
-        setFirstSessionDone,
-        confirmContext,
-        resetHydration,
-        getContextCollector,
-        refreshSetuFilesExist,  // Silent file existence check
-        setProjectRules,         // Silent Exploration: store loaded rules
-        getProjectDir,           // Project directory accessor (avoids process.cwd())
-        activeBatches            // Parallel execution tracking cleanup
-      )
+      async (input: { event: { type: string; properties?: Record<string, unknown> } }) => {
+        await maybeRunAutoUpdate(input.event);
+        await eventHook(input);
+      }
     ),
     
     // Compaction safety: inject active task into compaction summary
