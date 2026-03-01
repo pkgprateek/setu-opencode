@@ -1,14 +1,24 @@
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
-import { mkdir, writeFile, readFile, rm } from 'fs/promises';
+import { mkdir, writeFile, readFile, rm, access } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { bootstrapSetuGlobal, isExplicitGlobalInstallEnv, uninstallSetuGlobal } from '../bootstrap';
+
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 describe('install/bootstrap', () => {
   let testDir: string;
   let originalXdgConfigHome: string | undefined;
   let originalNpmGlobal: string | undefined;
   let originalNpmArgv: string | undefined;
+  let originalHome: string | undefined;
 
   beforeEach(async () => {
     testDir = join(tmpdir(), `setu-bootstrap-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -18,6 +28,7 @@ describe('install/bootstrap', () => {
 
     originalNpmGlobal = process.env.npm_config_global;
     originalNpmArgv = process.env.npm_config_argv;
+    originalHome = process.env.HOME;
     delete process.env.npm_config_global;
     delete process.env.npm_config_argv;
   });
@@ -39,6 +50,12 @@ describe('install/bootstrap', () => {
       delete process.env.npm_config_argv;
     } else {
       process.env.npm_config_argv = originalNpmArgv;
+    }
+
+    if (originalHome === undefined) {
+      delete process.env.HOME;
+    } else {
+      process.env.HOME = originalHome;
     }
 
     try {
@@ -130,6 +147,36 @@ describe('install/bootstrap', () => {
     expect(updatedAgent).not.toContain('stale agent content');
   });
 
+  test('init removes legacy home managed setu.md to avoid shadowing', async () => {
+    process.env.HOME = testDir;
+
+    const legacyDir = join(testDir, '.opencode');
+    await mkdir(join(legacyDir, 'agents'), { recursive: true });
+    await mkdir(join(legacyDir, 'agent'), { recursive: true });
+    await writeFile(join(legacyDir, 'agents', 'setu.md'), '<!-- setu-agent-version: 0.9.0 -->\nlegacy\n', 'utf-8');
+    await writeFile(join(legacyDir, 'agent', 'setu.md'), '<!-- setu-agent-version: 0.9.0 -->\nlegacy singular\n', 'utf-8');
+
+    const result = await bootstrapSetuGlobal();
+    expect(result.warning).toBeUndefined();
+
+    expect(await fileExists(join(testDir, 'opencode', 'agents', 'setu.md'))).toBe(true);
+    expect(await fileExists(join(legacyDir, 'agents', 'setu.md'))).toBe(false);
+    expect(await fileExists(join(legacyDir, 'agent', 'setu.md'))).toBe(false);
+  });
+
+  test('init keeps unmanaged legacy home setu.md untouched', async () => {
+    process.env.HOME = testDir;
+
+    const legacyDir = join(testDir, '.opencode');
+    await mkdir(join(legacyDir, 'agents'), { recursive: true });
+    const customAgentPath = join(legacyDir, 'agents', 'setu.md');
+    await writeFile(customAgentPath, '# custom setu profile\n', 'utf-8');
+
+    const result = await bootstrapSetuGlobal();
+    expect(result.warning).toBeUndefined();
+    expect(await fileExists(customAgentPath)).toBe(true);
+  });
+
   test('uninstall removes plugin and agent wiring', async () => {
     const setup = await bootstrapSetuGlobal();
     expect(setup.warning).toBeUndefined();
@@ -148,5 +195,49 @@ describe('install/bootstrap', () => {
     expect(result.warning).toBeUndefined();
     expect(result.pluginRemoved).toBe(false);
     expect(result.agentRemoved).toBe(false);
+  });
+
+  test('uninstall also removes legacy home .opencode managed wiring', async () => {
+    process.env.HOME = testDir;
+
+    const setup = await bootstrapSetuGlobal();
+    expect(setup.warning).toBeUndefined();
+
+    const legacyDir = join(testDir, '.opencode');
+    await mkdir(join(legacyDir, 'agents'), { recursive: true });
+    await mkdir(join(legacyDir, 'agent'), { recursive: true });
+    await writeFile(join(legacyDir, 'opencode.json'), '{"plugin": ["setu-opencode", "other-plugin"]}\n', 'utf-8');
+    await writeFile(join(legacyDir, 'agents', 'setu.md'), '<!-- setu-agent-version: 0.9.0 -->\nlegacy\n', 'utf-8');
+    await writeFile(join(legacyDir, 'agent', 'setu.md'), '<!-- setu-agent-version: 0.9.0 -->\nlegacy singular\n', 'utf-8');
+
+    const result = uninstallSetuGlobal();
+    expect(result.warning).toBeUndefined();
+    expect(result.pluginRemoved).toBe(true);
+    expect(result.agentRemoved).toBe(true);
+
+    const globalConfig = await readFile(join(testDir, 'opencode', 'opencode.json'), 'utf-8');
+    expect(globalConfig).not.toContain('setu-opencode');
+
+    const legacyConfig = await readFile(join(legacyDir, 'opencode.json'), 'utf-8');
+    expect(legacyConfig).not.toContain('setu-opencode');
+    expect(legacyConfig).toContain('other-plugin');
+
+    expect(await fileExists(join(legacyDir, 'agents', 'setu.md'))).toBe(false);
+    expect(await fileExists(join(legacyDir, 'agent', 'setu.md'))).toBe(false);
+  });
+
+  test('uninstall keeps unmanaged legacy setu.md untouched', async () => {
+    process.env.HOME = testDir;
+
+    const legacyDir = join(testDir, '.opencode');
+    await mkdir(join(legacyDir, 'agents'), { recursive: true });
+    const customAgentPath = join(legacyDir, 'agents', 'setu.md');
+    await writeFile(customAgentPath, '# custom setu profile\n', 'utf-8');
+
+    const result = uninstallSetuGlobal();
+    expect(result.warning).toBeUndefined();
+    expect(result.pluginRemoved).toBe(false);
+    expect(result.agentRemoved).toBe(false);
+    expect(await fileExists(customAgentPath)).toBe(true);
   });
 });
