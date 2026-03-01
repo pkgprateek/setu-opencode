@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
-import { mkdir, writeFile, readFile, rm, access } from 'fs/promises';
+import { mkdir, writeFile, readFile, rm, access, chmod } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { bootstrapSetuGlobal, isExplicitGlobalInstallEnv, uninstallSetuGlobal } from '../bootstrap';
@@ -195,6 +195,23 @@ describe('install/bootstrap', () => {
     expect(result.warning).toBeUndefined();
     expect(result.pluginRemoved).toBe(false);
     expect(result.agentRemoved).toBe(false);
+  });
+
+  test('uninstall does not rewrite config when Setu plugin is absent', async () => {
+    const configDir = join(testDir, 'opencode');
+    const configPath = join(configDir, 'opencode.json');
+    await mkdir(configDir, { recursive: true });
+    await writeFile(configPath, '{"plugin": ["other-plugin"]}\n', 'utf-8');
+    await chmod(configPath, 0o444);
+
+    const result = uninstallSetuGlobal();
+    expect(result.warning).toBeUndefined();
+    expect(result.pluginRemoved).toBe(false);
+    expect(result.agentRemoved).toBe(false);
+
+    const config = await readFile(configPath, 'utf-8');
+    expect(config).toContain('other-plugin');
+    expect(config).not.toContain('setu-opencode');
   });
 
   test('uninstall also removes legacy home .opencode managed wiring', async () => {

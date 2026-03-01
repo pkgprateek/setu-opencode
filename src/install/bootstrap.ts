@@ -148,7 +148,9 @@ function removePluginFromConfigPath(configPath: string): { removed: boolean; war
 
   try {
     const removed = removePlugin(config, 'setu-opencode');
-    writeConfig(configPath, config);
+    if (removed) {
+      writeConfig(configPath, config);
+    }
     return { removed };
   } catch (error) {
     return {
