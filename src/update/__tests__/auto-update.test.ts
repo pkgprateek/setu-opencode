@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdir, readFile, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { join, win32 } from 'path';
 import { checkAndPrepareSetuUpdate, isRootSessionCreatedEvent, resolveOpenCodePaths } from '../auto-update';
 
 describe('update/auto-update', () => {
@@ -158,13 +158,13 @@ describe('update/auto-update', () => {
   test('resolves OpenCode paths with XDG and Windows envs', () => {
     const xdgPaths = resolveOpenCodePaths(
       {
-        XDG_CACHE_HOME: '/tmp/xcache',
+        XDG_CACHE_HOME: '/home/dev/.cache/xcache',
         XDG_CONFIG_HOME: '/tmp/xconfig'
       },
       'linux',
       '/home/dev'
     );
-    expect(xdgPaths.cacheDir).toBe(join('/tmp/xcache', 'opencode'));
+    expect(xdgPaths.cacheDir).toBe(join('/home/dev/.cache/xcache', 'opencode'));
 
     const winPaths = resolveOpenCodePaths(
       {
@@ -174,7 +174,27 @@ describe('update/auto-update', () => {
       'win32',
       'C:/Users/dev'
     );
-    expect(winPaths.cacheDir).toContain('opencode');
+    expect(winPaths.cacheDir).toBe(win32.join('C:/Users/dev/AppData/Local', 'opencode'));
+  });
+
+  test('falls back to safe cache defaults for invalid cache env paths', () => {
+    const xdgPaths = resolveOpenCodePaths(
+      {
+        XDG_CACHE_HOME: '/home/dev/../escape',
+      },
+      'linux',
+      '/home/dev'
+    );
+    expect(xdgPaths.cacheDir).toBe(join('/home/dev/.cache', 'opencode'));
+
+    const winPaths = resolveOpenCodePaths(
+      {
+        LOCALAPPDATA: 'C:/Users/dev/../escape',
+      },
+      'win32',
+      'C:/Users/dev'
+    );
+    expect(winPaths.cacheDir).toBe(win32.join('C:/Users/dev/AppData/Local', 'opencode'));
   });
 
   test('detects root session.created events only', () => {

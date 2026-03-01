@@ -2,11 +2,12 @@ import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import { homedir } from 'os';
-import { join } from 'path';
+import { basename, join, relative, resolve, sep, win32 } from 'path';
 import { debugLog } from '../debug';
 
 const SETU_PACKAGE_NAME = 'setu-opencode';
 const DEFAULT_TIMEOUT_MS = 5000;
+const DEFAULT_COMMAND_TIMEOUT_MS = 30_000;
 
 interface DistTagsResponse {
   latest?: string;
@@ -43,7 +44,7 @@ type LatestVersionFetcher = (
 type CommandRunner = (
   command: string,
   args: string[],
-  options?: { cwd?: string; env?: NodeJS.ProcessEnv }
+  options?: { cwd?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number }
 ) => Promise<CommandResult>;
 
 export interface SessionEventLike {
@@ -82,20 +83,59 @@ function coalesceNonEmpty(...values: Array<string | undefined>): string | null {
   return null;
 }
 
+function isSubpath(baseDir: string, candidatePath: string, platform: NodeJS.Platform): boolean {
+  const resolvedBase = platform === 'win32' ? win32.resolve(baseDir) : resolve(baseDir);
+  const resolvedCandidate = platform === 'win32' ? win32.resolve(candidatePath) : resolve(candidatePath);
+  const rel = platform === 'win32'
+    ? win32.relative(resolvedBase, resolvedCandidate)
+    : relative(resolvedBase, resolvedCandidate);
+  return rel === '' || (!rel.startsWith('..') && rel !== '..');
+}
+
+function chooseSafeCacheBase(
+  candidate: string | null,
+  fallbackBase: string,
+  allowedBase: string,
+  sourceLabel: string,
+  platform: NodeJS.Platform,
+): string {
+  if (!candidate) {
+    return fallbackBase;
+  }
+
+  const resolvedCandidate = platform === 'win32' ? win32.resolve(candidate) : resolve(candidate);
+  if (!isSubpath(allowedBase, resolvedCandidate, platform)) {
+    debugLog(`Auto-update: rejected ${sourceLabel} outside allowed base`, {
+      sourceLabel,
+      candidate,
+      allowedBase,
+    });
+    return fallbackBase;
+  }
+
+  return resolvedCandidate;
+}
+
 export function resolveOpenCodePaths(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
   homeDir: string = homedir()
 ): OpenCodePaths {
+  const resolvedHome = platform === 'win32' ? win32.resolve(homeDir) : resolve(homeDir);
+
   if (platform === 'win32') {
-    const cacheBase = coalesceNonEmpty(env.LOCALAPPDATA, homeDir) ?? homeDir;
+    const fallbackBase = win32.join(resolvedHome, 'AppData', 'Local');
+    const candidate = coalesceNonEmpty(env.LOCALAPPDATA, fallbackBase);
+    const cacheBase = chooseSafeCacheBase(candidate, fallbackBase, resolvedHome, 'LOCALAPPDATA', platform);
 
     return {
-      cacheDir: join(cacheBase, 'opencode')
+      cacheDir: win32.join(cacheBase, 'opencode')
     };
   }
 
-  const cacheBase = coalesceNonEmpty(env.XDG_CACHE_HOME, join(homeDir, '.cache')) ?? join(homeDir, '.cache');
+  const fallbackBase = join(resolvedHome, '.cache');
+  const candidate = coalesceNonEmpty(env.XDG_CACHE_HOME, fallbackBase);
+  const cacheBase = chooseSafeCacheBase(candidate, fallbackBase, fallbackBase, 'XDG_CACHE_HOME', platform);
 
   return {
     cacheDir: join(cacheBase, 'opencode')
@@ -246,9 +286,10 @@ async function fetchLatestVersion(
 async function defaultCommandRunner(
   command: string,
   args: string[],
-  options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}
+  options: { cwd?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number } = {}
 ): Promise<CommandResult> {
   return new Promise((resolve) => {
+    const timeoutMs = options.timeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS;
     const child = spawn(command, args, {
       cwd: options.cwd,
       env: options.env,
@@ -266,7 +307,28 @@ async function defaultCommandRunner(
       stderrChunks.push(chunk);
     });
 
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      child.kill();
+      resolve({
+        code: 124,
+        stdout: Buffer.concat(stdoutChunks).toString('utf-8'),
+        stderr: `${Buffer.concat(stderrChunks).toString('utf-8')}\nCommand timed out after ${timeoutMs}ms`.trim()
+      });
+    }, timeoutMs);
+
     child.on('error', (error) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeout);
       resolve({
         code: 1,
         stdout: '',
@@ -275,6 +337,12 @@ async function defaultCommandRunner(
     });
 
     child.on('close', (code) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeout);
       resolve({
         code: code ?? 1,
         stdout: Buffer.concat(stdoutChunks).toString('utf-8'),
@@ -302,6 +370,17 @@ async function installLatestPackageInCache(
 ): Promise<boolean> {
   await ensureCachePackageJson(cacheDir);
 
+  // NOTE: Auto-update installer currently targets Bun runtime semantics.
+  // We explicitly guard runtime to avoid invoking Bun-only args under Node.
+  const runtime = basename(process.execPath).toLowerCase();
+  if (!runtime.includes('bun')) {
+    debugLog('Auto-update: skipping install because runtime is not Bun', {
+      execPath: process.execPath,
+      packageName,
+    });
+    return false;
+  }
+
   const result = await commandRunner(
     process.execPath,
     ['add', '--force', '--exact', '--cwd', cacheDir, `${packageName}@latest`],
@@ -310,7 +389,8 @@ async function installLatestPackageInCache(
       env: {
         ...process.env,
         BUN_BE_BUN: '1'
-      }
+      },
+      timeoutMs: DEFAULT_COMMAND_TIMEOUT_MS,
     }
   );
 
@@ -332,6 +412,19 @@ async function runInstalledSetuInit(
   commandRunner: CommandRunner
 ): Promise<boolean> {
   const cliPath = join(cacheDir, 'node_modules', packageName, 'dist', 'cli.js');
+  const resolvedCacheDir = resolve(cacheDir);
+  const resolvedCliPath = resolve(cliPath);
+  const relFromCache = relative(resolvedCacheDir, resolvedCliPath);
+  if (relFromCache.startsWith('..') || relFromCache === '..' || !resolvedCliPath.startsWith(`${resolvedCacheDir}${sep}`)) {
+    debugLog('Auto-update: CLI path escapes cache directory', {
+      cacheDir,
+      packageName,
+      cliPath,
+      resolvedCliPath,
+    });
+    return false;
+  }
+
   if (!existsSync(cliPath)) {
     debugLog('Auto-update: installed CLI not found for init', { cliPath });
     return false;
@@ -345,7 +438,8 @@ async function runInstalledSetuInit(
       env: {
         ...process.env,
         BUN_BE_BUN: '1'
-      }
+      },
+      timeoutMs: DEFAULT_COMMAND_TIMEOUT_MS,
     }
   );
 
