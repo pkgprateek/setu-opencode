@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'path';
-import { resolveAndValidateGlobalConfigRoot } from '../setu-agent';
+import { resolveAndValidateGlobalConfigRoot, resolveAndValidateLegacyHomeConfigRoot } from '../setu-agent';
 
 describe('agent/setu-agent global config root resolution', () => {
   test('uses XDG_CONFIG_HOME on non-windows platforms', () => {
@@ -79,5 +79,43 @@ describe('agent/setu-agent global config root resolution', () => {
         env: {},
       })
     ).toThrow('Invalid homeDir');
+  });
+
+  test('rejects relative homeDir when explicitly provided', () => {
+    expect(() =>
+      resolveAndValidateGlobalConfigRoot({
+        platform: 'linux',
+        homeDir: 'relative/home',
+        env: {},
+      })
+    ).toThrow('must be absolute');
+  });
+
+  test('rejects relative XDG_CONFIG_HOME', () => {
+    expect(() =>
+      resolveAndValidateGlobalConfigRoot({
+        platform: 'linux',
+        homeDir: '/home/dev',
+        env: {
+          XDG_CONFIG_HOME: 'relative/config',
+        },
+      })
+    ).toThrow('must be absolute');
+  });
+
+  test('rejects relative APPDATA', () => {
+    expect(() =>
+      resolveAndValidateGlobalConfigRoot({
+        platform: 'win32',
+        homeDir: '/home/dev',
+        env: {
+          APPDATA: '../roam',
+        },
+      })
+    ).toThrow('must be absolute');
+  });
+
+  test('legacy root rejects relative homeDir', () => {
+    expect(() => resolveAndValidateLegacyHomeConfigRoot('relative/home')).toThrow('must be absolute');
   });
 });

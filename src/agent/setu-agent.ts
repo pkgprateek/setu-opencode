@@ -10,7 +10,7 @@
 
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
-import { basename, isAbsolute, join, normalize, relative, resolve } from 'path';
+import { basename, isAbsolute, join, normalize, relative, resolve, win32 } from 'path';
 import { debugLog } from '../debug';
 
 /**
@@ -241,6 +241,11 @@ function resolveAndValidateConfigRoot(
 export function resolveAndValidateGlobalConfigRoot(options: GlobalConfigRootResolveOptions = {}): string {
   const env = options.env ?? process.env;
   const platform = options.platform ?? process.platform;
+
+  const isAbsolutePath = (pathValue: string): boolean => {
+    return platform === 'win32' ? win32.isAbsolute(pathValue) : isAbsolute(pathValue);
+  };
+
   let homeDir = homedir();
   if (options.homeDir !== undefined) {
     if (typeof options.homeDir !== 'string' || options.homeDir.trim().length === 0) {
@@ -249,13 +254,24 @@ export function resolveAndValidateGlobalConfigRoot(options: GlobalConfigRootReso
     homeDir = options.homeDir.trim();
   }
 
+  if (!isAbsolutePath(homeDir)) {
+    throw new Error(`Invalid homeDir: must be absolute (${sanitizeForLog(homeDir)})`);
+  }
+
+  const appData = env.APPDATA;
+  const xdgConfigHome = env.XDG_CONFIG_HOME;
+
   const configHomeRaw = platform === 'win32'
-    ? (env.APPDATA && env.APPDATA.trim().length > 0
-      ? env.APPDATA
+    ? (typeof appData === 'string' && appData.trim().length > 0
+      ? appData.trim()
       : join(homeDir, 'AppData', 'Roaming'))
-    : (env.XDG_CONFIG_HOME && env.XDG_CONFIG_HOME.trim().length > 0
-      ? env.XDG_CONFIG_HOME
+    : (typeof xdgConfigHome === 'string' && xdgConfigHome.trim().length > 0
+      ? xdgConfigHome.trim()
       : join(homeDir, '.config'));
+
+  if (configHomeRaw.trim().length === 0 || !isAbsolutePath(configHomeRaw)) {
+    throw new Error(`Invalid global config home: must be absolute (${sanitizeForLog(configHomeRaw)})`);
+  }
 
   if (hasTraversalSegment(configHomeRaw)) {
     debugLog(`[SECURITY] Path traversal attempt in global config home: ${sanitizeForLog(configHomeRaw)}`);
@@ -273,12 +289,17 @@ export function resolveAndValidateLegacyHomeConfigRoot(
     throw new Error('Invalid legacy config root: empty home directory');
   }
 
-  if (hasTraversalSegment(homeDir)) {
-    debugLog(`[SECURITY] Path traversal attempt in home directory: ${sanitizeForLog(homeDir)}`);
-    throw new Error(`Invalid legacy config root: traversal segment detected (${sanitizeForLog(homeDir)})`);
+  const trimmedHomeDir = homeDir.trim();
+  if (!isAbsolute(trimmedHomeDir)) {
+    throw new Error(`Invalid legacy config root: home directory must be absolute (${sanitizeForLog(trimmedHomeDir)})`);
   }
 
-  const resolvedHome = resolve(normalize(homeDir));
+  if (hasTraversalSegment(trimmedHomeDir)) {
+    debugLog(`[SECURITY] Path traversal attempt in home directory: ${sanitizeForLog(trimmedHomeDir)}`);
+    throw new Error(`Invalid legacy config root: traversal segment detected (${sanitizeForLog(trimmedHomeDir)})`);
+  }
+
+  const resolvedHome = resolve(normalize(trimmedHomeDir));
   return resolveAndValidateConfigRoot(join(resolvedHome, '.opencode'), { allowedBaseDir: resolvedHome });
 }
 
