@@ -84,7 +84,7 @@ pnpm add -g setu-opencode && setu init
 bun add -g setu-opencode && setu init
 ```
 
-`setu init` ensures consistent setup across npm, pnpm, and bun — even when install scripts are skipped.
+`setu init` ensures consistent setup across npm, pnpm, and bun — even when install scripts are skipped. It also cleans legacy managed `~/.opencode/agents/setu.md` files that can shadow global agent updates.
 
 Global setup updates:
 
@@ -116,7 +116,7 @@ setu uninstall && pnpm remove -g setu-opencode
 setu uninstall && bun remove -g setu-opencode
 ```
 
-`setu uninstall` removes Setu wiring from global OpenCode config.
+`setu uninstall` removes Setu wiring from global OpenCode config and cleans legacy managed Setu agent files from `~/.opencode` when present.
 
 Restart OpenCode. Setu should no longer appear as default agent/mode.
 
@@ -245,7 +245,7 @@ These aren't roadblocks—they're guardrails that keep your agent on the right p
 | `setu_task` | Manage task lifecycle (`create`, `reframe`, `update_status`, `clear`, `get`) |
 | `setu_reset` | Reset progress to restart current plan |
 
-**Important:** In `auto` mode, `setu_research` and `setu_plan` append to existing artifacts. A new objective starts with `setu_task(action="create")`, which archives prior artifacts to `HISTORY.md` and resets the workflow to Scout. Refinements to the same objective go through `setu_task(action="reframe")`, which keeps existing artifacts intact.
+**Important:** In `auto` mode, `setu_research` and `setu_plan` append to existing artifacts. A new objective starts with `setu_task(action="create")`, which archives prior artifacts to `HISTORY.md`, replaces the previous task boundary, and resets the workflow to Scout. Refinements to the same objective go through `setu_task(action="reframe")`, which keeps existing artifacts intact. `setu_task(action="update_status")` tracks progress only and should not be followed by an automatic `clear`.
 
 ---
 
