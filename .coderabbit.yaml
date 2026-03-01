@@ -1,9 +1,9 @@
 # CodeRabbit Configuration for Setu
 # An OpenCode plugin enforcing disciplined AI coding
-# https://github.com/anomalyco/setu-opencode
+# https://github.com/pkgprateek/setu-opencode
 
 language: en-US
-tone_instructions: "Be concise and technical. Focus on security, type safety, hook correctness, and enforcement logic. Skip pleasantries."
+tone_instructions: "Be concise and technical. Focus on concrete correctness, security, and regression risk. Skip stylistic nits and avoid speculative comments unless a reproducible breakage path is shown."
 
 reviews:
   request_changes_workflow: true
@@ -21,33 +21,26 @@ reviews:
       - dev
 
   path_filters:
-    # INCLUDE: Config files that matter
+    # INCLUDE: Runtime and config surfaces only
+    - "src/**/*.ts"
     - "package.json"
     - "tsconfig.json"
     - "eslint.config.js"
-    - "opencode.json"
     - ".coderabbit.yaml"
-
-    # INCLUDE: Main source file
-    - "src/**/*.ts"
-
-    # INCLUDE: Critical docs and exclude unwanted docs
-    # - "!**/*.md"
-    - "!tests/**"
-    - "!docs/internal/**"
     - "README.md"
-    - "AGENTS.md"
-    - "ROADMAP.md"
-    - "CHANGELOG.md"
-    - "skills/**/*.md"
+    - "CONTRIBUTING.md"
 
-    # EXCLUDE: Generated/vendored
+    # EXCLUDE: Generated/vendor/noisy paths
+    - "!dist/**"
+    - "!skills/**"
+    - "!docs/**"
+    - "!CHANGELOG.md"
+    - "!ROADMAP.md"
+    - "!AGENTS.md"
     - "!**/bun.lockb"
     - "!package-lock.json"
     - "!yarn.lock"
     - "!pnpm-lock.yaml"
-
-    # EXCLUDE: Misc files
     - "!**/*.txt"
     - "!**/.gitignore"
     - "!.git/**"
@@ -75,7 +68,7 @@ reviews:
         **CRITICAL: Hook Correctness**
         - `tool.execute.before` is the moat — must block correctly with no bypasses
         - Gear transitions (scout → architect → builder) must be atomic and deterministic
-        - Phase 0 blocking must prevent ALL side-effects until context confirmed
+        - Hydration gate must prevent ALL side-effects until context confirmed
         - Constraint enforcement (READ_ONLY, NO_PUSH, NO_DELETE, SANDBOX) must be bulletproof
         - Never allow write operations in scout gear
 
@@ -109,6 +102,31 @@ reviews:
         - Metrics collection must not impact performance
         - Hook failures must be logged with full context
         - Never cache gear state across tool calls
+
+    - path: "src/install/**/*.ts"
+      instructions: |
+        GLOBAL BOOTSTRAP/UNINSTALL PATH. Verify:
+
+        - `setu init` must be idempotent for config plugin list
+        - `setu init` must always refresh global `agents/setu.md`
+        - No project-local `.opencode` writes from global bootstrap path
+        - JSON parse/write failures must return actionable warnings
+        - Uninstall must remove only Setu wiring and preserve unrelated config
+
+    - path: "src/cli.ts"
+      instructions: |
+        INSTALL ENTRYPOINTS. Verify:
+
+        - CLI output must match actual operation outcomes
+        - Global install detection must avoid false positives
+        - Errors should provide direct remediation steps (`setu init` / `setu uninstall`)
+
+    - path: "src/postinstall.ts"
+      instructions: |
+        INSTALL ENTRYPOINTS. Verify:
+
+        - Postinstall must fail safely and never block package installation
+        - Errors should provide direct remediation steps (`setu init` / `setu uninstall`)
 
     - path: "src/context/**/*.ts"
       instructions: |
