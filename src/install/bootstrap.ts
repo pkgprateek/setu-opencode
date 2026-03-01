@@ -1,6 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { dirname, join } from 'path';
-import { createSetuAgentFile, resolveAndValidateGlobalConfigRoot } from '../agent/setu-agent';
+import {
+  createSetuAgentFile,
+  resolveAndValidateGlobalConfigRoot,
+  resolveAndValidateLegacyHomeConfigRoot,
+  SETU_AGENT_VERSION_MARKER_PREFIX,
+} from '../agent/setu-agent';
+import { debugLog } from '../debug';
 import { getErrorMessage } from '../utils/error-handling';
 
 export interface BootstrapResult {
@@ -23,13 +29,47 @@ function getGlobalOpenCodeConfigDir(): string {
   return resolveAndValidateGlobalConfigRoot();
 }
 
-function getGlobalRoots(): { configDir: string; configPath: string; agentPath: string } {
-  const configDir = getGlobalOpenCodeConfigDir();
+function getLegacyHomeOpenCodeConfigDir(): string {
+  return resolveAndValidateLegacyHomeConfigRoot();
+}
+
+interface RootPaths {
+  configDir: string;
+  configPath: string;
+  agentPaths: string[];
+}
+
+function createRootPaths(configDir: string): RootPaths {
   return {
     configDir,
     configPath: join(configDir, 'opencode.json'),
-    agentPath: join(configDir, 'agents', 'setu.md'),
+    agentPaths: [join(configDir, 'agents', 'setu.md'), join(configDir, 'agent', 'setu.md')],
   };
+}
+
+function getGlobalRoots(): { configDir: string; configPath: string; agentPath: string } {
+  const { configDir, configPath, agentPaths } = createRootPaths(getGlobalOpenCodeConfigDir());
+  return {
+    configDir,
+    configPath,
+    agentPath: agentPaths[0],
+  };
+}
+
+function getAllUninstallRoots(): RootPaths[] {
+  const primary = createRootPaths(getGlobalOpenCodeConfigDir());
+  const roots = [primary];
+
+  try {
+    const legacy = createRootPaths(getLegacyHomeOpenCodeConfigDir());
+    if (!roots.some(root => root.configDir === legacy.configDir)) {
+      roots.push(legacy);
+    }
+  } catch (error) {
+    debugLog('Skipping legacy home .opencode cleanup due to invalid root', error);
+  }
+
+  return roots;
 }
 
 function readConfig(configPath: string): Record<string, unknown> {
@@ -94,6 +134,101 @@ function writeConfig(configPath: string, config: Record<string, unknown>): void 
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
 }
 
+function removePluginFromConfigPath(configPath: string): { removed: boolean; warning?: string } {
+  if (!existsSync(configPath)) {
+    return { removed: false };
+  }
+
+  let config: Record<string, unknown>;
+  try {
+    config = readConfig(configPath);
+  } catch {
+    return { removed: false, warning: `Could not parse existing config at ${configPath}. Please fix JSON and retry uninstall.` };
+  }
+
+  try {
+    const removed = removePlugin(config, 'setu-opencode');
+    if (removed) {
+      writeConfig(configPath, config);
+    }
+    return { removed };
+  } catch (error) {
+    return {
+      removed: false,
+      warning: `Could not update config at ${configPath}: ${getErrorMessage(error)}. Check permissions and retry uninstall.`,
+    };
+  }
+}
+
+function isSetuManagedAgentContent(content: string): boolean {
+  return content.includes(SETU_AGENT_VERSION_MARKER_PREFIX);
+}
+
+function removeManagedAgentFile(agentPath: string): { removed: boolean; warning?: string } {
+  if (!existsSync(agentPath)) {
+    return { removed: false };
+  }
+
+  let content = '';
+  try {
+    content = readFileSync(agentPath, 'utf-8');
+  } catch (error) {
+    return {
+      removed: false,
+      warning: `Failed to inspect agent file at ${agentPath}: ${getErrorMessage(error)}.`,
+    };
+  }
+
+  if (!isSetuManagedAgentContent(content)) {
+    debugLog(`Skipping unmanaged Setu agent file at ${agentPath}`);
+    return { removed: false };
+  }
+
+  try {
+    unlinkSync(agentPath);
+    return { removed: true };
+  } catch (error) {
+    return {
+      removed: false,
+      warning: `Failed to remove agent file at ${agentPath}: ${getErrorMessage(error)}.`,
+    };
+  }
+}
+
+function cleanupLegacyManagedAgentFiles(primaryConfigDir: string): { removedAny: boolean; warning?: string } {
+  let legacyRoot: RootPaths;
+  try {
+    legacyRoot = createRootPaths(getLegacyHomeOpenCodeConfigDir());
+  } catch (error) {
+    debugLog('Skipping legacy home .opencode cleanup due to invalid root', error);
+    return { removedAny: false };
+  }
+
+  if (legacyRoot.configDir === primaryConfigDir) {
+    return { removedAny: false };
+  }
+
+  let removedAny = false;
+  const warnings: string[] = [];
+  const dedupedAgentPaths = Array.from(new Set(legacyRoot.agentPaths));
+
+  for (const path of dedupedAgentPaths) {
+    const result = removeManagedAgentFile(path);
+    if (result.removed) {
+      removedAny = true;
+    }
+    if (result.warning) {
+      warnings.push(result.warning);
+    }
+  }
+
+  if (warnings.length > 0) {
+    return { removedAny, warning: warnings.join(' ') };
+  }
+
+  return { removedAny };
+}
+
 export async function bootstrapSetuGlobal(): Promise<BootstrapResult> {
   const { configDir, configPath, agentPath } = getGlobalRoots();
 
@@ -128,12 +263,21 @@ export async function bootstrapSetuGlobal(): Promise<BootstrapResult> {
 
   let agentUpdated = false;
   try {
-    agentUpdated = await createSetuAgentFile(configDir, false /* forceUpdate */, { allowedBaseDir: configDir });
+    agentUpdated = await createSetuAgentFile(configDir, true /* forceUpdate */, { allowedBaseDir: configDir });
   } catch (error) {
     return warningResult(
       `Config updated, but agent creation failed at ${agentPath}: ${getErrorMessage(error)}. ` +
       'Run init again after fixing filesystem permissions.',
       pluginAdded,
+    );
+  }
+
+  const legacyCleanup = cleanupLegacyManagedAgentFiles(configDir);
+  if (legacyCleanup.warning) {
+    return warningResult(
+      `Config updated, but legacy managed Setu agent cleanup could not complete: ${legacyCleanup.warning}`,
+      pluginAdded,
+      agentUpdated,
     );
   }
 
@@ -157,39 +301,32 @@ export function uninstallSetuGlobal(): UninstallResult {
   });
 
   let pluginRemoved = false;
-  if (existsSync(configPath)) {
-    let config: Record<string, unknown>;
-    try {
-      config = readConfig(configPath);
-    } catch {
-      return warningResult(`Could not parse existing config at ${configPath}. Please fix JSON and retry uninstall.`);
+  let agentRemoved = false;
+  const warnings: string[] = [];
+
+  for (const root of getAllUninstallRoots()) {
+    const pluginResult = removePluginFromConfigPath(root.configPath);
+    if (pluginResult.removed) {
+      pluginRemoved = true;
+    }
+    if (pluginResult.warning) {
+      warnings.push(pluginResult.warning);
     }
 
-    try {
-      pluginRemoved = removePlugin(config, 'setu-opencode');
-      writeConfig(configPath, config);
-    } catch (error) {
-      return warningResult(
-        `Could not update config at ${configPath}: ${getErrorMessage(error)}. ` +
-        'Check permissions and retry uninstall.',
-        false,
-        false,
-      );
+    const dedupedAgentPaths = Array.from(new Set(root.agentPaths));
+    for (const path of dedupedAgentPaths) {
+      const agentResult = removeManagedAgentFile(path);
+      if (agentResult.removed) {
+        agentRemoved = true;
+      }
+      if (agentResult.warning) {
+        warnings.push(agentResult.warning);
+      }
     }
   }
 
-  let agentRemoved = false;
-  try {
-    if (existsSync(agentPath)) {
-      unlinkSync(agentPath);
-      agentRemoved = true;
-    }
-  } catch (error) {
-    return warningResult(
-      `Config updated, but failed to remove agent file at ${agentPath}: ${getErrorMessage(error)}.`,
-      pluginRemoved,
-      false,
-    );
+  if (warnings.length > 0) {
+    return warningResult(warnings.join(' '), pluginRemoved, agentRemoved);
   }
 
   return {

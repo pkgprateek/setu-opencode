@@ -18,14 +18,6 @@ It is not a downstream app that "uses" Setu to ship product features.
 2. `ROADMAP.md` (current direction and release scope)
 3. `CHANGELOG.md` (what changed recently)
 
-Deep context (internal, gitignored):
-
-- `docs/internal/ARCHITECTURE.md`
-- `docs/internal/PLAN.md`
-- `docs/internal/RESEARCH.md`
-
-Important: `docs/internal/` is gitignored. Do not stage or commit internal doc changes.
-
 ## Working Rules
 
 - Start with architecture impact, not quick patches.

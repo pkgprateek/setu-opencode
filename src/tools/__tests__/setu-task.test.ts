@@ -87,9 +87,40 @@ describe('setu_task lifecycle actions', () => {
     const result = await tool.execute({ action: 'update_status', status: 'blocked' }, createMockToolContext());
     expect(result).toContain('Task Updated');
     expect(result).toContain('blocked');
+    expect(result.toLowerCase()).not.toContain('clear');
 
     const active = loadActiveTask(projectDir);
     expect(active?.status).toBe('blocked');
+    expect(existsSync(join(setuDir, 'RESEARCH.md'))).toBe(true);
+    expect(existsSync(join(setuDir, 'PLAN.md'))).toBe(true);
+  });
+
+  test('reframe still works after update_status completed', async () => {
+    const projectDir = makeProjectDir();
+    const setuDir = join(projectDir, '.setu');
+    mkdirSync(setuDir, { recursive: true });
+
+    const tool = createSetuTaskTool(() => projectDir);
+    await tool.execute({ action: 'create', task: 'Ship update flow' }, createMockToolContext());
+
+    const statusResult = await tool.execute(
+      { action: 'update_status', status: 'completed' },
+      createMockToolContext()
+    );
+    expect(statusResult).toContain('Task Updated');
+
+    writeFileSync(join(setuDir, 'RESEARCH.md'), '# retained research\n', 'utf-8');
+    writeFileSync(join(setuDir, 'PLAN.md'), '# retained plan\n', 'utf-8');
+
+    const reframeResult = await tool.execute(
+      { action: 'reframe', task: 'Ship update flow with global agent refresh' },
+      createMockToolContext()
+    );
+    expect(reframeResult).toContain('Task Reframed');
+
+    const active = loadActiveTask(projectDir);
+    expect(active?.task).toBe('Ship update flow with global agent refresh');
+    expect(active?.status).toBe('completed');
     expect(existsSync(join(setuDir, 'RESEARCH.md'))).toBe(true);
     expect(existsSync(join(setuDir, 'PLAN.md'))).toBe(true);
   });

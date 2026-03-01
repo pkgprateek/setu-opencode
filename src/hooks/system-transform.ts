@@ -193,7 +193,7 @@ export function createSystemTransformHook(
                 "Use any available discovery/read tools and any non-destructive discovery tools to gather evidence.\n" +
                 "You are not required to plan yet; continue research until confidence is high.\n" +
                 "Do not make assumptions when path/runtime/scope is ambiguous; ask the user before scaffolding or branching work.\n" +
-                "Task lifecycle: use setu_task(create) only for a new objective; use setu_task(reframe) when scope changes but artifacts should be preserved.\n" +
+                "Task lifecycle: use setu_task(create) only for a new objective (it replaces prior task boundary); use setu_task(reframe) when scope changes but artifacts should be preserved. Do not auto-call clear after status updates.\n" +
                 "You may update research artifacts via setu_research; generic file edits are restricted in this phase.",
             );
             break;
@@ -203,7 +203,7 @@ export function createSystemTransformHook(
                 "Research findings saved. You may continue discovery or plan when ready.\n" +
                 "Call setu_plan() only when you have sufficient information to execute confidently.\n" +
                 "Do not make assumptions when target directory/package manager/port is ambiguous; ask the user before scaffolding.\n" +
-                "Task lifecycle: new objective -> setu_task(create), same objective refinement -> setu_task(reframe), status updates -> setu_task(update_status).\n" +
+                "Task lifecycle: new objective -> setu_task(create) (replaces prior boundary), same objective refinement -> setu_task(reframe), status updates -> setu_task(update_status). Do not auto-call clear after status updates.\n" +
                 "No forced transition—quality over speed.\n" +
                 "After setu_plan: show user \"Ready to execute: [objective]. Reply 'go' or tell me adjustments\"",
             );

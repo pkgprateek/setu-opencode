@@ -1,9 +1,9 @@
 # CodeRabbit Configuration for Setu
 # An OpenCode plugin enforcing disciplined AI coding
-# https://github.com/anomalyco/setu-opencode
+# https://github.com/pkgprateek/setu-opencode
 
 language: en-US
-tone_instructions: "Be concise and technical. Focus on security, type safety, hook correctness, and enforcement logic. Skip pleasantries."
+tone_instructions: "Be concise and technical. Focus on concrete correctness, security, and regression risk. Skip stylistic nits and avoid speculative comments unless a reproducible breakage path is shown."
 
 reviews:
   request_changes_workflow: true
@@ -21,35 +21,27 @@ reviews:
       - dev
 
   path_filters:
-    # INCLUDE: Config files that matter
+    # INCLUDE: Primary review surfaces
+    - "src/**/*.ts"
+    - "skills/**/*.md"
     - "package.json"
     - "tsconfig.json"
     - "eslint.config.js"
-    - "opencode.json"
     - ".coderabbit.yaml"
-
-    # INCLUDE: Main source file
-    - "src/**/*.ts"
-
-    # INCLUDE: Critical docs and exclude unwanted docs
-    # - "!**/*.md"
-    - "!tests/**"
-    - "!docs/internal/**"
     - "README.md"
+    - "CONTRIBUTING.md"
     - "AGENTS.md"
     - "ROADMAP.md"
     - "CHANGELOG.md"
-    - "skills/**/*.md"
 
-    # EXCLUDE: Generated/vendored
+    # EXCLUDE: Generated artifacts and lockfiles
+    - "!dist/**"
+    - "!**/__fixtures__/**"
+    - "!**/*.snap"
     - "!**/bun.lockb"
     - "!package-lock.json"
     - "!yarn.lock"
     - "!pnpm-lock.yaml"
-
-    # EXCLUDE: Misc files
-    - "!**/*.txt"
-    - "!**/.gitignore"
     - "!.git/**"
 
   path_instructions:
@@ -65,6 +57,11 @@ reviews:
         - Validate null/undefined at API boundaries
         - Naming default is camelCase, but allow explicit exceptions for stable protocol/constants (e.g., UPPER_SNAKE_CASE prompt contract identifiers)
 
+        **CRITICAL: Review Signal Quality**
+        - Prioritize correctness, security, and regression risk over style preferences
+        - Do not raise stylistic nitpicks unless they create a concrete maintainability or defect risk
+        - Do not raise hypothetical concerns without a concrete breakage path in this change set
+
         **CRITICAL: Security & Defense in Depth**
         - Path validation: Sanitize all file paths (prevent directory traversal)
         - Input sanitization: Remove null bytes, control characters from user input
@@ -75,7 +72,7 @@ reviews:
         **CRITICAL: Hook Correctness**
         - `tool.execute.before` is the moat — must block correctly with no bypasses
         - Gear transitions (scout → architect → builder) must be atomic and deterministic
-        - Phase 0 blocking must prevent ALL side-effects until context confirmed
+        - Hydration gate must prevent ALL side-effects until context confirmed
         - Constraint enforcement (READ_ONLY, NO_PUSH, NO_DELETE, SANDBOX) must be bulletproof
         - Never allow write operations in scout gear
 
@@ -110,6 +107,31 @@ reviews:
         - Hook failures must be logged with full context
         - Never cache gear state across tool calls
 
+    - path: "src/install/**/*.ts"
+      instructions: |
+        GLOBAL BOOTSTRAP/UNINSTALL PATH. Verify:
+
+        - `setu init` must be idempotent for config plugin list
+        - `setu init` must always refresh global `agents/setu.md`
+        - No project-local `.opencode` writes from global bootstrap path
+        - JSON parse/write failures must return actionable warnings
+        - Uninstall must remove only Setu wiring and preserve unrelated config
+
+    - path: "src/cli.ts"
+      instructions: |
+        INSTALL ENTRYPOINTS. Verify:
+
+        - CLI output must match actual operation outcomes
+        - Global install detection must avoid false positives
+        - Errors should provide direct remediation steps (`setu init` / `setu uninstall`)
+
+    - path: "src/postinstall.ts"
+      instructions: |
+        INSTALL ENTRYPOINTS. Verify:
+
+        - Postinstall must fail safely and never block package installation
+        - Errors should provide direct remediation steps (`setu init` / `setu uninstall`)
+
     - path: "src/context/**/*.ts"
       instructions: |
         CONTEXT PERSISTENCE IS CRITICAL. Verify:
@@ -132,6 +154,16 @@ reviews:
         - Error messages must guide agent to correct action
         - Never allow tools to bypass gear restrictions
         - Tool descriptions must be clear and actionable
+
+    - path: "src/**/__tests__/**/*.ts"
+      instructions: |
+        TEST QUALITY GATE. Verify:
+
+        - Tests cover changed behavior and at least one failure/edge path for risky logic
+        - Assertions validate behavior, not only implementation details
+        - Avoid brittle time/path/environment coupling unless explicitly required
+        - Setup/teardown must isolate global state (env vars, temp dirs, process globals)
+        - Keep comments and naming intent-focused; avoid style-only feedback
 
     - path: "src/agent/**/*.ts"
       instructions: |

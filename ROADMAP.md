@@ -1,6 +1,6 @@
 # setu-opencode Roadmap
 
-Updated: 2026-02-25
+Updated: 2026-03-01
 
 ## Vision
 
@@ -11,13 +11,14 @@ Setu should be the most reliable way to ship AI-assisted code in OpenCode:
 - verify before completion
 - preserve context across long sessions
 
-## Current State (v1.3.2)
+## Current State (v1.3.3)
 
 Shipped:
 
 - hook-enforced Scout -> Architect -> Builder workflow
 - content-first `setu_research` and `setu_plan`
 - global bootstrap lifecycle (`setu init`, `setu uninstall`)
+- legacy managed `~/.opencode` Setu agent cleanup during init/uninstall
 - non-global install safety (no accidental global mutation)
 - lazy `.setu/` creation on first Setu message
 - verification tooling and persistent `.setu` artifacts

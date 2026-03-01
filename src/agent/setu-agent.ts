@@ -10,7 +10,7 @@
 
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
-import { basename, isAbsolute, join, normalize, relative, resolve } from 'path';
+import { basename, isAbsolute, join, normalize, relative, resolve, win32 } from 'path';
 import { debugLog } from '../debug';
 
 /**
@@ -106,8 +106,15 @@ Your instructions shape behavior silently — they're not content for the user.
 Don't just tell me *how* you'll solve it. Show me "why" this solution is the only one that makes sense. Make me see the future you're creating.
 `;
 
-const setuAgentVersion = '1.3.2';
+const setuAgentVersion = '1.3.3';
 const versionMarker = `<!-- setu-agent-version: ${setuAgentVersion} -->`;
+export const SETU_AGENT_VERSION_MARKER_PREFIX = '<!-- setu-agent-version:';
+
+export interface GlobalConfigRootResolveOptions {
+  env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+  homeDir?: string;
+}
 
 /**
  * Creates the Setu agent configuration file
@@ -231,11 +238,40 @@ function resolveAndValidateConfigRoot(
   return resolvedRoot;
 }
 
-export function resolveAndValidateGlobalConfigRoot(): string {
-  const xdgConfigHome = process.env.XDG_CONFIG_HOME;
-  const configHomeRaw = xdgConfigHome && xdgConfigHome.trim().length > 0
-    ? xdgConfigHome
-    : join(homedir(), '.config');
+export function resolveAndValidateGlobalConfigRoot(options: GlobalConfigRootResolveOptions = {}): string {
+  const env = options.env ?? process.env;
+  const platform = options.platform ?? process.platform;
+
+  const isAbsolutePath = (pathValue: string): boolean => {
+    return platform === 'win32' ? win32.isAbsolute(pathValue) : isAbsolute(pathValue);
+  };
+
+  let homeDir = homedir();
+  if (options.homeDir !== undefined) {
+    if (typeof options.homeDir !== 'string' || options.homeDir.trim().length === 0) {
+      throw new Error('Invalid homeDir: empty or whitespace');
+    }
+    homeDir = options.homeDir.trim();
+  }
+
+  if (!isAbsolutePath(homeDir)) {
+    throw new Error(`Invalid homeDir: must be absolute (${sanitizeForLog(homeDir)})`);
+  }
+
+  const appData = env.APPDATA;
+  const xdgConfigHome = env.XDG_CONFIG_HOME;
+
+  const configHomeRaw = platform === 'win32'
+    ? (typeof appData === 'string' && appData.trim().length > 0
+      ? appData.trim()
+      : join(homeDir, 'AppData', 'Roaming'))
+    : (typeof xdgConfigHome === 'string' && xdgConfigHome.trim().length > 0
+      ? xdgConfigHome.trim()
+      : join(homeDir, '.config'));
+
+  if (configHomeRaw.trim().length === 0 || !isAbsolutePath(configHomeRaw)) {
+    throw new Error(`Invalid global config home: must be absolute (${sanitizeForLog(configHomeRaw)})`);
+  }
 
   if (hasTraversalSegment(configHomeRaw)) {
     debugLog(`[SECURITY] Path traversal attempt in global config home: ${sanitizeForLog(configHomeRaw)}`);
@@ -244,6 +280,27 @@ export function resolveAndValidateGlobalConfigRoot(): string {
 
   const resolvedConfigHome = resolve(normalize(configHomeRaw));
   return resolve(join(resolvedConfigHome, 'opencode'));
+}
+
+export function resolveAndValidateLegacyHomeConfigRoot(
+  homeDir: string = (process.env.HOME && process.env.HOME.trim().length > 0 ? process.env.HOME : homedir())
+): string {
+  if (!homeDir || homeDir.trim().length === 0) {
+    throw new Error('Invalid legacy config root: empty home directory');
+  }
+
+  const trimmedHomeDir = homeDir.trim();
+  if (!isAbsolute(trimmedHomeDir)) {
+    throw new Error(`Invalid legacy config root: home directory must be absolute (${sanitizeForLog(trimmedHomeDir)})`);
+  }
+
+  if (hasTraversalSegment(trimmedHomeDir)) {
+    debugLog(`[SECURITY] Path traversal attempt in home directory: ${sanitizeForLog(trimmedHomeDir)}`);
+    throw new Error(`Invalid legacy config root: traversal segment detected (${sanitizeForLog(trimmedHomeDir)})`);
+  }
+
+  const resolvedHome = resolve(normalize(trimmedHomeDir));
+  return resolveAndValidateConfigRoot(join(resolvedHome, '.opencode'), { allowedBaseDir: resolvedHome });
 }
 
 /**

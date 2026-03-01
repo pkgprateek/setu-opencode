@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here.
 
+## [1.3.3] - 2026-03-01
+
+### Fixed
+
+- Clean legacy managed Setu agent files from `~/.opencode/{agent,agents}/setu.md` during `setu init` to prevent stale shadowing of global agent updates.
+- Expand `setu uninstall` cleanup to remove managed Setu wiring from both global config and legacy home `.opencode` roots while preserving unmanaged custom agent files.
+- Harden global OpenCode config root resolution for cross-platform installs (`APPDATA` on Windows, `XDG_CONFIG_HOME` fallback on non-Windows).
+
+### Changed
+
+- Clarify and enforce task lifecycle semantics so `setu_task(action="update_status")` remains progress-only and does not imply automatic `clear`.
+- Bump package and agent metadata version to `1.3.3` for release consistency.
+
 ## [1.3.2] - 2026-02-26
 
 ### Documentation
