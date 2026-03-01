@@ -292,9 +292,6 @@ export function resolveAndValidateLegacyHomeConfigRoot(
 
   const trimmedHomeDir = homeDir.trim();
   const isAbsolutePath = platform === 'win32' ? win32.isAbsolute : isAbsolute;
-  const normalizePath = platform === 'win32' ? win32.normalize : normalize;
-  const resolvePath = platform === 'win32' ? win32.resolve : resolve;
-  const joinPath = platform === 'win32' ? win32.join : join;
   if (!isAbsolutePath(trimmedHomeDir)) {
     throw new Error(`Invalid legacy config root: home directory must be absolute (${sanitizeForLog(trimmedHomeDir)})`);
   }
@@ -304,8 +301,8 @@ export function resolveAndValidateLegacyHomeConfigRoot(
     throw new Error(`Invalid legacy config root: traversal segment detected (${sanitizeForLog(trimmedHomeDir)})`);
   }
 
-  const resolvedHome = resolvePath(normalizePath(trimmedHomeDir));
-  return resolveAndValidateConfigRoot(joinPath(resolvedHome, '.opencode'), { allowedBaseDir: resolvedHome });
+  const resolvedHome = resolve(normalize(trimmedHomeDir));
+  return resolveAndValidateConfigRoot(join(resolvedHome, '.opencode'), { allowedBaseDir: resolvedHome });
 }
 
 /**
