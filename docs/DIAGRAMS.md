@@ -1,3 +1,8 @@
+---
+title: Architecture Diagrams
+description: Visual diagrams for Setu session flow, architecture, and state transitions.
+---
+
 # Setu Diagrams
 
 Public diagram set for Setu.
