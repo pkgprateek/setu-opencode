@@ -1,3 +1,8 @@
+---
+title: Interoperability
+description: How Setu works with other OpenCode modes, plugins, and supporting tools.
+---
+
 # Interoperability
 
 > Setu is a discipline layer, not a replacement for your tools.
@@ -53,11 +58,11 @@ This means the agent **CANNOT** freely edit - OpenCode enforces this.
 
 | Hook | Purpose |
 |------|---------|
-| `system-transform` | Injects lean persona (~500 tokens) |
+| `system-transform` | Injects runtime state (gear, context, contracts, task continuity) |
 | `chat.message` | Tracks current agent for mode-aware behavior |
 | `tool.execute.before` | Hydration Gate + gear-based enforcement |
 | `tool.execute.after` | Tracks verification steps |
-| `config` | Sets Setu as default agent, creates agent file |
+| `config` | Sets Setu as default agent when user default is unset |
 | `event` | Handles session lifecycle, context loading |
 
 **Why both?**
@@ -73,8 +78,8 @@ Setu adapts based on which mode the user is in:
 | Mode | Setu Behavior |
 |------|---------------|
 | **Setu** | Full enforcement: Hydration Gate + gears + discipline guards + verification + context persistence |
-| **Build** | Light enforcement: Verification reminders, context tracking |
-| **Plan** | Deferred: OpenCode handles blocking, Setu tracks context only |
+| **Build** | No Setu runtime tool gating; OpenCode mode behavior applies |
+| **Plan** | No Setu runtime tool gating; OpenCode mode behavior applies |
 
 **Why defer in Plan mode?**
 - OpenCode's Plan mode already blocks edits via permissions
@@ -85,26 +90,9 @@ Setu adapts based on which mode the user is in:
 
 ## Using With Other Plugins
 
-When other discipline plugins are detected, Setu enters **minimal mode**:
+Setu is designed to coexist with other plugins, but there is no special auto-switch "minimal mode" in current runtime.
 
-### Minimal Mode Behavior
-
-| Feature | With Other Plugin | Without |
-|---------|-------------------|---------|
-| Context injection | **Disabled** (other plugin handles) | Enabled |
-| Auto-inject AGENTS.md | **Disabled** | Enabled |
-| Hydration Gate | Enabled | Enabled |
-| Gear enforcement | Enabled | Enabled |
-| Verification enforcement | Enabled | Enabled |
-| Context persistence | Enabled (uses `.setu/`) | Enabled |
-
-### Why Minimal Mode?
-
-When another plugin already handles context injection or orchestration, Setu avoids duplication:
-- **Other plugin** handles: Context injection, agent orchestration
-- **Setu** handles: Pre-emptive blocking, verification, attempt limits
-
-### Configuration
+### Recommended configuration
 
 ```json
 // In opencode.json
@@ -113,7 +101,11 @@ When another plugin already handles context injection or orchestration, Setu avo
 }
 ```
 
-**Load order:** Setu should load last so it can detect other plugins.
+Load order guidance:
+
+- Prefer loading Setu after broad orchestration plugins.
+- Validate behavior in your environment with a short smoke test.
+- If plugin behavior conflicts, isolate by running Setu-only first.
 
 ---
 
@@ -191,15 +183,8 @@ agent-browser close
 
 ## Detection Strategy (Future)
 
-In future versions, Setu will auto-detect installed tools and adapt:
-
-| If Detected | Setu Behavior |
-|-------------|---------------|
-| Other discipline plugins | Enter minimal mode |
-| agent-browser | Enable visual verification |
-| LSP tools | Use for precision reading |
-
-For now, Setu stays compatible through mode-awareness and minimal mode.
+Potential future direction is adaptive behavior based on installed tools/plugins.
+Today, compatibility is achieved through explicit mode and configuration choices.
 
 ---
 
@@ -217,3 +202,15 @@ If Setu conflicts with another plugin:
    - Expected behavior
 
 We'll work to ensure compatibility.
+
+---
+
+## Documentation Navigation
+
+For full product documentation, see:
+
+- [Docs Home](./index.md)
+- [Getting Started](./getting-started.md)
+- [Configuration](./configuration.md)
+- [Tools Reference](./reference/tools.md)
+- [Docs Publishing Pipeline](./recipes/docs-publishing.md)
