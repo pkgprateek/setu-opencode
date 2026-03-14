@@ -3,7 +3,8 @@
  */
 
 export { createSystemTransformHook } from './system-transform';
-export { createChatMessageHook, type AgentState } from './chat-message';
+export { createChatMessageHook } from './chat-message';
+export { createChatParamsHook } from './chat-params';
 export { 
   createToolExecuteBeforeHook,
   createToolExecuteAfterHook, 

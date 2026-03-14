@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Contain Setu runtime behavior to exact `setu` sessions with session-scoped agent tracking instead of a single global current-agent default.
+- Limit Setu system prompt/contracts/compaction injection to exact `setu` mode; unknown, Build, and Plan sessions now fail closed with no Setu injection.
+- Clarify in docs that OpenCode registers plugin tools globally, while Setu enforces runtime restrictions that block tool execution outside the Setu agent.
+
+### Fixed
+
+- Hard-block `setu_*` tool execution outside the Setu agent in both `tool.execute.before` and the tool implementations themselves, preventing cross-session leakage and fail-open usage.
+- Clear tracked session agent state on session lifecycle boundaries so one session cannot inherit Setu containment state from another.
+
 ## [1.3.4] - 2026-03-01
 
 ### Changed

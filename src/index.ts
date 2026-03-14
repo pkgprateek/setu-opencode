@@ -16,6 +16,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import {
   createSystemTransformHook,
+  createChatParamsHook,
   createChatMessageHook,
   createToolExecuteBeforeHook,
   createToolExecuteAfterHook,
@@ -45,10 +46,11 @@ import { debugLog, alwaysLog, errorLog } from './debug';
 import { type FileAvailability } from './prompts/persona';
 import { wrapHook } from './utils/error-handling';
 import { checkAndPrepareSetuUpdate, isRootSessionCreatedEvent } from './update/auto-update';
+import { removeControlChars } from './utils/sanitization';
 
 // Plugin state
 interface SetuState {
-  currentAgent: string;
+  sessionAgents: Map<string, string>;
   isFirstSession: boolean;
   verificationSteps: Set<VerificationStep>;
   verificationComplete: boolean;
@@ -98,7 +100,7 @@ interface ToastClient {
  * Uses available hooks from the OpenCode Plugin API:
  * - config: Set default_agent to "setu"
  * - experimental.chat.system.transform: Inject persona into system prompt
- * - chat.message: Track current agent
+ * - chat.params/chat.message: Track active agent per session
  * - tool.execute.before: hydration enforcement (block side-effects until context confirmed)
  * - tool.execute.after: Track verification steps, file reads, searches
  * - event: Handle session lifecycle, load context on start
@@ -145,7 +147,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
   
   // Initialize state
   const state: SetuState = {
-    currentAgent: 'setu', // Default to setu since we set it as default_agent
+    sessionAgents: new Map(),
     isFirstSession: true,
     verificationSteps: new Set(),
     verificationComplete: false,
@@ -219,12 +221,62 @@ export const SetuPlugin: Plugin = async (ctx) => {
     return state.setuFilesExist;
   };
   
-  const getCurrentAgent = () => state.currentAgent;
-  const setCurrentAgent = (agent: string) => {
-    if (agent !== state.currentAgent) {
-      debugLog(`Agent changed: ${state.currentAgent} → ${agent}`);
-      state.currentAgent = agent;
+  const normalizeSessionID = (sessionID?: string): string | null => {
+    const safeSessionID = removeControlChars(sessionID ?? '').trim();
+    return safeSessionID.length > 0 ? safeSessionID : null;
+  };
+
+  const normalizeAgent = (agent?: string): string | null => {
+    const safeAgent = removeControlChars(agent ?? '').trim();
+    return safeAgent.length > 0 ? safeAgent : null;
+  };
+
+  const setSessionAgent = (sessionID: string, agent: string): void => {
+    const safeSessionID = normalizeSessionID(sessionID);
+    const safeAgent = normalizeAgent(agent);
+
+    if (!safeSessionID) {
+      debugLog('Ignoring agent update with empty sanitized session ID');
+      return;
     }
+
+    if (!safeAgent) {
+      state.sessionAgents.delete(safeSessionID);
+      debugLog(`Cleared session agent due to empty sanitized value: ${safeSessionID}`);
+      return;
+    }
+
+    const previousAgent = state.sessionAgents.get(safeSessionID);
+    if (previousAgent !== safeAgent) {
+      debugLog(
+        `Session agent changed: ${safeSessionID} ${previousAgent ?? 'unknown'} → ${safeAgent}`
+      );
+    }
+
+    state.sessionAgents.set(safeSessionID, safeAgent);
+  };
+
+  const getSessionAgent = (sessionID?: string): string | null => {
+    const safeSessionID = normalizeSessionID(sessionID);
+    if (!safeSessionID) {
+      return null;
+    }
+    return state.sessionAgents.get(safeSessionID) ?? null;
+  };
+
+  const clearSessionAgent = (sessionID: string): void => {
+    const safeSessionID = normalizeSessionID(sessionID);
+    if (!safeSessionID) {
+      return;
+    }
+
+    if (state.sessionAgents.delete(safeSessionID)) {
+      debugLog(`Cleared session agent: ${safeSessionID}`);
+    }
+  };
+
+  const isSetuSession = (sessionID?: string): boolean => {
+    return getSessionAgent(sessionID) === 'setu';
   };
   
   const getHydrationState = (): typeof state.hydration => ({ ...state.hydration });
@@ -358,7 +410,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
 
   // Create tool.before hook once so session-scoped policy state persists correctly.
   const beforeHook = createToolExecuteBeforeHook(
-    getCurrentAgent,
+    getSessionAgent,
     getContextCollector,
     getProjectDir,
     getVerificationState,
@@ -375,6 +427,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
     getContextCollector,
     refreshSetuFilesExist,  // Silent file existence check
     setProjectRules,         // Silent Exploration: store loaded rules
+    clearSessionAgent,
     getProjectDir,           // Project directory accessor (avoids process.cwd())
     activeBatches            // Parallel execution tracking cleanup
   );
@@ -392,8 +445,8 @@ export const SetuPlugin: Plugin = async (ctx) => {
       }
     },
     
-    // Inject Setu persona into system prompt
-    // Only injects when in Setu agent - silent in Build/Plan
+    // Inject Setu runtime state into the system prompt
+    // Only injects for exact Setu sessions
     // Now also injects loaded context content (summary, constraints)
     // AND Silent Exploration project rules (AGENTS.md, CLAUDE.md, active task)
     // Wrapped for graceful degradation (2.10)
@@ -402,18 +455,24 @@ export const SetuPlugin: Plugin = async (ctx) => {
       createSystemTransformHook(
         getVerificationState,
         () => state.setuFilesExist, // Pass file existence for lazy loading
-        getCurrentAgent,
+        getSessionAgent,
         getContextCollector, // Pass context collector for content injection
         getProjectRules,      // Pass project rules for Silent Exploration injection
         () => state.projectDir // Pass project directory for JIT context injection
       )
     ),
     
-    // Track current agent
+    // Track session agent from emitted messages and lazy-init .setu/ on first Setu message.
     // Wrapped for graceful degradation (2.10)
     'chat.message': wrapHook(
       'chat.message',
-      createChatMessageHook(setCurrentAgent, onSetuMessage)
+      createChatMessageHook(setSessionAgent, onSetuMessage)
+    ),
+
+    // Track session agent as early as possible before prompt/tool hooks consume it.
+    'chat.params': wrapHook(
+      'chat.params',
+      createChatParamsHook(setSessionAgent)
     ),
     
     // Hydration gate: block side-effect tools until context is confirmed
@@ -428,8 +487,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
       // Record for parallel execution tracking (debug audit trail)
       // Only track when in Setu mode to avoid polluting other modes
       // Wrapped defensively: audit tracking must never prevent enforcement
-      const currentAgent = getCurrentAgent();
-      if (currentAgent.toLowerCase() === 'setu') {
+      if (isSetuSession(input.sessionID)) {
         try {
           recordToolExecution(activeBatches, input.sessionID, input.tool);
         } catch (err) {
@@ -442,13 +500,13 @@ export const SetuPlugin: Plugin = async (ctx) => {
     },
     
     // Track verification steps and context (file reads, searches)
-    // Only tracks when in Setu agent - silent in Build/Plan
+    // Only tracks for exact Setu sessions
     // Wrapped for graceful degradation (2.10)
     'tool.execute.after': wrapHook(
       'tool.execute.after',
       createToolExecuteAfterHook(
         markVerificationStep,
-        getCurrentAgent,
+        getSessionAgent,
         getContextCollector
       )
     ),
@@ -471,7 +529,7 @@ export const SetuPlugin: Plugin = async (ctx) => {
     // Wrapped for graceful degradation (2.10)
     'experimental.session.compacting': wrapHook(
       'session.compacting',
-      createCompactionHook(getProjectDir, getCurrentAgent)
+      createCompactionHook(getProjectDir, getSessionAgent)
     ),
     
     // Custom tools

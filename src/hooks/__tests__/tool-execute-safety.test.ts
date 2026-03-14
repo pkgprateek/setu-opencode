@@ -52,6 +52,59 @@ describe('tool-execute before hook safety flow', () => {
     clearDisciplineState(sessionID);
   });
 
+  test('blocked setu tool attempt is audited before denial', async () => {
+    const sessionID = 'blocked-setu-tool';
+    const hook = createToolExecuteBeforeHook(
+      () => 'build',
+      () => null,
+      () => projectDir,
+      undefined,
+      () => ({ contextConfirmed: true, sessionId: sessionID, startedAt: Date.now() })
+    );
+
+    await expect(
+      hook(
+        { tool: 'setu_plan', sessionID, callID: 'setu-block-1' },
+        { args: {} }
+      )
+    ).rejects.toThrow('Setu tools are only available in the Setu agent');
+
+    const securityLog = readFileSync(join(projectDir, '.setu', 'security.log'), 'utf-8');
+    expect(securityLog).toContain('BYPASS_ATTEMPT_DETECTED');
+    expect(securityLog).toContain('tool:setu_plan');
+    expect(securityLog).toContain('sessionAgent=build');
+  });
+
+  test('missing getSessionAgent fails fast in tool execute hooks', async () => {
+    const sessionID = 'missing-session-agent';
+    const beforeHook = createToolExecuteBeforeHook(
+      undefined,
+      () => null,
+      () => projectDir,
+      undefined,
+      () => ({ contextConfirmed: true, sessionId: sessionID, startedAt: Date.now() })
+    );
+    const afterHook = createToolExecuteAfterHook(
+      () => {},
+      undefined,
+      () => null
+    );
+
+    await expect(
+      beforeHook(
+        { tool: 'read', sessionID, callID: 'missing-before-1' },
+        { args: { filePath: 'README.md' } }
+      )
+    ).rejects.toThrow('getSessionAgent is required');
+
+    await expect(
+      afterHook(
+        { tool: 'read', sessionID, callID: 'missing-after-1', args: { filePath: 'README.md' } },
+        { title: 'Read README', output: '', metadata: null }
+      )
+    ).rejects.toThrow('getSessionAgent is required');
+  });
+
   test('ask flow requires approval and re-approval every attempt', async () => {
     const sessionID = 'safety-ask-flow';
     const beforeHook = createToolExecuteBeforeHook(

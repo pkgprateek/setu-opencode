@@ -76,4 +76,18 @@ describe('setu-doctor project rules check', () => {
       rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  test('rejects execution outside the Setu agent', async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'setu-doctor-test-'));
+
+    try {
+      const doctorTool = createSetuDoctorTool(() => tmpDir);
+
+      await expect(
+        doctorTool.execute({ verbose: true }, createMockToolContext({ agent: 'build' }))
+      ).rejects.toThrow('Setu tools are only available in the Setu agent');
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });

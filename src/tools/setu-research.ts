@@ -7,6 +7,7 @@ import { removeControlChars, removeInstructionBoundaries, removeSystemPatterns }
 import { validateProjectDir } from '../utils/path-validation';
 import { debugLog } from '../debug';
 import { RESEARCH_TOOL_EXPECTATIONS } from '../prompts/contracts';
+import { assertSetuAgent, withSetuOnlyDescription } from './agent-guard';
 
 const MAX_INLINE_RESEARCH_CHARS = 120_000;
 const CHUNK_SIZE_CHARS = 40_000;
@@ -88,13 +89,15 @@ async function persistResearchChunks(projectDir: string, content: string): Promi
 }
 
 export const createSetuResearchTool = (getProjectDir: () => string): ReturnType<typeof tool> => tool({
-  description: RESEARCH_TOOL_EXPECTATIONS,
+  description: withSetuOnlyDescription(RESEARCH_TOOL_EXPECTATIONS),
   args: {
     content: tool.schema.string().describe('Full research content in markdown format'),
     openQuestions: tool.schema.string().optional().describe('Unresolved questions (workflow-only, not persisted)'),
     mode: tool.schema.enum(['append', 'remake', 'auto']).optional().describe('Explicit mode or auto-detect')
   },
-  async execute(args): Promise<string> {
+  async execute(args, context): Promise<string> {
+    assertSetuAgent(context, 'setu_research');
+
     if (!args.content?.trim()) {
       throw new Error('content is required');
     }

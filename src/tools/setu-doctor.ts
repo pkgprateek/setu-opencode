@@ -15,6 +15,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { debugLog } from '../debug';
 import { getErrorMessage } from '../utils/error-handling';
+import { assertSetuAgent, withSetuOnlyDescription } from './agent-guard';
 
 const execAsync = promisify(exec);
 
@@ -398,14 +399,14 @@ export function createSetuDoctorTool(
   getProjectDir: () => string
 ): ReturnType<typeof tool> {
   return tool({
-    description: `Check environment health before execution.
+    description: withSetuOnlyDescription(`Check environment health before execution.
 Detects common issues that cause "ghost loops":
 - Git: uncommitted changes, detached HEAD
 - Dependencies: missing node_modules, outdated lockfile
 - Runtime: missing Node.js, TypeScript issues
 - Project Rules: validates AGENTS.md and CLAUDE.md (or compatible project policy files)
 
-Run this before starting complex tasks to ensure a clean environment.`,
+Run this before starting complex tasks to ensure a clean environment.`),
     
     args: {
       verbose: tool.schema.boolean().optional().describe(
@@ -413,7 +414,9 @@ Run this before starting complex tasks to ensure a clean environment.`,
       )
     },
     
-    async execute(args: { verbose?: boolean }, _context?: unknown): Promise<string> {
+    async execute(args: { verbose?: boolean }, context): Promise<string> {
+      assertSetuAgent(context, 'setu_doctor');
+
       const projectDir = getProjectDir();
       const result = await runDoctorChecks(projectDir);
 

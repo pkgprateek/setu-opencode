@@ -258,8 +258,8 @@ function isContextConfirmedWithFallback(collector: ContextCollector | null): boo
 /**
  * Create a before-execution hook that enforces Gearbox rules for tool execution.
  *
- * Setu plugin operates exclusively within Setu agent mode.
- * When not in Setu agent, this hook remains silent.
+ * Setu plugin operates only within exact Setu agent sessions.
+ * When the session agent is unknown or not Setu, Setu-specific enforcement is skipped.
  * When in Setu agent, enforces Gearbox based on artifact existence:
  * - Scout: No RESEARCH.md → read-only
  * - Architect: Has RESEARCH.md but no PLAN.md → .setu/ writes only
@@ -268,7 +268,7 @@ function isContextConfirmedWithFallback(collector: ContextCollector | null): boo
  * Also enforces active task constraints (READ_ONLY, NO_PUSH, etc.)
  * Also enforces Git Discipline: requires verification before commit/push.
  *
- * @param getCurrentAgent - Optional accessor for the current agent identifier; defaults to "setu" when omitted
+ * @param getSessionAgent - Optional accessor for the session agent identifier; unknown sessions fail closed for Setu-only tools
  * @param getContextCollector - Optional accessor for a ContextCollector used to obtain and format confirmed context for injection
  * @param getProjectDir - Optional accessor for project directory (used for constraint loading and gear determination)
  * @param getVerificationState - Optional accessor for verification state (used for git discipline enforcement)
@@ -276,7 +276,7 @@ function isContextConfirmedWithFallback(collector: ContextCollector | null): boo
  * @returns A hook function invoked before tool execution that enforces Gearbox rules and may throw an Error when a tool is blocked
  */
 export function createToolExecuteBeforeHook(
-  getCurrentAgent?: () => string,
+  getSessionAgent?: (sessionID?: string) => string | null,
   getContextCollector?: () => ContextCollector | null,
   getProjectDir?: () => string,
   getVerificationState?: () => VerificationState,
@@ -292,17 +292,37 @@ export function createToolExecuteBeforeHook(
     input: ToolExecuteBeforeInput,
     output: ToolExecuteBeforeOutput
   ): Promise<void> => {
-    const currentAgent = getCurrentAgent ? getCurrentAgent() : 'setu';
-    
-    // Only operate when in Setu agent mode
-    if (currentAgent.toLowerCase() !== 'setu') {
+    if (!getSessionAgent) {
+      throw new Error('Setu tool.execute.before hook misconfigured: getSessionAgent is required to resolve sessionAgent.');
+    }
+
+    const sessionAgent = getSessionAgent(input.sessionID);
+    const projectDir = getProjectDir ? getProjectDir() : process.cwd();
+
+    if (input.tool.startsWith('setu_') && sessionAgent !== 'setu') {
+      try {
+        logSecurityEvent(
+          projectDir,
+          SecurityEventType.BYPASS_ATTEMPT_DETECTED,
+          `Blocked ${input.tool} outside Setu agent containment (sessionAgent=${sessionAgent ?? 'unknown'})`,
+          { sessionId: input.sessionID, tool: input.tool }
+        );
+      } catch (logError) {
+        debugLog(`logSecurityEvent failed during Setu tool containment block: ${getErrorMessage(logError)}`);
+      }
+      throw new Error(
+        `Setu tools are only available in the Setu agent. Switch to Setu mode to use ${input.tool}.`
+      );
+    }
+
+    // Only operate when in exact Setu agent mode.
+    if (sessionAgent !== 'setu') {
       return;
     }
 
     // SECURITY: Sanitize args to prevent control char injection
     // Removes null bytes and control characters that could bypass parsing
     output.args = sanitizeArgs(output.args);
-    const projectDir = getProjectDir ? getProjectDir() : process.cwd();
     const collector = getContextCollector ? getContextCollector() : null;
     const disciplineState = getDisciplineState(input.sessionID);
     const isMutating = isMutatingToolName(input.tool);
@@ -711,8 +731,8 @@ export function createToolExecuteBeforeHook(
 /**
  * Creates a post-tool-execution hook that records verification steps and context events.
  *
- * Setu plugin operates exclusively within Setu agent mode.
- * When not in Setu agent, this hook remains silent.
+ * Setu plugin operates only within exact Setu agent sessions.
+ * When the session agent is unknown or not Setu, this hook remains silent.
  *
  * Calls `markVerificationStep` when bash command output or titles indicate build, test, lint, or typecheck activity.
  * When a `ContextCollector` is available it records file reads and grep/glob searches (pattern and result count).
@@ -721,7 +741,7 @@ export function createToolExecuteBeforeHook(
  * with `steps: ['visual']`. This prompts the user to visually verify UI correctness.
  *
  * @param markVerificationStep - Callback invoked with a verification step ('build' | 'test' | 'lint' | 'typecheck' | 'visual') when the hook detects the corresponding command.
- * @param getCurrentAgent - Optional accessor for the current agent identifier; if not 'setu', hook does nothing.
+ * @param getSessionAgent - Optional accessor for the session agent identifier; if not 'setu', hook does nothing.
  * @param getContextCollector - Optional function that returns a `ContextCollector` used to record file reads and search actions; if omitted or it returns `null`, context tracking is disabled.
  */
 /**
@@ -732,7 +752,7 @@ const countResultLines = (output: string): number =>
 
 export function createToolExecuteAfterHook(
   markVerificationStep: (step: VerificationStep) => void,
-  getCurrentAgent?: () => string,
+  getSessionAgent?: (sessionID?: string) => string | null,
   getContextCollector?: () => ContextCollector | null
 ): (
   input: { tool: string; sessionID: string; callID: string; args?: Record<string, unknown> },
@@ -742,9 +762,13 @@ export function createToolExecuteAfterHook(
     input: { tool: string; sessionID: string; callID: string; args?: Record<string, unknown> },
     output: { title: string; output: string; metadata: unknown }
   ): Promise<void> => {
-    // Only operate when in Setu agent mode
-    const currentAgent = getCurrentAgent ? getCurrentAgent() : 'setu';
-    if (currentAgent.toLowerCase() !== 'setu') {
+    if (!getSessionAgent) {
+      throw new Error('Setu tool.execute.after hook misconfigured: getSessionAgent is required to resolve sessionAgent.');
+    }
+
+    // Only operate when in exact Setu agent mode.
+    const sessionAgent = getSessionAgent(input.sessionID);
+    if (sessionAgent !== 'setu') {
       return;
     }
 

@@ -9,6 +9,27 @@ mock.module('../../debug', () => ({
 }));
 
 describe('tool-execute before hook protocol gating', () => {
+  test('blocks setu tools outside the Setu agent', async () => {
+    const hook = createToolExecuteBeforeHook((sessionID) => {
+      if (sessionID === 'build-session') return 'build';
+      return null;
+    });
+
+    await expect(
+      hook(
+        { tool: 'setu_plan', sessionID: 'build-session', callID: 'call-setu-build' },
+        { args: { content: '# Plan' } }
+      )
+    ).rejects.toThrow('Setu tools are only available in the Setu agent');
+
+    await expect(
+      hook(
+        { tool: 'setu_context', sessionID: 'unknown-session', callID: 'call-setu-unknown' },
+        { args: { summary: 'x', task: 'y' } }
+      )
+    ).rejects.toThrow('Switch to Setu mode to use setu_context');
+  });
+
   test('allows read-only tools while protocol decision is pending', async () => {
     const sessionID = 'protocol-pending-session';
     setQuestionBlocked(sessionID, 'Need architecture clarification');

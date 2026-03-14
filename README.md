@@ -169,7 +169,7 @@ Now (and only now) does it implement. Verification runs at the end, and you can 
 
 Setu doesn't just block bad actions—it **guides** the model to produce better artifacts.
 
-**Before Generation:** Setu injects detailed contracts into the system prompt, telling the model exactly what comprehensive research and atomic planning look like.
+**Before Generation:** In exact `setu` mode, Setu injects detailed contracts into the system prompt, telling the model exactly what comprehensive research and atomic planning look like.
 
 **Research Contract:** Intent/PRD, technical analysis, alternatives/tradeoffs, risks, verification, open decisions
 
@@ -250,6 +250,8 @@ These aren't roadblocks—they're guardrails that keep your agent on the right p
 | `setu_task` | Manage task lifecycle (`create`, `reframe`, `update_status`, `clear`, `get`) |
 | `setu_reset` | Reset progress to restart current plan |
 
+OpenCode exposes plugin tools globally, but Setu hard-denies every `setu_*` tool unless the active agent is exactly `setu`. Build/Plan/other agents also receive no Setu prompt, contract, or compaction injection.
+
 **Important:** In `auto` mode, `setu_research` and `setu_plan` append to existing artifacts. A new objective starts with `setu_task(action="create")`, which archives prior artifacts to `HISTORY.md`, replaces the previous task boundary, and resets the workflow to Scout. Refinements to the same objective go through `setu_task(action="reframe")`, which keeps existing artifacts intact. `setu_task(action="update_status")` tracks progress only and should not be followed by an automatic `clear`.
 
 ---
@@ -300,6 +302,7 @@ Setu's role: **Guardrails + continuity + verification** inside OpenCode.
 ## Technical Details
 
 - Skills load on-demand rather than front-loading context
+- OpenCode tool registration is global; Setu containment is enforced at runtime with session-scoped agent tracking and per-tool hard denial outside exact `setu`
 - Hook-level enforcement at `tool.execute.before`
 - Compaction survival via `experimental.session.compacting`
 - Version tracked by the npm badge at the top of this README

@@ -265,37 +265,39 @@ describe('system-transform AGENTS.md warning', () => {
       );
       expect(setuHasWarning).toBe(true);
       
-      // Test Explore agent
-      const exploreHook = createSystemTransformHook(
+      // Test Build agent
+      const buildHook = createSystemTransformHook(
         () => ({ complete: false, stepsRun: new Set() }),
         mockGetSetuFilesExist,
-        () => 'explore',
+        () => 'build',
         undefined,  // getContextCollector
         undefined,  // getProjectRules
         () => testDir  // getProjectDir
       );
-      const exploreOutput = { system: [] as string[] };
-      await exploreHook({ sessionID: 'test' }, exploreOutput);
-      const exploreHasWarning = exploreOutput.system.some((s: string) => 
+      const buildOutput = { system: [] as string[] };
+      await buildHook({ sessionID: 'test' }, buildOutput);
+      const buildHasWarning = buildOutput.system.some((s: string) => 
         s.includes('No AGENTS.md found')
       );
-      expect(exploreHasWarning).toBe(false);
+      expect(buildHasWarning).toBe(false);
+      expect(buildOutput.system).toHaveLength(0);
       
-      // Test General agent
-      const generalHook = createSystemTransformHook(
+      // Test Plan agent
+      const planHook = createSystemTransformHook(
         () => ({ complete: false, stepsRun: new Set() }),
         mockGetSetuFilesExist,
-        () => 'general',
+        () => 'plan',
         undefined,  // getContextCollector
         undefined,  // getProjectRules
         () => testDir  // getProjectDir
       );
-      const generalOutput = { system: [] as string[] };
-      await generalHook({ sessionID: 'test' }, generalOutput);
-      const generalHasWarning = generalOutput.system.some((s: string) => 
+      const planOutput = { system: [] as string[] };
+      await planHook({ sessionID: 'test' }, planOutput);
+      const planHasWarning = planOutput.system.some((s: string) => 
         s.includes('No AGENTS.md found')
       );
-      expect(generalHasWarning).toBe(false);
+      expect(planHasWarning).toBe(false);
+      expect(planOutput.system).toHaveLength(0);
     } finally {
       rmSync(testDir, { recursive: true, force: true });
     }
@@ -446,7 +448,7 @@ describe('system-transform contract injection', () => {
     }
   });
 
-  test('Explore subagent does NOT get contract injection', async () => {
+  test('Build agent gets no Setu prompt injection', async () => {
     const testDir = createTestDir('scout');
     
     try {
@@ -457,33 +459,38 @@ describe('system-transform contract injection', () => {
         claudeMd: false 
       });
       
+      const sessionAgents = new Map<string, string | null>([
+        ['setu-session', 'setu'],
+        ['build-session', 'build'],
+        ['unknown-session', null],
+      ]);
+
       const hook = createSystemTransformHook(
         () => ({ complete: false, stepsRun: new Set() }),
         mockGetSetuFilesExist,
-        () => 'explore',  // Subagent, not Setu
+        (sessionID) => sessionAgents.get(sessionID ?? '') ?? null,
         undefined,
         undefined,
         () => testDir
       );
       
-      const output = { system: [] as string[] };
-      await hook({ sessionID: 'test' }, output);
-      
-      const hasResearchContract = output.system.some((s: string) => 
-        s.includes('INTENT') && s.includes('TECHNICAL')
-      );
-      expect(hasResearchContract).toBe(false);
-      
-      const hasPlanContract = output.system.some((s: string) => 
-        s.includes('WHY') && s.includes('FILES')
-      );
-      expect(hasPlanContract).toBe(false);
+      const setuOutput = { system: [] as string[] };
+      await hook({ sessionID: 'setu-session' }, setuOutput);
+      expect(setuOutput.system.length).toBeGreaterThan(0);
+
+      const buildOutput = { system: [] as string[] };
+      await hook({ sessionID: 'build-session' }, buildOutput);
+      expect(buildOutput.system).toHaveLength(0);
+
+      const unknownOutput = { system: [] as string[] };
+      await hook({ sessionID: 'unknown-session' }, unknownOutput);
+      expect(unknownOutput.system).toHaveLength(0);
     } finally {
       rmSync(testDir, { recursive: true, force: true });
     }
   });
 
-  test('General subagent does NOT get contract injection', async () => {
+  test('Plan agent gets no Setu prompt injection', async () => {
     const testDir = createTestDir('architect');
     
     try {
@@ -497,7 +504,7 @@ describe('system-transform contract injection', () => {
       const hook = createSystemTransformHook(
         () => ({ complete: false, stepsRun: new Set() }),
         mockGetSetuFilesExist,
-        () => 'general',  // Subagent, not Setu
+        () => 'plan',
         undefined,
         undefined,
         () => testDir
@@ -506,15 +513,66 @@ describe('system-transform contract injection', () => {
       const output = { system: [] as string[] };
       await hook({ sessionID: 'test' }, output);
       
-      const hasResearchContract = output.system.some((s: string) => 
-        s.includes('INTENT') && s.includes('TECHNICAL')
+      expect(output.system).toHaveLength(0);
+    } finally {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+
+  test('unknown session agent gets no Setu prompt injection', async () => {
+    const testDir = createTestDir('builder');
+
+    try {
+      const mockGetSetuFilesExist = (): FileAvailability => ({
+        active: false,
+        context: false,
+        agentsMd: true,
+        claudeMd: false
+      });
+
+      const hook = createSystemTransformHook(
+        () => ({ complete: false, stepsRun: new Set() }),
+        mockGetSetuFilesExist,
+        () => null,
+        undefined,
+        undefined,
+        () => testDir
       );
-      expect(hasResearchContract).toBe(false);
-      
-      const hasPlanContract = output.system.some((s: string) => 
-        s.includes('WHY') && s.includes('FILES')
+
+      const output = { system: [] as string[] };
+      await hook({ sessionID: 'test' }, output);
+
+      expect(output.system).toHaveLength(0);
+    } finally {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+
+  test('direct input agent enables first-turn Setu injection before session cache exists', async () => {
+    const testDir = createTestDir('scout');
+
+    try {
+      const mockGetSetuFilesExist = (): FileAvailability => ({
+        active: false,
+        context: false,
+        agentsMd: true,
+        claudeMd: false
+      });
+
+      const hook = createSystemTransformHook(
+        () => ({ complete: false, stepsRun: new Set() }),
+        mockGetSetuFilesExist,
+        () => null,
+        undefined,
+        undefined,
+        () => testDir
       );
-      expect(hasPlanContract).toBe(false);
+
+      const output = { system: [] as string[] };
+      await hook({ sessionID: 'first-turn', agent: 'setu' }, output);
+
+      expect(output.system.length).toBeGreaterThan(0);
+      expect(output.system.some((entry) => entry.includes('Scout Mode'))).toBe(true);
     } finally {
       rmSync(testDir, { recursive: true, force: true });
     }

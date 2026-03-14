@@ -49,34 +49,27 @@ export interface CompactionOutput {
  */
 export function createCompactionHook(
   getProjectDir: () => string,
-  getCurrentAgent?: () => string
+  getSessionAgent?: (sessionID?: string) => string | null
 ): (input: CompactionInput, output: CompactionOutput) => Promise<void> {
   
   return async (
-    _input: CompactionInput,
+    input: CompactionInput,
     output: CompactionOutput
   ): Promise<void> => {
     // Wrap entire body in try-catch for graceful degradation
     // The hook must never crash OpenCode
-    let currentAgent: string | undefined;
+    let sessionAgent: string | null = null;
     
     try {
-      // Get current agent - if this throws, we default to 'setu'
       try {
-        currentAgent = getCurrentAgent ? getCurrentAgent() : undefined;
+        sessionAgent = getSessionAgent ? getSessionAgent(input.sessionID) : null;
       } catch (agentError) {
-        debugLog('Compaction: getCurrentAgent() threw, defaulting to setu:', agentError);
-        currentAgent = 'setu';
+        debugLog('Compaction: getSessionAgent() threw, failing closed:', agentError);
+        sessionAgent = null;
       }
-      
-      // IMPORTANT: Explicit null/undefined check (not falsy)
-      // Empty string '' should be preserved as a valid agent name
-      if (currentAgent === undefined || currentAgent === null) {
-        currentAgent = 'setu';
-      }
-      
-      if (currentAgent.toLowerCase() !== 'setu') {
-        debugLog(`Compaction: Skipping - not in Setu mode (current agent: ${currentAgent})`);
+
+      if (sessionAgent !== 'setu') {
+        debugLog(`Compaction: Skipping - not in Setu mode (current agent: ${sessionAgent ?? 'unknown'})`);
         return;
       }
 
@@ -157,7 +150,7 @@ ${patternsSummary}`);
       }
     } catch (error) {
       // Log full context and return gracefully - never crash OpenCode
-      const agentInfo = currentAgent ?? 'unknown';
+      const agentInfo = sessionAgent ?? 'unknown';
       debugLog(
         `Compaction hook error (agent: ${agentInfo}):`,
         getErrorMessage(error)
