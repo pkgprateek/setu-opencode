@@ -292,9 +292,24 @@ export function createToolExecuteBeforeHook(
     input: ToolExecuteBeforeInput,
     output: ToolExecuteBeforeOutput
   ): Promise<void> => {
-    const sessionAgent = getSessionAgent ? getSessionAgent(input.sessionID) : null;
+    if (!getSessionAgent) {
+      throw new Error('Setu tool.execute.before hook misconfigured: getSessionAgent is required to resolve sessionAgent.');
+    }
+
+    const sessionAgent = getSessionAgent(input.sessionID);
+    const projectDir = getProjectDir ? getProjectDir() : process.cwd();
 
     if (input.tool.startsWith('setu_') && sessionAgent !== 'setu') {
+      try {
+        logSecurityEvent(
+          projectDir,
+          SecurityEventType.BYPASS_ATTEMPT_DETECTED,
+          `Blocked ${input.tool} outside Setu agent containment (sessionAgent=${sessionAgent ?? 'unknown'})`,
+          { sessionId: input.sessionID, tool: input.tool }
+        );
+      } catch (logError) {
+        debugLog(`logSecurityEvent failed during Setu tool containment block: ${getErrorMessage(logError)}`);
+      }
       throw new Error(
         `Setu tools are only available in the Setu agent. Switch to Setu mode to use ${input.tool}.`
       );
@@ -308,7 +323,6 @@ export function createToolExecuteBeforeHook(
     // SECURITY: Sanitize args to prevent control char injection
     // Removes null bytes and control characters that could bypass parsing
     output.args = sanitizeArgs(output.args);
-    const projectDir = getProjectDir ? getProjectDir() : process.cwd();
     const collector = getContextCollector ? getContextCollector() : null;
     const disciplineState = getDisciplineState(input.sessionID);
     const isMutating = isMutatingToolName(input.tool);
@@ -748,8 +762,12 @@ export function createToolExecuteAfterHook(
     input: { tool: string; sessionID: string; callID: string; args?: Record<string, unknown> },
     output: { title: string; output: string; metadata: unknown }
   ): Promise<void> => {
+    if (!getSessionAgent) {
+      throw new Error('Setu tool.execute.after hook misconfigured: getSessionAgent is required to resolve sessionAgent.');
+    }
+
     // Only operate when in exact Setu agent mode.
-    const sessionAgent = getSessionAgent ? getSessionAgent(input.sessionID) : null;
+    const sessionAgent = getSessionAgent(input.sessionID);
     if (sessionAgent !== 'setu') {
       return;
     }
