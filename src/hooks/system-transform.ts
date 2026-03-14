@@ -67,6 +67,7 @@ function formatFilesAlreadyRead(filesRead: Array<{ path: string }>): string {
 /** Input shape for the system transform hook */
 interface SystemTransformInput {
   sessionID?: string;
+  agent?: string;
   message?: { content?: string };
 }
 
@@ -93,15 +94,20 @@ export function createSystemTransformHook(
     input: SystemTransformInput,
     output: SystemTransformOutput,
   ): Promise<void> => {
-    let sessionAgent: string | null = null;
+    const directAgent = typeof input.agent === "string"
+      ? input.agent.trim() || null
+      : null;
+    let sessionAgent: string | null = directAgent;
 
-    try {
-      sessionAgent = getSessionAgent ? getSessionAgent(input.sessionID) : null;
-    } catch (error) {
-      debugLog(
-        "system-transform: getSessionAgent failed:",
-        getErrorMessage(error),
-      );
+    if (!sessionAgent) {
+      try {
+        sessionAgent = getSessionAgent ? getSessionAgent(input.sessionID) : null;
+      } catch (error) {
+        debugLog(
+          "system-transform: getSessionAgent failed:",
+          getErrorMessage(error),
+        );
+      }
     }
 
     // Fail closed when session agent is unknown or not exact-match Setu.

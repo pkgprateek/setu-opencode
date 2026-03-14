@@ -459,19 +459,32 @@ describe('system-transform contract injection', () => {
         claudeMd: false 
       });
       
+      const sessionAgents = new Map<string, string | null>([
+        ['setu-session', 'setu'],
+        ['build-session', 'build'],
+        ['unknown-session', null],
+      ]);
+
       const hook = createSystemTransformHook(
         () => ({ complete: false, stepsRun: new Set() }),
         mockGetSetuFilesExist,
-        () => 'build',
+        (sessionID) => sessionAgents.get(sessionID ?? '') ?? null,
         undefined,
         undefined,
         () => testDir
       );
       
-      const output = { system: [] as string[] };
-      await hook({ sessionID: 'test' }, output);
-      
-      expect(output.system).toHaveLength(0);
+      const setuOutput = { system: [] as string[] };
+      await hook({ sessionID: 'setu-session' }, setuOutput);
+      expect(setuOutput.system.length).toBeGreaterThan(0);
+
+      const buildOutput = { system: [] as string[] };
+      await hook({ sessionID: 'build-session' }, buildOutput);
+      expect(buildOutput.system).toHaveLength(0);
+
+      const unknownOutput = { system: [] as string[] };
+      await hook({ sessionID: 'unknown-session' }, unknownOutput);
+      expect(unknownOutput.system).toHaveLength(0);
     } finally {
       rmSync(testDir, { recursive: true, force: true });
     }
@@ -530,6 +543,36 @@ describe('system-transform contract injection', () => {
       await hook({ sessionID: 'test' }, output);
 
       expect(output.system).toHaveLength(0);
+    } finally {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+
+  test('direct input agent enables first-turn Setu injection before session cache exists', async () => {
+    const testDir = createTestDir('scout');
+
+    try {
+      const mockGetSetuFilesExist = (): FileAvailability => ({
+        active: false,
+        context: false,
+        agentsMd: true,
+        claudeMd: false
+      });
+
+      const hook = createSystemTransformHook(
+        () => ({ complete: false, stepsRun: new Set() }),
+        mockGetSetuFilesExist,
+        () => null,
+        undefined,
+        undefined,
+        () => testDir
+      );
+
+      const output = { system: [] as string[] };
+      await hook({ sessionID: 'first-turn', agent: 'setu' }, output);
+
+      expect(output.system.length).toBeGreaterThan(0);
+      expect(output.system.some((entry) => entry.includes('Scout Mode'))).toBe(true);
     } finally {
       rmSync(testDir, { recursive: true, force: true });
     }
