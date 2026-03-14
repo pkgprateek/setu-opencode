@@ -175,4 +175,16 @@ describe('setu_task lifecycle actions', () => {
     expect(result).toContain('Unknown action');
     expect(result).toContain('update_status');
   });
+
+  test('rejects execution outside the Setu agent', async () => {
+    const projectDir = makeProjectDir();
+    const tool = createSetuTaskTool(() => projectDir);
+
+    await expect(
+      tool.execute(
+        { action: 'create', task: 'Should not run' },
+        createMockToolContext({ agent: 'build' })
+      )
+    ).rejects.toThrow('Setu tools are only available in the Setu agent');
+  });
 });

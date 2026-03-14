@@ -29,6 +29,7 @@ import { debugLog, errorLog } from '../debug';
 import { getErrorMessage } from '../utils/error-handling';
 import { removeControlChars } from '../utils/sanitization';
 import { validateProjectDir } from '../utils/path-validation';
+import { assertSetuAgent, withSetuOnlyDescription } from './agent-guard';
 
 /**
  * Valid constraint names for input validation
@@ -128,7 +129,7 @@ export function createSetuTaskTool(
   resetVerificationState?: () => void
 ): ReturnType<typeof tool> {
   return tool({
-    description: `Manage active tasks with constraints.
+    description: withSetuOnlyDescription(`Manage active tasks with constraints.
 
 **Actions:**
 - \`create\`: Start a new task with optional constraints
@@ -146,7 +147,7 @@ export function createSetuTaskTool(
 Active tasks persist to \`.setu/active.json\` and survive:
 - Session restarts
 - Context compaction
-- OpenCode restarts`,
+- OpenCode restarts`),
     
     args: {
       action: tool.schema.string().describe(
@@ -166,7 +167,9 @@ Active tasks persist to \`.setu/active.json\` and survive:
       )
     },
     
-    async execute(args, _context): Promise<string> {
+    async execute(args, context): Promise<string> {
+      assertSetuAgent(context, 'setu_task');
+
       const projectDir = getProjectDir();
       validateProjectDir(projectDir);
       const action = removeControlChars(String(args.action ?? '').toLowerCase()).trim() || 'unknown';

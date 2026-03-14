@@ -12,6 +12,7 @@ import { writeStepResult } from "../context/results";
 import { sanitizeYamlString } from "../utils/sanitization";
 import { advanceStep, loadActiveTask } from "../context/active";
 import { getErrorMessage } from "../utils/error-handling";
+import { assertSetuAgent, withSetuOnlyDescription } from "./agent-guard";
 
 /**
  * Build commands per tool/runtime
@@ -154,10 +155,10 @@ export function createSetuVerifyTool(
   getProjectDir?: () => string,
 ): ReturnType<typeof tool> {
   return tool({
-    description: `Run Setu's verification protocol before completing a task.
+    description: withSetuOnlyDescription(`Run Setu's verification protocol before completing a task.
 Checks build, tests, lint using Setu's default verification flow.
 Automatically detects project build tool (npm/yarn/pnpm/bun for JS/TS, cargo for Rust, go for Go, uv/pip for Python).
-- Runs required verification checks by default`,
+- Runs required verification checks by default`),
 
     args: {
       steps: tool.schema
@@ -173,6 +174,8 @@ Automatically detects project build tool (npm/yarn/pnpm/bun for JS/TS, cargo for
     },
 
     async execute(args, context): Promise<string> {
+      assertSetuAgent(context, 'setu_verify');
+
       // Detect project build tool
       const projectDir = getProjectDir ? getProjectDir() : process.cwd();
       const projectInfo = detectProjectInfo(projectDir);

@@ -9,6 +9,7 @@ import { createPromptMultilineSanitizer } from '../utils/sanitization';
 import { debugLog } from '../debug';
 import { PLAN_TOOL_EXPECTATIONS } from '../prompts/contracts';
 import { getErrorMessage } from '../utils/error-handling';
+import { assertSetuAgent, withSetuOnlyDescription } from './agent-guard';
 
 export const OBJECTIVE_MAX_LENGTH = 200;
 
@@ -64,13 +65,15 @@ function extractPlanPreview(content: string): string {
 }
 
 export const createSetuPlanTool = (getProjectDir: () => string): ReturnType<typeof tool> => tool({
-  description: PLAN_TOOL_EXPECTATIONS,
+  description: withSetuOnlyDescription(PLAN_TOOL_EXPECTATIONS),
   args: {
     content: tool.schema.string().describe('Full plan content in markdown format'),
     objective: tool.schema.string().optional().describe('Objective for return message only'),
     mode: tool.schema.enum(['append', 'remake', 'auto']).optional().describe('Explicit mode or auto-detect')
   },
-  async execute(args): Promise<string> {
+  async execute(args, context): Promise<string> {
+    assertSetuAgent(context, 'setu_plan');
+
     if (!args.content?.trim()) {
       throw new Error('content is required');
     }

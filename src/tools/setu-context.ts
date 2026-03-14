@@ -20,6 +20,7 @@ import { clearQuestionBlocked, type ContextCollector } from '../context';
 import { errorLog } from '../debug';
 import { sanitizeContextInput } from '../security/prompt-sanitization';
 import { logSecurityEvent, SecurityEventType } from '../security/audit-log';
+import { assertSetuAgent, withSetuOnlyDescription } from './agent-guard';
 
 export interface SetuContextResult {
   success: boolean;
@@ -47,7 +48,7 @@ export function createSetuContextTool(
   getProjectDir?: () => string
 ): ReturnType<typeof tool> {
   return tool({
-    description: `Confirm that context has been gathered and understood. 
+    description: withSetuOnlyDescription(`Confirm that context has been gathered and understood. 
 This unlocks side-effect tools (write, edit, bash commands) that are blocked during hydration.
 
 Call this tool after:
@@ -60,7 +61,7 @@ Provide:
 - What the current task/goal is
 - Your plan for accomplishing it
 
-Once confirmed, context is persisted to .setu/ for continuity.`,
+Once confirmed, context is persisted to .setu/ for continuity.`),
     
     args: {
       summary: tool.schema.string().describe(
@@ -75,6 +76,8 @@ Once confirmed, context is persisted to .setu/ for continuity.`,
     },
     
     async execute(args, context): Promise<string> {
+      assertSetuAgent(context, 'setu_context');
+
       const state = getHydrationState();
       const projectDir = getProjectDir ? getProjectDir() : process.cwd();
 

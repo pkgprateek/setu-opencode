@@ -1,17 +1,9 @@
 /**
- * Chat message hook - tracks active agent only.
+ * Chat message hook - tracks the active agent per session.
  */
 
 import { debugLog, errorLog } from '../debug';
 import { removeControlChars } from '../utils/sanitization';
-
-/**
- * Agent state tracking
- */
-export interface AgentState {
-  current: string;
-  isSetuActive: boolean;
-}
 
 /**
  * Hook signature returned by createChatMessageHook.
@@ -25,10 +17,10 @@ type ChatMessageHook = (
 ) => Promise<void>;
 
 /**
- * Creates a chat-message processing hook that tracks active agent.
+ * Creates a chat-message processing hook that tracks the active agent per session.
  */
 export function createChatMessageHook(
-  setAgentState?: (agent: string) => void,
+  setSessionAgent?: (sessionID: string, agent: string) => void,
   onSetuMessage?: (sessionID: string) => void
 ): ChatMessageHook {
   return async (
@@ -37,8 +29,9 @@ export function createChatMessageHook(
   ): Promise<void> => {
     const rawSessionID = input.sessionID ?? '';
     const safeSessionID = removeControlChars(rawSessionID).trim();
+    const safeAgent = removeControlChars(input.agent ?? '').trim();
 
-    if (input.agent && input.agent.toLowerCase() === 'setu' && onSetuMessage) {
+    if (safeAgent === 'setu' && onSetuMessage) {
       try {
         if (!safeSessionID) {
           errorLog('[setu] security_event hook=onSetuMessage type=empty_sanitized_session_id');
@@ -51,12 +44,16 @@ export function createChatMessageHook(
       }
     }
 
-    if (input.agent && setAgentState) {
+    if (safeAgent && setSessionAgent) {
       try {
-        setAgentState(input.agent);
+        if (!safeSessionID) {
+          errorLog('[setu] security_event hook=chat.message type=empty_sanitized_session_id');
+        } else {
+          setSessionAgent(safeSessionID, safeAgent);
+        }
       } catch (error) {
         // Graceful degradation: agent tracking is non-critical
-        debugLog('Failed to set agent state:', error);
+        debugLog('Failed to set session agent:', error);
       }
     }
   };

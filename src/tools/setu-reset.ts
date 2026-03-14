@@ -5,13 +5,18 @@ import { getErrorMessage } from '../utils/error-handling';
 import { errorLog, debugLog } from '../debug';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { assertSetuAgent, withSetuOnlyDescription } from './agent-guard';
 
 export const createSetuResetTool = (getProjectDir: () => string): ReturnType<typeof tool> => tool({
-  description: 'Reset step progress to 0. Use when you want to restart the current plan from the beginning.',
+  description: withSetuOnlyDescription(
+    'Reset step progress to 0. Use when you want to restart the current plan from the beginning.'
+  ),
   args: {
     clearLearnings: tool.schema.boolean().optional().describe('Also clear learned approaches (default: false)')
   },
-  async execute(args, _context) {
+  async execute(args, context) {
+    assertSetuAgent(context, 'setu_reset');
+
     const projectDir = getProjectDir();
     try {
       validateProjectDir(projectDir);

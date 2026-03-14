@@ -7,7 +7,7 @@
  * The full persona is already in the agent file (.opencode/agents/setu.md).
  *
  * When in Setu mode: Check file availability + project rules + context content + read history
- * When in Build/Plan: Does nothing (Setu is off)
+ * When outside Setu: Do nothing (fail closed)
  */
 
 import { getStateInjection, type FileAvailability } from "../prompts/persona";
@@ -84,7 +84,7 @@ type SystemTransformHook = (
 export function createSystemTransformHook(
   getVerificationState: () => { complete: boolean; stepsRun: Set<string> },
   getSetuFilesExist?: () => FileAvailability,
-  getCurrentAgent?: () => string,
+  getSessionAgent?: (sessionID?: string) => string | null,
   getContextCollector?: () => ContextCollector | null,
   getProjectRules?: () => ProjectRules | null,
   getProjectDir?: () => string,
@@ -93,18 +93,19 @@ export function createSystemTransformHook(
     input: SystemTransformInput,
     output: SystemTransformOutput,
   ): Promise<void> => {
-    const currentAgent = getCurrentAgent ? getCurrentAgent() : "setu";
-    const agentLower = currentAgent.toLowerCase();
+    let sessionAgent: string | null = null;
 
-    // Define which agents should receive Setu injections
-    // Setu: Full persona + all injections
-    // Subagents (explore, general): JIT context only (for task awareness)
-    // Build/Plan: No Setu injections
-    const isSetuAgent = agentLower === "setu";
-    const isSubagent = ["explore", "general"].includes(agentLower);
+    try {
+      sessionAgent = getSessionAgent ? getSessionAgent(input.sessionID) : null;
+    } catch (error) {
+      debugLog(
+        "system-transform: getSessionAgent failed:",
+        getErrorMessage(error),
+      );
+    }
 
-    // Only inject for Setu or known subagents
-    if (!isSetuAgent && !isSubagent) {
+    // Fail closed when session agent is unknown or not exact-match Setu.
+    if (sessionAgent !== "setu") {
       return;
     }
 
@@ -220,7 +221,7 @@ export function createSystemTransformHook(
 
         // AGENTS.md warning: only for Setu agent, only when both AGENTS.md and CLAUDE.md are missing
         // Only run when getSetuFilesExist is available (filesExist was actually populated)
-        if (isSetuAgent && getSetuFilesExist) {
+        if (getSetuFilesExist) {
           if (!filesExist.agentsMd && !filesExist.claudeMd) {
             // Use push (not unshift) so it doesn't outrank core gear/safety guidance
             output.system.push(
@@ -229,25 +230,21 @@ export function createSystemTransformHook(
           }
         }
 
-        // CONTRACT INJECTION: Quality guidance for research/plan creation
-        // Only for Setu agent - subagents get JIT context only
-        if (isSetuAgent) {
-          const researchContract = getResearchContractForSystem(
-            gearState.current,
-          );
-          const planContract = getPlanContractForSystem(gearState.current);
+        const researchContract = getResearchContractForSystem(
+          gearState.current,
+        );
+        const planContract = getPlanContractForSystem(gearState.current);
 
-          if (researchContract) {
-            output.system.push(researchContract);
-          }
-          if (planContract) {
-            output.system.push(planContract);
-          }
-
-          debugLog(
-            `Contracts injected: research=${!!researchContract}, plan=${!!planContract}`,
-          );
+        if (researchContract) {
+          output.system.push(researchContract);
         }
+        if (planContract) {
+          output.system.push(planContract);
+        }
+
+        debugLog(
+          `Contracts injected: research=${!!researchContract}, plan=${!!planContract}`,
+        );
       }
 
       const sessionID = input.sessionID?.trim();
@@ -285,9 +282,8 @@ export function createSystemTransformHook(
       debugLog("Gear/discipline injection failed:", getErrorMessage(error));
     }
 
-    // JIT Context Injection: Inject active task context for subagent awareness
-    // This provides step tracking, failed approaches, and constraints
-    // CRITICAL: Subagents need this to know which step to execute
+    // JIT Context Injection: Inject active task context for the Setu session.
+    // This provides step tracking, failed approaches, and constraints.
     if (getProjectDir) {
       try {
         const projectDir = getProjectDir();
