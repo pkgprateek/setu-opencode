@@ -44,12 +44,15 @@ export function createChatMessageHook(
       }
     }
 
-    if (safeAgent && setSessionAgent) {
+    if (setSessionAgent) {
       try {
         if (!safeSessionID) {
           errorLog('[setu] security_event hook=chat.message type=empty_sanitized_session_id');
         } else {
           setSessionAgent(safeSessionID, safeAgent);
+          if (!safeAgent) {
+            errorLog('[setu] security_event hook=chat.message type=empty_sanitized_agent');
+          }
         }
       } catch (error) {
         // Graceful degradation: agent tracking is non-critical

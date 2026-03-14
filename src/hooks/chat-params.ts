@@ -41,6 +41,11 @@ export function createChatParamsHook(
     }
 
     if (!safeAgent) {
+      try {
+        setSessionAgent(safeSessionID, safeAgent);
+      } catch (error) {
+        debugLog('Failed to clear session agent from chat.params:', error);
+      }
       errorLog('[setu] security_event hook=chat.params type=empty_sanitized_agent');
       return;
     }
